@@ -87,7 +87,7 @@ footer { min-height: 56px; padding: 0 clamp(18px, 4vw, 64px); border-top: 1px so
 footer a { margin-left: auto; }
 
 @media (max-width: 900px) {
-  .topbar { grid-template-columns: 1fr auto; }
+  .topbar { grid-template-columns: 1fr auto; backdrop-filter: none; }
   nav { position: fixed; bottom: 0; left: 0; right: 0; height: 58px; background: var(--paper); border-top: 1px solid var(--line); z-index: 30; justify-content: stretch; }
   nav a { flex: 1; min-width: 0; padding: 0 5px; font-size: 12px; border-bottom: 0; border-top: 3px solid transparent; }
   nav a.active { border-top-color: var(--ink); }
