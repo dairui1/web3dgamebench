@@ -40,7 +40,10 @@ def publish_runs(
 
     for run_root in runs:
         manifest = json.loads((run_root / "manifest.json").read_text())
-        evaluation = manifest.get("evaluation", {})
+        evaluation_path = run_root / "evaluation/report.json"
+        evaluation = (
+            json.loads(evaluation_path.read_text()) if evaluation_path.is_file() else {}
+        )
         if not evaluation.get("trusted") or not evaluation.get("passed"):
             raise PublishError(f"run is not trusted and passing: {run_root}")
         task_id = manifest["task"]["id"]

@@ -12,7 +12,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import Profile, Task, load_profiles, load_task
-from .container import ensure_plane, load_container_config, wrap_command
+from .container import (
+    ensure_plane,
+    load_container_config,
+    prepare_dependencies,
+    wrap_command,
+)
 from .runtimes import build_invocation, parse_resolved_model
 
 
@@ -29,9 +34,13 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _tree_digest(root: Path) -> str:
+def _tree_digest(root: Path, *, excluded: frozenset[str] = frozenset()) -> str:
     digest = hashlib.sha256()
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+    for path in sorted(
+        item
+        for item in root.rglob("*")
+        if item.is_file() and not excluded.intersection(item.relative_to(root).parts)
+    ):
         digest.update(path.relative_to(root).as_posix().encode())
         digest.update(bytes.fromhex(_sha256(path)))
     return digest.hexdigest()
@@ -51,7 +60,12 @@ def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple
     run_root = runs_dir() / run_id
     workspace = run_root / "workspace"
     workspace.mkdir(parents=True)
-    shutil.copytree(task.starter, workspace, dirs_exist_ok=True)
+    shutil.copytree(
+        task.starter,
+        workspace,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("node_modules", "dist"),
+    )
     shutil.copy2(task.brief, workspace / "TASK.md")
     (workspace / "AGENTS.md").write_text(
         "# Candidate rules\n\nImplement TASK.md in this directory. Do not access the network, parent "
@@ -62,7 +76,10 @@ def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple
         "schema_version": 1,
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
-        "task": {"id": task.id, "digest": _tree_digest(task.root)},
+        "task": {
+            "id": task.id,
+            "digest": _tree_digest(task.root, excluded=frozenset({"node_modules", "dist"})),
+        },
         "profile": asdict(profile),
         "attempt": attempt,
         "workspace": str(workspace),
@@ -99,6 +116,7 @@ def run_once(
     if backend == "container":
         container_config = load_container_config(root)
         plane = ensure_plane(root, container_config)
+        prepare_dependencies(root, container_config, workspace)
         argv, passed_environment = wrap_command(
             invocation.argv,
             root=root,
@@ -145,7 +163,9 @@ def run_once(
             "duration_seconds": round(time.monotonic() - started, 3),
             "trace_format": invocation.trace_format,
             "model_resolved": parse_resolved_model(invocation.trace_format, stdout),
-            "workspace_digest": _tree_digest(workspace),
+            "workspace_digest": _tree_digest(
+                workspace, excluded=frozenset({"node_modules"})
+            ),
             "backend": backend,
             "container_plane": plane,
             "environment_names": sorted(passed_environment),

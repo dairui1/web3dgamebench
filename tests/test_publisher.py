@@ -21,9 +21,12 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
         "task": {"id": "task"},
         "profile": {"id": "profile", "harness": "codex", "model": "model"},
         "workspace": str(workspace),
-        "evaluation": {"trusted": True, "passed": True},
     }
     (tmp_path / "run/manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "run/evaluation").mkdir()
+    (tmp_path / "run/evaluation/report.json").write_text(
+        json.dumps({"trusted": True, "passed": True})
+    )
 
     publish_runs(root, [tmp_path / "run"], games)
 

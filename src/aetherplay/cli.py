@@ -198,6 +198,29 @@ def command_publish(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_invalidate(args: argparse.Namespace) -> int:
+    run_root = Path(args.run).expanduser().resolve()
+    manifest_path = run_root / "manifest.json"
+    if not manifest_path.is_file():
+        raise ValueError(f"run manifest not found: {manifest_path}")
+    sidecar = run_root / "withdrawal.json"
+    if sidecar.exists():
+        raise ValueError(f"run is already withdrawn: {run_root}")
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "withdrawn_at": datetime.now(UTC).isoformat(),
+                "reason": args.reason,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print(sidecar)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aetherplay")
     parser.add_argument("--version", action="version", version=__version__)
@@ -227,6 +250,10 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--games-repo")
     publish.add_argument("--replace", action="store_true")
     publish.set_defaults(func=command_publish)
+    invalidate = commands.add_parser("invalidate")
+    invalidate.add_argument("--run", required=True)
+    invalidate.add_argument("--reason", required=True)
+    invalidate.set_defaults(func=command_invalidate)
     return parser
 
 

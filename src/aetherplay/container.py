@@ -129,6 +129,42 @@ def stage_credentials(profile: Profile, destination: Path) -> dict[str, str]:
     return staged
 
 
+def prepare_dependencies(root: Path, config: ContainerConfig, workspace: Path) -> None:
+    vendor = root / "vendor"
+    result = docker(
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "-v",
+        f"{workspace}:/workspace",
+        "-v",
+        f"{vendor}:/vendor:ro",
+        "-w",
+        "/workspace",
+        "-e",
+        "HOME=/tmp",
+        "-e",
+        "npm_config_cache=/vendor/npm-cache",
+        "-e",
+        "npm_config_offline=true",
+        config.image,
+        "npm",
+        "ci",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        timeout=300,
+        check=False,
+    )
+    if result.returncode:
+        raise ContainerError(f"offline dependency preparation failed: {result.stderr.strip()}")
+
+
 def wrap_command(
     argv: tuple[str, ...],
     *,

@@ -118,10 +118,4 @@ def evaluate_run(root: Path, run_root: Path) -> Path:
             docker("network", "rm", network, check=False)
 
     report = json.loads(report_path.read_text())
-    manifest["evaluation"] = {
-        "trusted": True,
-        "passed": bool(report.get("passed")),
-        "report": str(report_path),
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     return report_path
