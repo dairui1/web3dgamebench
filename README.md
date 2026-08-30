@@ -1,0 +1,28 @@
+# AetherPlay Bench
+
+AetherPlay Bench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, time limit, and browser checks. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
+
+The public result is intentionally two-part:
+
+1. Deterministic checks establish that a submission builds, renders, responds to input, works on desktop and phone, and exposes a small runtime inspection contract.
+2. Blind pairwise play determines the leaderboard. Visitors compare two games from the same task without seeing the model name; ratings use a Bradley-Terry fit.
+
+## Pilot matrix
+
+| Profile | Harness | Model | Thinking |
+| --- | --- | --- | --- |
+| `codex-sol-medium` | Codex | `gpt-5.6-sol` | `medium` |
+| `codex-terra-high` | Codex | `gpt-5.6-terra` | `high` |
+| `codex-luna-max` | Codex | `gpt-5.6-luna` | `max` |
+| `claude-sonnet-default` | Claude Code | `claude-sonnet-5` | official default |
+| `claude-opus-default` | Claude Code | `claude-opus-5` | official default |
+| `pi-deepseek-v4-flash` | pi | `opencode-go/deepseek-v4-flash` | provider default |
+
+## Boundaries
+
+- `aetherplay-bench`: tasks, harness, checks, release manifests, and the arena site.
+- `aetherplay-games`: immutable published source and builds for completed seasons.
+- `${AETHERPLAY_RUNS_DIR:-~/.local/state/aetherplay/runs}`: private candidate workspaces and raw traces.
+- `aetherplaybench.dairui1.com`: public catalog, playable routes, arena voting, and leaderboard.
+
+See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.

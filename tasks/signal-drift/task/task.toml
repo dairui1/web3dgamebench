@@ -1,0 +1,25 @@
+id = "signal-drift"
+title = "Signal Drift"
+season = "pilot-2026-09"
+framework = "three.js"
+brief = "brief.md"
+starter = "starter"
+time_limit_seconds = 3600
+seed = 94721
+
+[viewport.desktop]
+width = 1440
+height = 900
+
+[viewport.phone]
+width = 390
+height = 844
+
+[checks]
+build = true
+canvas_nonblank = true
+keyboard_input = true
+pointer_or_touch_input = true
+restart = true
+resize = true
+runtime_state = true

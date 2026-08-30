@@ -1,0 +1,17 @@
+[container]
+image = "aetherplay-candidate:0.1.0"
+internal_network = "aetherplay-internal"
+egress_network = "aetherplay-egress"
+proxy_container = "aetherplay-egress-proxy"
+proxy_port = 8888
+memory = "8g"
+cpus = "6"
+
+# Model APIs only. Do not add galleries, GitHub, npm, CDNs, or the public site.
+egress_allow = [
+  "chatgpt.com",
+  "openai.com",
+  "oaiusercontent.com",
+  "anthropic.com",
+  "opencode.ai",
+]

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aetherplaybench.dairui1.com/schemas/submission.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "submission_id", "season", "task_id", "profile_id", "source_commit", "build_sha256", "checks"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "submission_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$" },
+    "season": { "type": "string" },
+    "task_id": { "type": "string" },
+    "profile_id": { "type": "string" },
+    "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "build_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "checks": {
+      "type": "object",
+      "required": ["build", "desktop", "phone", "state_contract"],
+      "properties": {
+        "build": { "type": "boolean" },
+        "desktop": { "type": "boolean" },
+        "phone": { "type": "boolean" },
+        "state_contract": { "type": "boolean" }
+      }
+    }
+  }
+}

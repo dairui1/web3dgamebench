@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-08-31T00:00:00Z",
+  "season": {
+    "id": "pilot-2026-09",
+    "status": "private-running"
+  },
+  "tasks": [
+    {
+      "id": "signal-drift",
+      "title": "Signal Drift",
+      "summary": "Pilot a courier craft through a storm-damaged relay field, restore three gates, and reach extraction.",
+      "genre": "3D flight challenge",
+      "submissions": []
+    }
+  ]
+}

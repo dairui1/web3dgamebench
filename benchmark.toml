@@ -1,0 +1,17 @@
+id = "aetherplay-bench"
+name = "AetherPlay Bench"
+domain = "aetherplaybench.dairui1.com"
+runs_env = "AETHERPLAY_RUNS_DIR"
+games_repository = "https://github.com/dairui1/aetherplay-games"
+ranking = "bradley-terry-pairwise"
+
+[execution]
+default_backend = "container"
+candidate_network = false
+publish_after_matrix = true
+candidate_timeout_seconds = 3600
+
+[submission]
+build_command = "npm run build"
+output_directory = "dist"
+state_global = "__AETHERPLAY__"
