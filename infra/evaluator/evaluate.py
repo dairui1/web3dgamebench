@@ -52,12 +52,23 @@ def main() -> int:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--use-angle=swiftshader", "--enable-webgl"],
+                args=[
+                    "--no-sandbox",
+                    "--use-gl=angle",
+                    "--use-angle=swiftshader",
+                    "--enable-unsafe-swiftshader",
+                ],
             )
             for width, height, label in viewports:
                 context = browser.new_context(viewport={"width": width, "height": height})
                 page = context.new_page()
                 page.on("pageerror", lambda error: browser_errors.append(str(error)))
+                page.on(
+                    "console",
+                    lambda message: browser_errors.append(message.text)
+                    if message.type == "error"
+                    else None,
+                )
                 page.on(
                     "request",
                     lambda request: external_requests.append(request.url)
