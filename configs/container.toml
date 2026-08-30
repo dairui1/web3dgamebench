@@ -1,5 +1,6 @@
 [container]
 image = "aetherplay-candidate:0.1.0"
+evaluator_image = "aetherplay-evaluator:0.1.0"
 internal_network = "aetherplay-internal"
 egress_network = "aetherplay-egress"
 proxy_container = "aetherplay-egress-proxy"

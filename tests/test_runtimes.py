@@ -23,3 +23,13 @@ def test_codex_effort_is_explicit() -> None:
     profile = load_profiles(ROOT)["codex-luna-max"]
     invocation = build_invocation(profile, Path("/tmp/workspace"), "task")
     assert 'model_reasoning_effort="max"' in invocation.argv
+    assert "--skip-git-repo-check" in invocation.argv
+
+
+def test_container_codex_uses_external_boundary() -> None:
+    profile = load_profiles(ROOT)["codex-sol-medium"]
+    invocation = build_invocation(
+        profile, Path("/workspace"), "task", isolation="container"
+    )
+    assert "danger-full-access" in invocation.argv
+    assert "sandbox_workspace_write.network_access=true" in invocation.argv

@@ -26,3 +26,21 @@ The public result is intentionally two-part:
 - `aetherplaybench.dairui1.com`: public catalog, playable routes, arena voting, and leaderboard.
 
 See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
+
+## Operator quick start
+
+```bash
+uv sync
+uv run aetherplay vendor
+docker build -t aetherplay-candidate:0.1.0 infra/candidate
+docker build -t aetherplay-evaluator:0.1.0 infra/evaluator
+uv run aetherplay doctor
+uv run aetherplay plan --season pilot-2026-09
+uv run aetherplay matrix --season pilot-2026-09 --backend container
+```
+
+The candidate image deliberately layers the pinned runtimes on ReconBench's local
+`reconbench-candidate:0.147.0` base. Candidate generation, production rendering, and browser
+evaluation run in separate containers. Only the generation container joins the API allowlist
+proxy; production rendering has `--network none`, and the evaluator uses a fresh internal
+network with no credentials.

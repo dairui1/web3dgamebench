@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "starters": [
+    {
+      "starter": "tasks/signal-drift/task/starter",
+      "package_lock_sha256": "f6c2e7080bc56b648cdb181a8e27be915fb9dbb9e2ada4b182aad4d7aeb45a30"
+    }
+  ]
+}

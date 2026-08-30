@@ -15,21 +15,25 @@ class Invocation:
     trace_format: str
 
 
-def build_invocation(profile: Profile, workspace: Path, prompt: str) -> Invocation:
+def build_invocation(
+    profile: Profile, workspace: Path, prompt: str, *, isolation: str = "runtime"
+) -> Invocation:
     final_path = workspace / ".aetherplay-final.txt"
     if profile.harness == "codex":
         if not profile.effort:
             raise ValueError("Codex profiles require an explicit effort")
+        external = isolation == "container"
         return Invocation(
             argv=(
                 "codex", "exec", "-C", str(workspace), "--model", profile.model,
                 "-c", f'model_reasoning_effort="{profile.effort}"',
                 "-c", 'approval_policy="never"',
-                "-c", 'sandbox_workspace_write.network_access=false',
+                "-c", f'sandbox_workspace_write.network_access={str(external).lower()}',
                 "-c", 'web_search="disabled"',
-                "--disable", "multi_agent", "--sandbox", "workspace-write",
+                "--disable", "multi_agent", "--sandbox", "danger-full-access" if external else "workspace-write",
                 "--json", "--ephemeral", "--ignore-user-config", "--strict-config",
-                "--color", "never", "--output-last-message", str(final_path), "-",
+                "--skip-git-repo-check", "--color", "never",
+                "--output-last-message", str(final_path), "-",
             ),
             stdin_prompt=True,
             env={},

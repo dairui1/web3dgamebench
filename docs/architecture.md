@@ -16,7 +16,10 @@ It does not receive other submissions, evaluator scripts, release data, Git hist
 
 ## Publication
 
-The publisher validates a terminal run, copies source and production build into `aetherplay-games/submissions/<season>/<task>/<submission-id>/`, commits the immutable manifest, and then syncs only build output into the arena Worker's static assets.
+The publisher validates a trusted passing run, copies source into
+`aetherplay-games/games/<task>/<profile>/`, and syncs only rendered `dist/` output into the
+arena Worker's static assets. Raw traces, credentials, evaluator output, task prompts, and
+run manifests remain private.
 
 Playable URLs are stable:
 

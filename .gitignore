@@ -7,5 +7,5 @@ site/.wrangler/
 site/public/playground/
 tasks/*/task/starter/dist/
 runs/
-vendor/npm-cache/_logs/
+vendor/npm-cache/
 .DS_Store

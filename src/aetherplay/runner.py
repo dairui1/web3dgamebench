@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import Profile, Task, load_profiles, load_task
+from .container import ensure_plane, load_container_config, wrap_command
 from .runtimes import build_invocation, parse_resolved_model
 
 
@@ -72,6 +73,12 @@ def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple
 
 
 def run_native(root: Path, task_id: str, profile_id: str, attempt: int = 1) -> Path:
+    return run_once(root, task_id, profile_id, attempt, backend="native")
+
+
+def run_once(
+    root: Path, task_id: str, profile_id: str, attempt: int = 1, *, backend: str = "container"
+) -> Path:
     profiles = load_profiles(root)
     if profile_id not in profiles:
         raise ValueError(f"unknown profile: {profile_id}")
@@ -79,10 +86,28 @@ def run_native(root: Path, task_id: str, profile_id: str, attempt: int = 1) -> P
     task = load_task(root, task_id)
     run_root, workspace = prepare(root, task, profile, attempt)
     prompt = _candidate_prompt(task)
-    invocation = build_invocation(profile, workspace, prompt)
+    invocation_workspace = Path("/workspace") if backend == "container" else workspace
+    invocation = build_invocation(
+        profile, invocation_workspace, prompt, isolation="container" if backend == "container" else "runtime"
+    )
     environment = os.environ.copy()
     environment.update(invocation.env)
-    if profile.credential_env and profile.runtime_env:
+    argv: tuple[str, ...] | list[str] = invocation.argv
+    credential_dir = run_root / ".runtime-home"
+    plane = None
+    passed_environment: dict[str, str] = {}
+    if backend == "container":
+        container_config = load_container_config(root)
+        plane = ensure_plane(root, container_config)
+        argv, passed_environment = wrap_command(
+            invocation.argv,
+            root=root,
+            config=container_config,
+            workspace=workspace,
+            profile=profile,
+            credential_dir=credential_dir,
+        )
+    elif profile.credential_env and profile.runtime_env:
         value = environment.get(profile.credential_env)
         if not value:
             raise RuntimeError(f"missing required environment variable {profile.credential_env}")
@@ -90,7 +115,7 @@ def run_native(root: Path, task_id: str, profile_id: str, attempt: int = 1) -> P
     started = time.monotonic()
     try:
         result = subprocess.run(
-            invocation.argv,
+            argv,
             cwd=workspace,
             input=prompt if invocation.stdin_prompt else None,
             text=True,
@@ -121,7 +146,11 @@ def run_native(root: Path, task_id: str, profile_id: str, attempt: int = 1) -> P
             "trace_format": invocation.trace_format,
             "model_resolved": parse_resolved_model(invocation.trace_format, stdout),
             "workspace_digest": _tree_digest(workspace),
+            "backend": backend,
+            "container_plane": plane,
+            "environment_names": sorted(passed_environment),
         }
     )
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    shutil.rmtree(credential_dir, ignore_errors=True)
     return run_root
