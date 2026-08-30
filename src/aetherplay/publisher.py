@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,6 +9,18 @@ from pathlib import Path
 
 class PublishError(RuntimeError):
     pass
+
+
+_ROOT_ASSET_URL = re.compile(r'(?P<attribute>\b(?:src|href)=["\'])/assets/')
+
+
+def _make_assets_relative(destination: Path) -> None:
+    """Keep Vite bundles scoped to each nested playground route."""
+    for html_path in destination.rglob("*.html"):
+        html = html_path.read_text()
+        rewritten = _ROOT_ASSET_URL.sub(r"\g<attribute>./assets/", html)
+        if rewritten != html:
+            html_path.write_text(rewritten)
 
 
 def _copy_source(workspace: Path, destination: Path) -> None:
@@ -74,6 +87,7 @@ def publish_runs(
         play_target.parent.mkdir(parents=True, exist_ok=True)
         _copy_source(workspace, source_target)
         shutil.copytree(dist, play_target)
+        _make_assets_relative(play_target)
         additions.setdefault(task_id, []).append(
             {
                 "id": f"{task_id}--{profile_id}",
