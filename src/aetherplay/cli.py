@@ -161,11 +161,14 @@ def command_matrix(args: argparse.Namespace) -> int:
                     )
                     report_path = evaluate_run(root, run_root)
                     report = json.loads(report_path.read_text())
+                    manifest = json.loads((run_root / "manifest.json").read_text())
                     cell.update(
                         {
                             "run": str(run_root),
                             "evaluation": str(report_path),
-                            "passed": bool(report.get("passed")),
+                            "playable": bool(report.get("passed")),
+                            "passed": manifest.get("status") == "candidate-complete"
+                            and bool(report.get("passed")),
                         }
                     )
                 except (OSError, RuntimeError, ValueError) as error:

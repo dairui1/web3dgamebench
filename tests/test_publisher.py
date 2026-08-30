@@ -15,9 +15,14 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     (workspace / "src.ts").write_text("source")
     (workspace / "TASK.md").write_text("sealed until close")
     (dist / "index.html").write_text("game")
-    catalog = {"generatedAt": "old", "tasks": [{"id": "task", "submissions": []}]}
+    catalog = {
+        "generatedAt": "old",
+        "season": {"id": "test", "status": "private-running"},
+        "tasks": [{"id": "task", "submissions": []}],
+    }
     (root / "site/public/data/catalog.json").write_text(json.dumps(catalog))
     manifest = {
+        "status": "candidate-complete",
         "task": {"id": "task"},
         "profile": {"id": "profile", "harness": "codex", "model": "model"},
         "workspace": str(workspace),

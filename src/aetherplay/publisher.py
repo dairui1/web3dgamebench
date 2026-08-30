@@ -46,6 +46,9 @@ def publish_runs(
         )
         if not evaluation.get("trusted") or not evaluation.get("passed"):
             raise PublishError(f"run is not trusted and passing: {run_root}")
+        run_status = str(manifest.get("status", "unknown"))
+        if run_status not in {"candidate-complete", "timeout"}:
+            raise PublishError(f"run is not publishable: {run_root} ({run_status})")
         task_id = manifest["task"]["id"]
         profile = manifest["profile"]
         profile_id = profile["id"]
@@ -80,6 +83,7 @@ def publish_runs(
                 "model": manifest.get("model_resolved") or profile["model"],
                 "playUrl": f"/playground/{task_id}/{profile_id}/",
                 "status": "published",
+                "runStatus": run_status,
             }
         )
 
@@ -91,6 +95,7 @@ def publish_runs(
         tasks[task_id]["submissions"] = sorted(
             existing.values(), key=lambda item: item["profileId"]
         )
+    catalog["season"]["status"] = "public-voting"
     catalog["generatedAt"] = datetime.now(UTC).isoformat()
     catalog_path.write_text(json.dumps(catalog, indent=2) + "\n")
     return catalog_path

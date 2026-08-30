@@ -28,6 +28,7 @@ async function loadCatalog() {
       <div class="meta"><span>Task ${String(index + 1).padStart(2, '0')}</span><span>${escapeHtml(task.genre)}</span></div>
       <h3>${escapeHtml(task.title)}</h3>
       <p>${escapeHtml(task.summary)}</p>
+      ${task.submissions.length ? `<div class="build-list">${task.submissions.map((item) => `<div class="build-row"><div><strong>${escapeHtml(item.model)}</strong><small>${escapeHtml(item.harness)}${item.runStatus === 'timeout' ? ' · timed out after producing this build' : ''}</small></div><a href="${escapeHtml(item.playUrl)}" target="_blank" rel="noopener">Play</a></div>`).join('')}</div>` : ''}
       <div class="card-foot"><span>${task.submissions.length} playable builds</span><a href="#arena">Compare →</a></div>
     </article>
   `).join('');
@@ -92,7 +93,7 @@ async function loadLeaderboard() {
     root.innerHTML = data.tasks.map((task) => `
       <section class="board">
         <div class="board-head"><h2>${escapeHtml(task.task.title)}</h2><span>${task.votes} preference votes</span></div>
-        ${task.ratings.length ? `<table class="board-table"><thead><tr><th>Rank</th><th>System</th><th>Rating</th><th>Comparisons</th><th>Record</th></tr></thead><tbody>${task.ratings.map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.submission?.model || row.submissionId)} <small>${escapeHtml(row.submission?.harness || '')}</small></td><td>${row.rating}</td><td>${row.comparisons}</td><td>${row.wins}W · ${row.losses}L · ${row.ties}T</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">Ratings appear after the closed pilot matrix is published and blind play begins.</div>'}
+        ${task.ratings.length ? `<table class="board-table"><thead><tr><th>Rank</th><th>System</th><th>Rating</th><th>Comparisons</th><th>Record</th></tr></thead><tbody>${task.ratings.map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.submission?.model || row.submissionId)} <small>${escapeHtml(row.submission?.harness || '')}${row.submission?.runStatus === 'timeout' ? ' · timeout build' : ''}</small></td><td>${row.rating}</td><td>${row.comparisons}</td><td>${row.wins}W · ${row.losses}L · ${row.ties}T</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">Ratings appear after the closed pilot matrix is published and blind play begins.</div>'}
       </section>
     `).join('');
   } catch (error) {

@@ -13,6 +13,7 @@ type Submission = {
   model: string;
   playUrl: string;
   status: string;
+  runStatus?: string;
 };
 
 type Catalog = { tasks: Array<{ id: string; title: string; submissions: Submission[] }> };

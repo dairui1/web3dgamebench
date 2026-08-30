@@ -48,6 +48,12 @@ h1 { margin: 0; font-size: clamp(52px, 7vw, 108px); line-height: 0.92; font-weig
 .game-card h3 { margin: auto 0 12px; font-size: 34px; }
 .game-card p { margin: 0 0 24px; line-height: 1.5; color: var(--muted); }
 .game-card .card-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; }
+.build-list { display: grid; gap: 0; margin: 0 0 18px; border-top: 1px solid var(--line); }
+.build-row { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.build-row strong, .build-row small { display: block; }
+.build-row strong { font-size: 13px; }
+.build-row small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.build-row a { border: 1px solid var(--ink); padding: 7px 11px; font: 700 11px/1 ui-monospace, monospace; text-transform: uppercase; }
 
 .arena-head { display: grid; grid-template-columns: 1fr 420px; gap: 40px; align-items: end; margin-bottom: 36px; }
 .arena-head h1, .page-title h1 { font-size: clamp(45px, 6vw, 84px); }

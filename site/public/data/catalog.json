@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-08-31T00:00:00Z",
+  "generatedAt": "2026-08-30T20:21:44.206030+00:00",
   "season": {
     "id": "pilot-2026-09",
-    "status": "private-running"
+    "status": "public-voting"
   },
   "tasks": [
     {
@@ -10,7 +10,68 @@
       "title": "Signal Drift",
       "summary": "Pilot a courier craft through a storm-damaged relay field, restore three gates, and reach extraction.",
       "genre": "3D flight challenge",
-      "submissions": []
+      "submissions": [
+        {
+          "id": "signal-drift--claude-opus-default",
+          "taskId": "signal-drift",
+          "profileId": "claude-opus-default",
+          "harness": "claude-code",
+          "model": "claude-opus-5",
+          "playUrl": "/playground/signal-drift/claude-opus-default/",
+          "status": "published",
+          "runStatus": "candidate-complete"
+        },
+        {
+          "id": "signal-drift--claude-sonnet-default",
+          "taskId": "signal-drift",
+          "profileId": "claude-sonnet-default",
+          "harness": "claude-code",
+          "model": "claude-sonnet-5",
+          "playUrl": "/playground/signal-drift/claude-sonnet-default/",
+          "status": "published",
+          "runStatus": "candidate-complete"
+        },
+        {
+          "id": "signal-drift--codex-luna-max",
+          "taskId": "signal-drift",
+          "profileId": "codex-luna-max",
+          "harness": "codex",
+          "model": "gpt-5.6-luna",
+          "playUrl": "/playground/signal-drift/codex-luna-max/",
+          "status": "published",
+          "runStatus": "candidate-complete"
+        },
+        {
+          "id": "signal-drift--codex-sol-medium",
+          "taskId": "signal-drift",
+          "profileId": "codex-sol-medium",
+          "harness": "codex",
+          "model": "gpt-5.6-sol",
+          "playUrl": "/playground/signal-drift/codex-sol-medium/",
+          "status": "published",
+          "runStatus": "candidate-complete"
+        },
+        {
+          "id": "signal-drift--codex-terra-high",
+          "taskId": "signal-drift",
+          "profileId": "codex-terra-high",
+          "harness": "codex",
+          "model": "gpt-5.6-terra",
+          "playUrl": "/playground/signal-drift/codex-terra-high/",
+          "status": "published",
+          "runStatus": "candidate-complete"
+        },
+        {
+          "id": "signal-drift--pi-deepseek-v4-flash",
+          "taskId": "signal-drift",
+          "profileId": "pi-deepseek-v4-flash",
+          "harness": "pi",
+          "model": "deepseek-v4-flash",
+          "playUrl": "/playground/signal-drift/pi-deepseek-v4-flash/",
+          "status": "published",
+          "runStatus": "timeout"
+        }
+      ]
     }
   ]
 }
