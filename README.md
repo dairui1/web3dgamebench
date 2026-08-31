@@ -17,6 +17,13 @@ The public result is intentionally two-part:
 | `claude-sonnet-default` | Claude Code | `claude-sonnet-5` | official default |
 | `claude-opus-default` | Claude Code | `claude-opus-5` | official default |
 | `pi-deepseek-v4-flash` | pi | `opencode-go/deepseek-v4-flash` | provider default |
+| `pi-qwen3-8-flash` | pi | `opencode-go/qwen3.8-flash` | provider default |
+| `pi-glm-5-3-flash` | pi | `opencode-go/glm-5.3-flash` | provider default |
+
+The executable matrix is defined by `configs/seasons.toml` and `configs/profiles.toml`, not by
+this table. Run `uv run web3dgamebench plan --season <season-id>` and review the complete output
+before starting paid cells. At present, `pilot-2026-09` is the only runnable season and contains
+only `signal-drift`; the proposed Season 1 tasks remain review drafts.
 
 ## Boundaries
 

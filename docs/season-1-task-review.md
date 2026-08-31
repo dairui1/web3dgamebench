@@ -2,6 +2,11 @@
 
 Status: **draft for human review**. None of these tasks belongs to a runnable season yet.
 
+This review document does not define an execution matrix. A task becomes runnable only after it
+is assigned to a season in `configs/seasons.toml`; that season's profile list, resolved through
+`configs/profiles.toml`, is the authoritative harness and model set. Before any paid run, inspect
+the complete expansion with `uv run web3dgamebench plan --season <season-id>`.
+
 Signal Drift remains an immutable `Pilot 0` artifact. The proposed official season contains ten recognizable 3D game archetypes. Each task has one canonical English goal contract for candidate runs and one Chinese mirror for review. Goal mode must be activated by the harness outside the task prompt; the candidate prompt itself must never instruct a model to invoke `/goal`.
 
 | # | Task | Familiar reference | Core completion event | English | 中文 |
