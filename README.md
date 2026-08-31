@@ -1,6 +1,6 @@
-# AetherPlay Bench
+# Web3DGameBench
 
-AetherPlay Bench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, time limit, and browser checks. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
+Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, time limit, and browser checks. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
 
 The public result is intentionally two-part:
 
@@ -20,10 +20,10 @@ The public result is intentionally two-part:
 
 ## Boundaries
 
-- `aetherplay-bench`: tasks, harness, checks, release manifests, and the arena site.
-- `aetherplay-games`: immutable published source and builds for completed seasons.
-- `${AETHERPLAY_RUNS_DIR:-~/.local/state/aetherplay/runs}`: private candidate workspaces and raw traces.
-- `aetherplaybench.dairui1.com`: public catalog, playable routes, arena voting, and leaderboard.
+- `web3dgamebench`: tasks, harness, checks, release manifests, and the arena site.
+- `web3dgamebench-games`: immutable published source and builds for completed seasons.
+- `${WEB3DGAMEBENCH_RUNS_DIR:-~/.local/state/web3dgamebench/runs}`: private candidate workspaces and raw traces.
+- `web3dgamebench.dairui1.com`: public catalog, playable routes, arena voting, and leaderboard.
 
 See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
 
@@ -31,12 +31,12 @@ See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
 
 ```bash
 uv sync
-uv run aetherplay vendor
-docker build -t aetherplay-candidate:0.1.0 infra/candidate
-docker build -t aetherplay-evaluator:0.1.0 infra/evaluator
-uv run aetherplay doctor
-uv run aetherplay plan --season pilot-2026-09
-uv run aetherplay matrix --season pilot-2026-09 --backend container
+uv run web3dgamebench vendor
+docker build -t web3dgamebench-candidate:0.1.0 infra/candidate
+docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
+uv run web3dgamebench doctor
+uv run web3dgamebench plan --season pilot-2026-09
+uv run web3dgamebench matrix --season pilot-2026-09 --backend container
 ```
 
 The candidate image deliberately layers the pinned runtimes on ReconBench's local

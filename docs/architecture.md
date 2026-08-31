@@ -2,7 +2,7 @@
 
 ## Repositories and trust boundaries
 
-`aetherplay-bench` owns benchmark inputs and operations. `aetherplay-games` is a separate publication repository populated only by the trusted publisher after every cell in a season has reached a terminal state. Candidate workspaces live under the user state directory, never below either repository.
+`web3dgamebench` owns benchmark inputs and operations. `web3dgamebench-games` is a separate publication repository populated only by the trusted publisher after every cell in a season has reached a terminal state. Candidate workspaces live under the user state directory, never below either repository.
 
 The candidate receives only:
 
@@ -17,14 +17,14 @@ It does not receive other submissions, evaluator scripts, release data, Git hist
 ## Publication
 
 The publisher validates a trusted passing run, copies source into
-`aetherplay-games/games/<task>/<profile>/`, and syncs only rendered `dist/` output into the
+`web3dgamebench-games/games/<task>/<profile>/`, and syncs only rendered `dist/` output into the
 arena Worker's static assets. Raw traces, credentials, evaluator output, task prompts, and
 run manifests remain private.
 
 Playable URLs are stable:
 
 ```text
-https://aetherplaybench.dairui1.com/playground/<task-id>/<submission-id>/
+https://web3dgamebench.dairui1.com/playground/<task-id>/<submission-id>/
 ```
 
 The public catalog deliberately labels systems only after a vote is recorded or when the visitor opens the results view. Pair pages are blind.

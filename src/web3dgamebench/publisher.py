@@ -33,6 +33,7 @@ def _copy_source(workspace: Path, destination: Path) -> None:
             ".git",
             "TASK.md",
             "AGENTS.md",
+            ".web3dgamebench-final.txt",
             ".aetherplay-final.txt",
         ),
     )

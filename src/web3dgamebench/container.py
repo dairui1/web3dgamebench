@@ -176,7 +176,7 @@ def wrap_command(
 ) -> tuple[list[str], dict[str, str]]:
     vendor = root / "vendor"
     if not (vendor / "manifest.json").is_file():
-        raise ContainerError("offline vendor store is missing; run aetherplay vendor")
+        raise ContainerError("offline vendor store is missing; run web3dgamebench vendor")
     runtime_env = stage_credentials(profile, credential_dir)
     environment = {
         "HOME": "/home/candidate",

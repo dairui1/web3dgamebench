@@ -12,7 +12,13 @@ def _copy_submission(source: Path, destination: Path) -> None:
     shutil.copytree(
         source,
         destination,
-        ignore=shutil.ignore_patterns("node_modules", "dist", ".git", ".aetherplay-final.txt"),
+        ignore=shutil.ignore_patterns(
+            "node_modules",
+            "dist",
+            ".git",
+            ".web3dgamebench-final.txt",
+            ".aetherplay-final.txt",
+        ),
     )
 
 
@@ -75,7 +81,7 @@ def evaluate_run(root: Path, run_root: Path) -> Path:
         }
         report_path.write_text(json.dumps(report, indent=2) + "\n")
     else:
-        network = f"aetherplay-evaluator-{uuid.uuid4().hex[:10]}"
+        network = f"web3dgamebench-evaluator-{uuid.uuid4().hex[:10]}"
         docker("network", "create", "--internal", network)
         try:
             script = root / "infra/evaluator/evaluate.py"

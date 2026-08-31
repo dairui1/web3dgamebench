@@ -18,7 +18,7 @@ class Invocation:
 def build_invocation(
     profile: Profile, workspace: Path, prompt: str, *, isolation: str = "runtime"
 ) -> Invocation:
-    final_path = workspace / ".aetherplay-final.txt"
+    final_path = workspace / ".web3dgamebench-final.txt"
     if profile.harness == "codex":
         if not profile.effort:
             raise ValueError("Codex profiles require an explicit effort")

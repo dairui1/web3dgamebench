@@ -16,7 +16,25 @@ type Submission = {
   runStatus?: string;
 };
 
-type Catalog = { tasks: Array<{ id: string; title: string; submissions: Submission[] }> };
+type Task = {
+  id: string;
+  title: string;
+  titleZh?: string;
+  summary: string;
+  summaryZh?: string;
+  genre: string;
+  genreZh?: string;
+  evaluation?: {
+    objective: string;
+    objectiveZh?: string;
+    controls: string;
+    controlsZh?: string;
+    checklist: Array<{ text: string; textZh?: string }>;
+  };
+  submissions: Submission[];
+};
+
+type Catalog = { tasks: Task[] };
 
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), {
@@ -31,12 +49,14 @@ async function catalog(env: Env): Promise<Catalog> {
 }
 
 function sessionId(request: Request): { value: string; fresh: boolean } {
-  const match = request.headers.get('cookie')?.match(/(?:^|;\s*)ap_session=([a-zA-Z0-9-]+)/);
+  const match = request.headers.get('cookie')?.match(
+    /(?:^|;\s*)(?:w3gb_session|ap_session)=([a-zA-Z0-9-]+)/,
+  );
   return match ? { value: match[1], fresh: false } : { value: crypto.randomUUID(), fresh: true };
 }
 
 function cookie(value: string): string {
-  return `ap_session=${value}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`;
+  return `w3gb_session=${value}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`;
 }
 
 function originAllowed(request: Request): boolean {
@@ -75,7 +95,7 @@ async function arenaPair(request: Request, env: Env): Promise<Response> {
   const selected = pairs[0];
   const session = sessionId(request);
   return json(
-    { ready: true, task: { id: task.id, title: task.title }, left: blind(selected[0]), right: blind(selected[1]) },
+    { ready: true, task: publicTask(task), left: blind(selected[0]), right: blind(selected[1]) },
     200,
     session.fresh ? { 'set-cookie': cookie(session.value) } : {},
   );
@@ -83,6 +103,11 @@ async function arenaPair(request: Request, env: Env): Promise<Response> {
 
 function blind(submission: Submission) {
   return { id: submission.id, playUrl: submission.playUrl };
+}
+
+function publicTask(task: Task): Omit<Task, 'submissions'> {
+  const { submissions: _submissions, ...metadata } = task;
+  return metadata;
 }
 
 async function vote(request: Request, env: Env): Promise<Response> {
@@ -112,7 +137,7 @@ async function leaderboard(env: Env): Promise<Response> {
   for (const task of data.tasks) {
     const submissions = task.submissions.filter((item) => item.status === 'published');
     if (!submissions.length) {
-      output.push({ task: { id: task.id, title: task.title }, ratings: [], votes: 0 });
+      output.push({ task: publicTask(task), ratings: [], votes: 0 });
       continue;
     }
     const result = await env.DB.prepare(
@@ -122,7 +147,7 @@ async function leaderboard(env: Env): Promise<Response> {
       ...rating,
       submission: submissions.find((item) => item.id === rating.submissionId),
     }));
-    output.push({ task: { id: task.id, title: task.title }, ratings, votes: result.results.length });
+    output.push({ task: publicTask(task), ratings, votes: result.results.length });
   }
   return json({ tasks: output });
 }
@@ -130,6 +155,10 @@ async function leaderboard(env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.hostname === 'aetherplaybench.dairui1.com') {
+      url.hostname = 'web3dgamebench.dairui1.com';
+      return Response.redirect(url, 308);
+    }
     try {
       if (request.method === 'GET' && url.pathname === '/api/catalog') return json(await catalog(env));
       if (request.method === 'GET' && url.pathname === '/api/arena/pair') return arenaPair(request, env);

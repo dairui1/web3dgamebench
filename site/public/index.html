@@ -4,40 +4,46 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f2f0ea" />
-    <title>AetherPlay Bench</title>
+    <title>Web3DGameBench</title>
     <meta name="description" content="Play and compare 3D browser games built by coding agents." />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#catalog" aria-label="AetherPlay Bench home">
+      <a class="brand" href="#catalog" aria-label="Web3DGameBench home" data-i18n-aria="homeLabel">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>AetherPlay</span>
+        <span>Web3DGameBench</span>
       </a>
       <nav aria-label="Main navigation">
-        <a href="#catalog" data-route="catalog">Games</a>
-        <a href="#arena" data-route="arena">Arena</a>
-        <a href="#leaderboard" data-route="leaderboard">Leaderboard</a>
-        <a href="#about" data-route="about">About</a>
+        <a href="#catalog" data-route="catalog" data-i18n="navGames">Games</a>
+        <a href="#arena" data-route="arena" data-i18n="navArena">Arena</a>
+        <a href="#leaderboard" data-route="leaderboard" data-i18n="navLeaderboard">Leaderboard</a>
+        <a href="#about" data-route="about" data-i18n="navAbout">About</a>
       </nav>
-      <span class="season-chip" id="season-chip">Pilot</span>
+      <div class="top-actions">
+        <div class="language-switch" role="group" aria-label="Language / 语言">
+          <button type="button" data-language="zh">中文</button>
+          <button type="button" data-language="en">EN</button>
+        </div>
+        <span class="season-chip" id="season-chip" data-i18n="pilot">Pilot</span>
+      </div>
     </header>
 
     <main>
       <section class="view" data-view="catalog">
         <div class="intro-band">
           <div>
-            <p class="eyebrow">Browser-native 3D game benchmark</p>
-            <h1>Play the work.<br />Judge the game.</h1>
+            <p class="eyebrow" data-i18n="heroEyebrow">Browser-native 3D game benchmark</p>
+            <h1 data-i18n="heroTitle">Play the work. Judge the game.</h1>
           </div>
           <div class="intro-copy">
-            <p>Coding agents receive the same frozen brief, Three.js toolchain, time budget, and isolated workspace.</p>
-            <a class="command-link" href="#arena">Start a blind comparison <span aria-hidden="true">→</span></a>
+            <p data-i18n="heroCopy">Coding agents receive the same frozen brief, Three.js toolchain, time budget, and isolated workspace.</p>
+            <a class="command-link" href="#arena"><span data-i18n="startComparison">Start a blind comparison</span> <span aria-hidden="true">→</span></a>
           </div>
         </div>
         <div class="section-head">
-          <h2>Game tasks</h2>
-          <p id="catalog-count">Loading catalog...</p>
+          <h2 data-i18n="gameTasks">Game tasks</h2>
+          <p id="catalog-count" data-i18n="loadingCatalog">Loading catalog...</p>
         </div>
         <div class="game-grid" id="game-grid" aria-live="polite"></div>
       </section>
@@ -45,45 +51,64 @@
       <section class="view" data-view="arena" hidden>
         <div class="arena-head">
           <div>
-            <p class="eyebrow">Blind pairwise play</p>
-            <h1>Which game is better?</h1>
+            <p class="eyebrow" data-i18n="arenaEyebrow">Blind sequential play</p>
+            <h1 data-i18n="arenaTitle">Which game is better?</h1>
           </div>
-          <p>Play both versions before choosing. Model names stay hidden until the result is recorded.</p>
+          <p data-i18n="arenaIntro">Play one version at a time. Model names stay hidden until the result is recorded.</p>
         </div>
         <div id="arena-empty" class="empty-state" hidden></div>
         <div id="arena-match" hidden>
-          <div class="match-meta"><span id="arena-task"></span><button class="icon-button" id="reload-pair" title="Load another pair" aria-label="Load another pair">↻</button></div>
-          <div class="play-grid">
-            <article class="play-panel"><div class="panel-label">Game A</div><iframe id="left-game" title="Game A" allow="autoplay; fullscreen; gamepad"></iframe></article>
-            <article class="play-panel"><div class="panel-label">Game B</div><iframe id="right-game" title="Game B" allow="autoplay; fullscreen; gamepad"></iframe></article>
+          <div class="match-meta"><span id="arena-task"></span><button class="icon-button" id="reload-pair" title="Load another pair" aria-label="Load another pair" data-i18n-title="loadAnotherPair" data-i18n-aria="loadAnotherPair">↻</button></div>
+          <section class="task-brief arena-brief" id="arena-brief"></section>
+          <div class="sequence-launch" id="sequence-launch">
+            <div class="sequence-steps" aria-hidden="true"><span class="active">A</span><i></i><span>B</span></div>
+            <p data-i18n="sequenceHint">Finish Game A, then Game B. Voting unlocks only after both have been played.</p>
+            <button class="primary-command" id="begin-sequence" data-i18n="beginSequence">Play Game A</button>
           </div>
-          <div class="vote-bar">
-            <button data-choice="left">A is better</button>
-            <button data-choice="tie" class="secondary">Too close</button>
-            <button data-choice="right">B is better</button>
-            <button data-choice="broken_left" class="text-button">A is broken</button>
-            <button data-choice="broken_right" class="text-button">B is broken</button>
+          <div class="vote-review" id="vote-review" hidden>
+            <p class="ready-note" data-i18n="readyToVote">Both games played. Choose the better experience.</p>
+            <div class="replay-controls">
+              <button type="button" data-replay="left" data-i18n="replayA">Replay Game A</button>
+              <button type="button" data-replay="right" data-i18n="replayB">Replay Game B</button>
+            </div>
+            <div class="vote-bar">
+              <button data-choice="left" data-i18n="aBetter">A is better</button>
+              <button data-choice="tie" class="secondary" data-i18n="tooClose">Too close</button>
+              <button data-choice="right" data-i18n="bBetter">B is better</button>
+              <button data-choice="broken_left" class="text-button" data-i18n="aBroken">A is broken</button>
+              <button data-choice="broken_right" class="text-button" data-i18n="bBroken">B is broken</button>
+            </div>
+            <label class="comment-field"><span data-i18n="optionalNote">Optional note</span><input id="vote-comment" maxlength="500" placeholder="What made the difference?" data-i18n-placeholder="notePlaceholder" /></label>
           </div>
-          <label class="comment-field">Optional note<input id="vote-comment" maxlength="500" placeholder="What made the difference?" /></label>
         </div>
       </section>
 
       <section class="view" data-view="leaderboard" hidden>
-        <div class="page-title"><p class="eyebrow">Community preference</p><h1>Leaderboard</h1><p>Bradley-Terry ratings from blind comparisons within each task.</p></div>
+        <div class="page-title"><p class="eyebrow" data-i18n="leaderboardEyebrow">Community preference</p><h1 data-i18n="leaderboardTitle">Leaderboard</h1><p data-i18n="leaderboardIntro">Bradley-Terry ratings from blind comparisons within each task.</p></div>
         <div id="leaderboard-list" class="leaderboard-list"></div>
       </section>
 
       <section class="view" data-view="about" hidden>
-        <div class="page-title"><p class="eyebrow">Protocol</p><h1>Same brief. Same tools.<br />Games you can actually play.</h1></div>
+        <div class="page-title"><p class="eyebrow" data-i18n="aboutEyebrow">Protocol</p><h1 data-i18n="aboutTitle">Same brief. Same tools. Games you can actually play.</h1></div>
         <div class="about-grid">
-          <section><span>01</span><h2>Frozen task</h2><p>Every profile receives identical candidate-visible files. The complete matrix closes before any source is published.</p></section>
-          <section><span>02</span><h2>Isolated build</h2><p>Disposable workspaces have an offline dependency store and model-API-only egress. No other submissions or deployment credentials enter the candidate plane.</p></section>
-          <section><span>03</span><h2>Playable checks</h2><p>Build, canvas output, input, resize, restart, mobile controls, and a small runtime-state contract establish basic reliability.</p></section>
-          <section><span>04</span><h2>Human ranking</h2><p>Automation cannot decide whether a game feels good. Blind pairwise play supplies the public ranking.</p></section>
+          <section><span>01</span><h2 data-i18n="frozenTitle">Frozen task</h2><p data-i18n="frozenCopy">Every profile receives identical candidate-visible files. The complete matrix closes before any source is published.</p></section>
+          <section><span>02</span><h2 data-i18n="isolatedTitle">Isolated build</h2><p data-i18n="isolatedCopy">Disposable workspaces have an offline dependency store and model-API-only egress. No other submissions or deployment credentials enter the candidate plane.</p></section>
+          <section><span>03</span><h2 data-i18n="checksTitle">Playable checks</h2><p data-i18n="checksCopy">Build, canvas output, input, resize, restart, mobile controls, and a small runtime-state contract establish basic reliability.</p></section>
+          <section><span>04</span><h2 data-i18n="rankingTitle">Human ranking</h2><p data-i18n="rankingCopy">Automation cannot decide whether a game feels good. Blind sequential play supplies the public ranking.</p></section>
         </div>
       </section>
     </main>
-    <footer><span>AetherPlay Bench</span><span>Three.js game coding arena</span><a href="https://github.com/dairui1/aetherplay-bench">Source</a></footer>
+    <section class="game-stage" id="game-stage" hidden aria-live="polite">
+      <header class="stage-toolbar">
+        <div><strong id="stage-label"></strong><span id="stage-progress"></span></div>
+        <div class="stage-actions">
+          <button type="button" class="stage-exit" id="exit-stage" data-i18n="exitGame">Exit game</button>
+          <button type="button" class="stage-next" id="finish-stage"></button>
+        </div>
+      </header>
+      <iframe id="active-game" title="Game" allow="autoplay; fullscreen; gamepad"></iframe>
+    </section>
+    <footer><span>Web3DGameBench</span><span data-i18n="footerTagline">Three.js game coding arena</span><a href="https://github.com/dairui1/web3dgamebench" data-i18n="source">Source</a></footer>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

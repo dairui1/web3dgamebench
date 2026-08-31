@@ -8,8 +8,39 @@
     {
       "id": "signal-drift",
       "title": "Signal Drift",
+      "titleZh": "信号漂移（Signal Drift）",
       "summary": "Pilot a courier craft through a storm-damaged relay field, restore three gates, and reach extraction.",
+      "summaryZh": "驾驶一艘小型信使飞船穿越风暴损毁的空中中继区，依次修复三座中继门，维持飞船能量，避开移动障碍，最后穿过撤离环完成任务。",
       "genre": "3D flight challenge",
+      "genreZh": "3D 飞行挑战",
+      "evaluation": {
+        "objective": "Restore all three relay gates in order, keep enough charge to stay airborne, then cross the extraction ring.",
+        "objectiveZh": "按顺序修复全部三座中继门，在飞行中收集并维持足够能量，最后穿过撤离环。",
+        "controls": "Each build must explain its own desktop keyboard controls and provide usable pointer or touch controls on mobile.",
+        "controlsZh": "每个版本都应在游戏内说明自己的桌面键盘操作，并在手机上提供可用的指针或触摸操作。",
+        "checklist": [
+          {
+            "text": "A clear start screen explains the setting, objective, and how to begin.",
+            "textZh": "开始画面清楚交代背景、目标和进入游戏的方法。"
+          },
+          {
+            "text": "Steering, forward motion, collisions, charge management, and ordered relay progress form a coherent playable loop.",
+            "textZh": "转向、前进、碰撞、能量管理和按顺序修复中继门组成完整可玩的循环。"
+          },
+          {
+            "text": "The course is spatially legible, with convincing speed, turning, impact, danger, and success feedback.",
+            "textZh": "航线在空间上容易辨认，并能明确反馈速度、转向、撞击、危险和成功。"
+          },
+          {
+            "text": "The HUD shows charge, relay progress, and the current objective without blocking the playfield.",
+            "textZh": "HUD 显示能量、中继修复进度和当前目标，同时不遮挡主要游戏区域。"
+          },
+          {
+            "text": "Victory, failure, pause, restart, desktop controls, and mobile controls all work reliably.",
+            "textZh": "胜利、失败、暂停、重新开始、桌面操作和手机操作都能可靠工作。"
+          }
+        ]
+      },
       "submissions": [
         {
           "id": "signal-drift--claude-opus-default",

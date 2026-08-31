@@ -22,8 +22,14 @@ from .runtimes import build_invocation, parse_resolved_model
 
 
 def runs_dir() -> Path:
-    configured = os.environ.get("AETHERPLAY_RUNS_DIR")
-    return Path(configured).expanduser() if configured else Path.home() / ".local/state/aetherplay/runs"
+    configured = os.environ.get("WEB3DGAMEBENCH_RUNS_DIR") or os.environ.get(
+        "AETHERPLAY_RUNS_DIR"
+    )
+    return (
+        Path(configured).expanduser()
+        if configured
+        else Path.home() / ".local/state/web3dgamebench/runs"
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -150,7 +156,7 @@ def run_once(
     stderr = result.stderr if isinstance(result.stderr, str) else ""
     (run_root / "events.jsonl").write_text(stdout, encoding="utf-8")
     (run_root / "stderr.log").write_text(stderr, encoding="utf-8")
-    final_path = workspace / ".aetherplay-final.txt"
+    final_path = workspace / ".web3dgamebench-final.txt"
     if final_path.exists():
         shutil.copy2(final_path, run_root / "final.txt")
         final_path.unlink()

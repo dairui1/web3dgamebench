@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aetherplaybench.dairui1.com/schemas/submission.schema.json",
+  "$id": "https://web3dgamebench.dairui1.com/schemas/submission.schema.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "submission_id", "season", "task_id", "profile_id", "source_commit", "build_sha256", "checks"],

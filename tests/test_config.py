@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from aetherplay.config import load_profiles, validate_matrix
+from web3dgamebench.config import load_profiles, validate_matrix
 
 ROOT = Path(__file__).resolve().parents[1]
 

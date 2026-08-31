@@ -26,7 +26,7 @@ The player pilots a compact courier craft through a storm-damaged relay field su
 
 ## Runtime inspection contract
 
-Expose `window.__AETHERPLAY__` as a JSON-serializable object updated during play. It must contain:
+Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: number;

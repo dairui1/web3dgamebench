@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from aetherplay.config import load_profiles
-from aetherplay.runtimes import build_invocation
+from web3dgamebench.config import load_profiles
+from web3dgamebench.runtimes import build_invocation
 
 ROOT = Path(__file__).resolve().parents[1]
 

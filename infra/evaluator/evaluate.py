@@ -14,6 +14,7 @@ from playwright.sync_api import sync_playwright  # type: ignore[import-not-found
 
 SUBMISSION = Path("/submission")
 OUTPUT = Path("/output")
+STATE_EXPRESSION = "() => window.__WEB3DGAMEBENCH__ ?? window.__AETHERPLAY__ ?? null"
 
 
 def check(name: str, passed: bool, detail: object = None) -> dict:
@@ -77,7 +78,7 @@ def main() -> int:
                 )
                 page.goto(url, wait_until="networkidle", timeout=30_000)
                 page.wait_for_selector("canvas", timeout=15_000)
-                state_before = page.evaluate("() => window.__AETHERPLAY__ ?? null")
+                state_before = page.evaluate(STATE_EXPRESSION)
                 checks.append(check(f"{label}.runtime-contract", valid_state(state_before), state_before))
                 overflow = page.evaluate("() => document.documentElement.scrollWidth - innerWidth")
                 checks.append(check(f"{label}.no-horizontal-overflow", overflow <= 2, overflow))
@@ -96,7 +97,7 @@ def main() -> int:
                 else:
                     page.keyboard.press("Space")
                 page.wait_for_timeout(500)
-                state_started = page.evaluate("() => window.__AETHERPLAY__ ?? null")
+                state_started = page.evaluate(STATE_EXPRESSION)
                 checks.append(
                     check(
                         f"{label}.starts",
@@ -110,7 +111,7 @@ def main() -> int:
                 page.wait_for_timeout(700)
                 page.keyboard.up("KeyW")
                 page.keyboard.up("ArrowLeft")
-                state_after = page.evaluate("() => window.__AETHERPLAY__ ?? null")
+                state_after = page.evaluate(STATE_EXPRESSION)
                 moved = state_after != state_started and valid_state(state_after)
                 checks.append(check(f"{label}.updates-during-input", moved, state_after))
                 context.close()

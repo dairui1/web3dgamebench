@@ -90,7 +90,7 @@ def command_vendor(_: argparse.Namespace) -> int:
             from .container import load_container_config
 
             image = load_container_config(root).image
-            with tempfile.TemporaryDirectory(prefix="aetherplay-vendor-") as temporary:
+            with tempfile.TemporaryDirectory(prefix="web3dgamebench-vendor-") as temporary:
                 seed = Path(temporary) / "starter"
                 shutil.copytree(starter, seed, ignore=shutil.ignore_patterns("node_modules", "dist"))
                 result = subprocess.run(
@@ -189,7 +189,7 @@ def command_publish(args: argparse.Namespace) -> int:
     games_repo = (
         Path(args.games_repo).expanduser().resolve()
         if args.games_repo
-        else root.parent / "aetherplay-games"
+        else root.parent / "web3dgamebench-games"
     )
     catalog = publish_runs(
         root,
@@ -225,7 +225,7 @@ def command_invalidate(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aetherplay")
+    parser = argparse.ArgumentParser(prog="web3dgamebench")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
     doctor = commands.add_parser("doctor")

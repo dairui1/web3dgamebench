@@ -3,7 +3,7 @@
   "starters": [
     {
       "starter": "tasks/signal-drift/task/starter",
-      "package_lock_sha256": "f6c2e7080bc56b648cdb181a8e27be915fb9dbb9e2ada4b182aad4d7aeb45a30"
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
     }
   ]
 }

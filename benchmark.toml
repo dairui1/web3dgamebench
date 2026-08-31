@@ -1,8 +1,8 @@
-id = "aetherplay-bench"
-name = "AetherPlay Bench"
-domain = "aetherplaybench.dairui1.com"
-runs_env = "AETHERPLAY_RUNS_DIR"
-games_repository = "https://github.com/dairui1/aetherplay-games"
+id = "web3dgamebench"
+name = "Web3DGameBench"
+domain = "web3dgamebench.dairui1.com"
+runs_env = "WEB3DGAMEBENCH_RUNS_DIR"
+games_repository = "https://github.com/dairui1/web3dgamebench-games"
 ranking = "bradley-terry-pairwise"
 
 [execution]
@@ -14,4 +14,4 @@ candidate_timeout_seconds = 3600
 [submission]
 build_command = "npm run build"
 output_directory = "dist"
-state_global = "__AETHERPLAY__"
+state_global = "__WEB3DGAMEBENCH__"

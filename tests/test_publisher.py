@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from aetherplay.publisher import publish_runs
+from web3dgamebench.publisher import publish_runs
 
 
 def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
