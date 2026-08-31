@@ -26,6 +26,7 @@ class ContainerConfig:
     egress_allow: tuple[str, ...]
     memory: str | None
     cpus: str | None
+    command_timeout_seconds: int
 
     @property
     def proxy_url(self) -> str:
@@ -36,7 +37,7 @@ def load_container_config(root: Path) -> ContainerConfig:
     import tomllib
 
     raw = tomllib.loads((root / "configs/container.toml").read_text())["container"]
-    return ContainerConfig(
+    config = ContainerConfig(
         image=str(raw["image"]),
         evaluator_image=str(raw["evaluator_image"]),
         internal_network=str(raw["internal_network"]),
@@ -46,7 +47,11 @@ def load_container_config(root: Path) -> ContainerConfig:
         egress_allow=tuple(raw["egress_allow"]),
         memory=raw.get("memory"),
         cpus=raw.get("cpus"),
+        command_timeout_seconds=int(raw.get("command_timeout_seconds", 1200)),
     )
+    if config.command_timeout_seconds <= 0:
+        raise ContainerError("command_timeout_seconds must be positive")
+    return config
 
 
 def docker(*args: str, timeout: int = 180, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -199,12 +204,24 @@ def wrap_command(
             raise ContainerError(f"missing {profile.credential_env}")
         environment[profile.runtime_env] = value
         environment["PI_CODING_AGENT_DIR"] = "/tmp/pi-agent"
+        environment["WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS"] = str(
+            config.command_timeout_seconds
+        )
     args = [
         "docker", "run", "--rm", "-i", "--network", config.internal_network,
         "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--init",
         "-v", f"{workspace}:/workspace", "-v", f"{vendor}:/vendor:ro",
         "-v", f"{credential_dir}:/runtime-home", "-w", "/workspace",
     ]
+    if profile.harness == "pi":
+        timeout_extension = root / "infra/candidate/pi_command_timeout.js"
+        if not timeout_extension.is_file():
+            raise ContainerError(f"missing Pi command timeout extension: {timeout_extension}")
+        extension_target = (
+            "/usr/lib/node_modules/@earendil-works/pi-coding-agent/"
+            "web3dgamebench-command-timeout.js"
+        )
+        args.extend(["-v", f"{timeout_extension}:{extension_target}:ro"])
     if config.memory:
         args.extend(["--memory", config.memory])
     if config.cpus:
@@ -212,6 +229,16 @@ def wrap_command(
     for key, value in sorted(environment.items()):
         args.extend(["-e", f"{key}={value}"])
     args.append(config.image)
-    args.extend(argv)
+    if profile.harness == "pi":
+        args.extend(
+            [
+                argv[0],
+                "--extension",
+                "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
+                *argv[1:],
+            ]
+        )
+    else:
+        args.extend(argv)
     # Return redacted environment metadata separately; never persist values.
     return args, {key: "<passed>" for key in environment}

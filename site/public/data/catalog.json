@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T06:33:56.703815+00:00",
+  "generatedAt": "2026-08-31T10:15:37.795077+00:00",
   "season": {
     "id": "pilot-2026-09",
     "status": "public-voting"
@@ -146,6 +146,24 @@
             "eventCount": 289,
             "toolCalls": 155,
             "errors": 10
+          },
+          "status": "published",
+          "runStatus": "candidate-complete"
+        },
+        {
+          "id": "signal-drift--pi-glm-5-3-flash",
+          "taskId": "signal-drift",
+          "profileId": "pi-glm-5-3-flash",
+          "harness": "pi",
+          "model": "glm-5.3-flash",
+          "playUrl": "/playground/signal-drift/pi-glm-5-3-flash/",
+          "traceId": "20260831T060824Z-signal-drift-pi-glm-5-3-flash-a1-20c507f5",
+          "replayUrl": "/replay/20260831T060824Z-signal-drift-pi-glm-5-3-flash-a1-20c507f5",
+          "traceSummary": {
+            "durationSeconds": 14759.173,
+            "eventCount": 279,
+            "toolCalls": 143,
+            "errors": 9
           },
           "status": "published",
           "runStatus": "candidate-complete"

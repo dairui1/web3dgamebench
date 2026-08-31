@@ -34,3 +34,10 @@ provider = "opencode-go"
 model = "qwen3.8-flash"
 credential_env = "OPENCODE_GO_APIKEY"
 runtime_env = "OPENCODE_API_KEY"
+
+[profiles.pi-glm-5-3-flash]
+harness = "pi"
+provider = "opencode-go"
+model = "glm-5.3-flash"
+credential_env = "OPENCODE_GO_APIKEY"
+runtime_env = "OPENCODE_API_KEY"

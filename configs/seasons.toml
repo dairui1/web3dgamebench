@@ -9,6 +9,7 @@ profiles = [
   "claude-opus-default",
   "pi-deepseek-v4-flash",
   "pi-qwen3-8-flash",
+  "pi-glm-5-3-flash",
 ]
 attempts = 1
 publish_prompts_after_close = true
