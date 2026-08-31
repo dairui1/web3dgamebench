@@ -16,6 +16,12 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     render = tmp_path / "run/render"
     dist = render / "dist"
     (root / "site/public/data").mkdir(parents=True)
+    (root / "configs").mkdir()
+    (root / "configs/pricing.toml").write_text(
+        '[pricing]\ncurrency = "USD"\nunit_tokens = 1000000\nas_of = "2026-08-31"\n'
+        '[models.model]\ninput = 2\ncached_input = 0.2\noutput = 10\n'
+        'source = "https://example.com/pricing"\nsource_label = "Official pricing"\n'
+    )
     workspace.mkdir(parents=True)
     dist.mkdir(parents=True)
     (workspace / "src.ts").write_text("mutable workspace")
@@ -82,6 +88,8 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     submission = updated["tasks"][0]["submissions"][0]
     assert submission["traceId"] == "run-task-profile"
     assert submission["replayUrl"] == "/replay/run-task-profile"
+    assert submission["officialApiCost"]["total"] == 0
+    assert submission["officialApiCost"]["source"] == "https://example.com/pricing"
     replay = json.loads(
         (root / "site/public/data/traces/run-task-profile.json").read_text()
     )
@@ -94,6 +102,10 @@ def test_season_one_run_requires_closed_matrix(tmp_path: Path) -> None:
     games = tmp_path / "games"
     run = tmp_path / "run"
     (root / "site/public/data").mkdir(parents=True)
+    (root / "configs").mkdir()
+    (root / "configs/pricing.toml").write_text(
+        '[pricing]\ncurrency = "USD"\nunit_tokens = 1000000\nas_of = "2026-08-31"\n'
+    )
     (root / "site/public/data/catalog.json").write_text(
         json.dumps(
             {
@@ -125,6 +137,10 @@ def test_matrix_publication_requires_exact_trusted_run_set(
 ) -> None:
     root = tmp_path / "bench"
     (root / "site/public/data").mkdir(parents=True)
+    (root / "configs").mkdir()
+    (root / "configs/pricing.toml").write_text(
+        '[pricing]\ncurrency = "USD"\nunit_tokens = 1000000\nas_of = "2026-08-31"\n'
+    )
     (root / "site/public/data/catalog.json").write_text(
         json.dumps(
             {

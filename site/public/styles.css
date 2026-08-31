@@ -121,6 +121,10 @@ body.stage-open { overflow: hidden; }
 
 .page-title { padding: 6vh 0 60px; border-bottom: 1px solid var(--ink); }
 .leaderboard-list { margin-top: 30px; }
+.board-scroll { overflow-x: auto; }
+.cost-cell { display: inline-flex; flex-direction: column; gap: 3px; color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; white-space: nowrap; }
+.cost-cell small, .cost-missing, .cost-method { color: var(--muted); font: 700 11px/1.35 ui-monospace, monospace; }
+.cost-method { margin: 12px 0 0; max-width: 900px; }
 .board { margin-bottom: 46px; }
 .board-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 12px; }
 .board-head h2 { margin: 0; font-size: 30px; }
@@ -285,5 +289,7 @@ footer a { margin-left: auto; }
   .trace-detail-head > div { flex-wrap: wrap; }
   .trace-index-row { min-height: 82px; }
   .trace-index-group > header { align-items: start; flex-direction: column; justify-content: center; gap: 8px; }
-  .board-table th:nth-child(4), .board-table td:nth-child(4), .board-table th:nth-child(5), .board-table td:nth-child(5) { display: none; }
+  .board-table th, .board-table td { padding: 13px 8px; }
+  .board-table th:nth-child(5), .board-table td:nth-child(5), .board-table th:nth-child(6), .board-table td:nth-child(6) { display: none; }
+  .cost-cell small { font-size: 9px; }
 }

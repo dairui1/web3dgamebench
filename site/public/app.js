@@ -268,9 +268,21 @@ function renderLeaderboard() {
   document.querySelector('#leaderboard-list').innerHTML = leaderboardData.tasks.map((task) => `
     <section class="board">
       <div class="board-head"><h2>${escapeHtml(localized(task.task, 'title'))}</h2><span>${t('preferenceVotes', { count: task.votes })}</span></div>
-      ${task.ratings.length ? `<table class="board-table"><thead><tr><th>${t('rank')}</th><th>${t('system')}</th><th>${t('rating')}</th><th>${t('comparisons')}</th><th>${t('record')}</th></tr></thead><tbody>${task.ratings.map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.submission?.model || row.submissionId)} <small>${escapeHtml(row.submission?.harness || '')}${row.submission?.runStatus === 'timeout' ? ` · ${t('timeoutShort')}` : ''}</small></td><td>${row.rating}</td><td>${row.comparisons}</td><td>${language === 'zh' ? `${row.wins}胜 · ${row.losses}负 · ${row.ties}平` : `${row.wins}W · ${row.losses}L · ${row.ties}T`}</td></tr>`).join('')}</tbody></table>` : `<div class="empty-state">${t('emptyRatings')}</div>`}
+      ${task.ratings.length ? `<div class="board-scroll"><table class="board-table"><thead><tr><th>${t('rank')}</th><th>${t('system')}</th><th>${t('rating')}</th><th>${t('apiCost')}</th><th>${t('comparisons')}</th><th>${t('record')}</th></tr></thead><tbody>${task.ratings.map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.submission?.model || row.submissionId)} <small>${escapeHtml(row.submission?.harness || '')}${row.submission?.runStatus === 'timeout' ? ` · ${t('timeoutShort')}` : ''}</small></td><td>${row.rating}</td><td>${formatCost(row.submission?.officialApiCost)}</td><td>${row.comparisons}</td><td>${language === 'zh' ? `${row.wins}胜 · ${row.losses}负 · ${row.ties}平` : `${row.wins}W · ${row.losses}L · ${row.ties}T`}</td></tr>`).join('')}</tbody></table></div><p class="cost-method">${t('costMethod')}</p>` : `<div class="empty-state">${t('emptyRatings')}</div>`}
     </section>
   `).join('');
+}
+
+function formatCost(cost) {
+  if (!cost) return `<span class="cost-missing">${t('costUnavailable')}</span>`;
+  const dollars = new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+    style: 'currency', currency: cost.currency || 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(cost.total);
+  const tokens = new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+    notation: 'compact', maximumFractionDigits: 2,
+  }).format(cost.usage?.totalTokens || 0);
+  const title = `${cost.sourceLabel || ''} · ${cost.priceAsOf || ''}${cost.pricingTier && cost.pricingTier !== 'standard' ? ` · ${cost.pricingTier}` : ''}`;
+  return `<a class="cost-cell" href="${escapeHtml(cost.source)}" target="_blank" rel="noopener" title="${escapeHtml(title)}"><strong>${escapeHtml(dollars)}</strong><small>${escapeHtml(t('costTokens', { tokens }))}</small></a>`;
 }
 
 function escapeHtml(value) {

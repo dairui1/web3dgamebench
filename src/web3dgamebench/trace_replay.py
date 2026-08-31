@@ -150,6 +150,7 @@ def _codex_events(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict
                     "outputTokens": int(raw_usage.get("output_tokens") or 0),
                     "reasoningTokens": int(raw_usage.get("reasoning_output_tokens") or 0),
                     "cachedTokens": int(raw_usage.get("cached_input_tokens") or 0),
+                    "cacheWriteTokens": int(raw_usage.get("cache_creation_input_tokens") or 0),
                 }
             )
             continue
@@ -257,6 +258,7 @@ def _claude_events(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dic
                         (raw_usage.get("output_tokens_details") or {}).get("thinking_tokens") or 0
                     ),
                     "cachedTokens": int(raw_usage.get("cache_read_input_tokens") or 0),
+                    "cacheWriteTokens": int(raw_usage.get("cache_creation_input_tokens") or 0),
                 }
             )
             result_text = str(raw_event.get("result") or "").strip()
@@ -292,6 +294,7 @@ def _pi_events(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[st
                     "outputTokens": int(raw_usage.get("output") or 0),
                     "reasoningTokens": int(raw_usage.get("reasoning") or 0),
                     "cachedTokens": int(raw_usage.get("cacheRead") or 0),
+                    "cacheWriteTokens": int(raw_usage.get("cacheWrite") or 0),
                 }
             )
             for block in message.get("content") or []:

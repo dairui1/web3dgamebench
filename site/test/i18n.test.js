@@ -22,3 +22,17 @@ test('published tasks include bilingual evaluation guidance', async () => {
     assert.ok(task.evaluation.checklist.every((item) => item.text && item.textZh));
   }
 });
+
+test('published submissions include official API cost estimates', async () => {
+  const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  const submissions = catalog.tasks.flatMap((task) => task.submissions);
+  assert.ok(submissions.length > 0);
+  for (const submission of submissions) {
+    const cost = submission.officialApiCost;
+    assert.equal(cost.currency, 'USD');
+    assert.equal(cost.estimated, true);
+    assert.ok(cost.total > 0);
+    assert.ok(cost.usage.totalTokens > 0);
+    assert.match(cost.source, /^https:\/\//);
+  }
+});

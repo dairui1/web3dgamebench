@@ -58,7 +58,30 @@
             "errors": 3
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 15.649287,
+            "usage": {
+              "uncachedInputTokens": 306,
+              "cachedInputTokens": 23580515,
+              "cacheWriteTokens": 0,
+              "outputTokens": 154300,
+              "reasoningTokens": 49755,
+              "totalTokens": 23735121
+            },
+            "ratesPerMillion": {
+              "input": 5.0,
+              "cachedInput": 0.5,
+              "cacheWrite": 6.25,
+              "output": 25.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://www.anthropic.com/claude/opus",
+            "sourceLabel": "Anthropic Claude Opus 5 pricing"
+          }
         },
         {
           "id": "signal-drift--claude-sonnet-default",
@@ -76,7 +99,30 @@
             "errors": 3
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 2.325103,
+            "usage": {
+              "uncachedInputTokens": 162,
+              "cachedInputTokens": 7589894,
+              "cacheWriteTokens": 0,
+              "outputTokens": 80680,
+              "reasoningTokens": 28610,
+              "totalTokens": 7670736
+            },
+            "ratesPerMillion": {
+              "input": 2.0,
+              "cachedInput": 0.2,
+              "cacheWrite": 2.5,
+              "output": 10.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://www.anthropic.com/research/claude-sonnet-5",
+            "sourceLabel": "Anthropic Claude Sonnet 5 pricing"
+          }
         },
         {
           "id": "signal-drift--codex-luna-max",
@@ -94,7 +140,30 @@
             "errors": 3
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.171051,
+            "usage": {
+              "uncachedInputTokens": 140236,
+              "cachedInputTokens": 3098624,
+              "cacheWriteTokens": 0,
+              "outputTokens": 67526,
+              "reasoningTokens": 16143,
+              "totalTokens": 3306386
+            },
+            "ratesPerMillion": {
+              "input": 0.2,
+              "cachedInput": 0.02,
+              "cacheWrite": 0.25,
+              "output": 1.2
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://help.openai.com/en/articles/20001415",
+            "sourceLabel": "OpenAI ChatGPT rate card"
+          }
         },
         {
           "id": "signal-drift--codex-sol-medium",
@@ -112,7 +181,30 @@
             "errors": 2
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 1.229285,
+            "usage": {
+              "uncachedInputTokens": 98311,
+              "cachedInputTokens": 861952,
+              "cacheWriteTokens": 0,
+              "outputTokens": 24563,
+              "reasoningTokens": 1898,
+              "totalTokens": 984826
+            },
+            "ratesPerMillion": {
+              "input": 4.0,
+              "cachedInput": 0.4,
+              "cacheWrite": 5.0,
+              "output": 20.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://help.openai.com/en/articles/20001415",
+            "sourceLabel": "OpenAI ChatGPT rate card"
+          }
         },
         {
           "id": "signal-drift--codex-terra-high",
@@ -130,7 +222,30 @@
             "errors": 2
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.598658,
+            "usage": {
+              "uncachedInputTokens": 90468,
+              "cachedInputTokens": 724992,
+              "cacheWriteTokens": 0,
+              "outputTokens": 22727,
+              "reasoningTokens": 1953,
+              "totalTokens": 838187
+            },
+            "ratesPerMillion": {
+              "input": 2.0,
+              "cachedInput": 0.2,
+              "cacheWrite": 2.5,
+              "output": 12.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+            "sourceLabel": "OpenAI API model pricing"
+          }
         },
         {
           "id": "signal-drift--pi-deepseek-v4-flash",
@@ -148,7 +263,30 @@
             "errors": 10
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.254438,
+            "usage": {
+              "uncachedInputTokens": 52461,
+              "cachedInputTokens": 17507328,
+              "cacheWriteTokens": 0,
+              "outputTokens": 182341,
+              "reasoningTokens": 0,
+              "totalTokens": 17742130
+            },
+            "ratesPerMillion": {
+              "input": 0.22,
+              "cachedInput": 0.007,
+              "cacheWrite": 0.22,
+              "output": 0.66
+            },
+            "pricingTier": "off-peak",
+            "priceAsOf": "2026-08-31",
+            "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+            "sourceLabel": "DeepSeek API pricing"
+          }
         },
         {
           "id": "signal-drift--pi-glm-5-3-flash",
@@ -166,7 +304,31 @@
             "errors": 9
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.318343,
+            "usage": {
+              "uncachedInputTokens": 1136715,
+              "cachedInputTokens": 12859712,
+              "cacheWriteTokens": 0,
+              "outputTokens": 160776,
+              "reasoningTokens": 74797,
+              "totalTokens": 14157203
+            },
+            "ratesPerMillion": {
+              "input": 0.075,
+              "cachedInput": 0.015,
+              "cacheWrite": 0.075,
+              "output": 0.25
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://docs.z.ai/guides/overview/pricing",
+            "sourceLabel": "Z.AI model pricing",
+            "note": "50% launch price through 2026-09-09 24:00 UTC+8"
+          }
         },
         {
           "id": "signal-drift--pi-qwen3-8-flash",
@@ -184,7 +346,30 @@
             "errors": 4
           },
           "status": "published",
-          "runStatus": "candidate-complete"
+          "runStatus": "candidate-complete",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.232271,
+            "usage": {
+              "uncachedInputTokens": 467353,
+              "cachedInputTokens": 6276992,
+              "cacheWriteTokens": 0,
+              "outputTokens": 131353,
+              "reasoningTokens": 36094,
+              "totalTokens": 6875698
+            },
+            "ratesPerMillion": {
+              "input": 0.15,
+              "cachedInput": 0.016,
+              "cacheWrite": 0.2,
+              "output": 0.47
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://www.qwencloud.com/models/qwen3.8-flash",
+            "sourceLabel": "QwenCloud model pricing"
+          }
         }
       ]
     }

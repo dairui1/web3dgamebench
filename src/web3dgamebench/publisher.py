@@ -13,6 +13,7 @@ from .matrix import (
     load_matrix_receipt,
     validate_publication_receipt,
 )
+from .pricing import PricingError, estimate_official_cost, load_pricing
 from .trace_replay import TraceReplayError, export_trace_replay
 
 
@@ -156,6 +157,7 @@ def publish_runs(
     catalog = json.loads(catalog_path.read_text())
     seen: set[tuple[str, str]] = set()
     additions: dict[str, list[dict]] = {}
+    pricing = load_pricing(root)
     if catalog.get("season", {}).get("id") == "season-1" and matrix_receipt is None:
         raise PublishError("season-1 publication requires a closed matrix receipt")
     if matrix_receipt is not None:
@@ -231,13 +233,24 @@ def publish_runs(
             replay = export_trace_replay(run_root, trace_target)
         except TraceReplayError as error:
             raise PublishError(str(error)) from error
+        model = manifest.get("model_resolved") or profile["model"]
+        try:
+            cost = estimate_official_cost(
+                pricing,
+                model,
+                replay["summary"]["usage"],
+                replay["traceFormat"],
+                replay.get("createdAt"),
+            )
+        except PricingError as error:
+            raise PublishError(str(error)) from error
         additions.setdefault(task_id, []).append(
             {
                 "id": f"{task_id}--{profile_id}",
                 "taskId": task_id,
                 "profileId": profile_id,
                 "harness": profile["harness"],
-                "model": manifest.get("model_resolved") or profile["model"],
+                "model": model,
                 "playUrl": f"/playground/{task_id}/{profile_id}/",
                 "traceId": trace_id,
                 "replayUrl": f"/replay/{trace_id}",
@@ -247,6 +260,7 @@ def publish_runs(
                     "toolCalls": replay["summary"]["toolCalls"],
                     "errors": replay["summary"]["errors"],
                 },
+                "officialApiCost": cost,
                 "status": "published",
                 "runStatus": run_status,
             }

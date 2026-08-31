@@ -38,6 +38,11 @@ normalizes Codex, Claude Code, and Pi event streams into a compact replay timeli
 `site/public/data/traces/`; raw `events.jsonl`, stderr, evaluator logs, and credentials remain in
 the private run directory.
 
+Leaderboard rows also show a reproducible official-API-equivalent cost. The publisher normalizes
+uncached input, cached input, cache writes, and output tokens, then applies the versioned official
+rates in `configs/pricing.toml`. This is an estimate for cross-system comparison, not the amount
+charged by subscription products such as Codex, Claude Code, or OpenCode Go.
+
 See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
 
 ## Operator quick start

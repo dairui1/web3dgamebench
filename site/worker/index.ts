@@ -15,6 +15,17 @@ type Submission = {
   traceId?: string;
   replayUrl?: string;
   traceSummary?: { durationSeconds: number; eventCount: number; toolCalls: number; errors: number };
+  officialApiCost?: {
+    currency: string;
+    estimated: boolean;
+    total: number;
+    usage: { totalTokens: number };
+    source: string;
+    sourceLabel: string;
+    priceAsOf?: string;
+    pricingTier?: string;
+    note?: string;
+  };
   status: string;
   runStatus?: string;
 };
