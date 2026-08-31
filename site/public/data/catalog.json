@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-30T20:27:15.814677+00:00",
+  "generatedAt": "2026-08-31T06:04:08.817870+00:00",
   "season": {
     "id": "pilot-2026-09",
     "status": "public-voting"
@@ -101,6 +101,16 @@
           "playUrl": "/playground/signal-drift/pi-deepseek-v4-flash/",
           "status": "published",
           "runStatus": "timeout"
+        },
+        {
+          "id": "signal-drift--pi-qwen3-8-flash",
+          "taskId": "signal-drift",
+          "profileId": "pi-qwen3-8-flash",
+          "harness": "pi",
+          "model": "qwen3.8-flash",
+          "playUrl": "/playground/signal-drift/pi-qwen3-8-flash/",
+          "status": "published",
+          "runStatus": "candidate-complete"
         }
       ]
     }

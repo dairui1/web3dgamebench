@@ -16,7 +16,6 @@ class Profile:
     model: str
     effort: str | None
     provider: str | None
-    timeout_seconds: int
     credential_env: str | None
     runtime_env: str | None
 
@@ -38,7 +37,6 @@ class Task:
     root: Path
     starter: Path
     brief: Path
-    time_limit_seconds: int
 
 
 def _toml(path: Path) -> dict:
@@ -60,7 +58,6 @@ def load_profiles(root: Path) -> dict[str, Profile]:
             model=str(value["model"]),
             effort=value.get("effort"),
             provider=value.get("provider"),
-            timeout_seconds=int(value.get("timeout_seconds", 3600)),
             credential_env=value.get("credential_env"),
             runtime_env=value.get("runtime_env"),
         )
@@ -97,7 +94,6 @@ def load_task(root: Path, task_id: str) -> Task:
         root=task_root,
         starter=starter,
         brief=brief,
-        time_limit_seconds=int(raw.get("time_limit_seconds", 3600)),
     )
 
 

@@ -9,7 +9,6 @@ ranking = "bradley-terry-pairwise"
 default_backend = "container"
 candidate_network = false
 publish_after_matrix = true
-candidate_timeout_seconds = 3600
 
 [submission]
 build_command = "npm run build"

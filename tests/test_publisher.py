@@ -21,7 +21,7 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     catalog = {
         "generatedAt": "old",
         "season": {"id": "test", "status": "private-running"},
-        "tasks": [{"id": "task", "submissions": []}],
+        "tasks": [{"id": "task", "titleZh": "信号漂移", "submissions": []}],
     }
     (root / "site/public/data/catalog.json").write_text(json.dumps(catalog))
     manifest = {
@@ -46,3 +46,4 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     )
     updated = json.loads((root / "site/public/data/catalog.json").read_text())
     assert updated["tasks"][0]["submissions"][0]["playUrl"] == "/playground/task/profile/"
+    assert "信号漂移" in (root / "site/public/data/catalog.json").read_text()

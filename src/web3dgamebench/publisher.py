@@ -112,5 +112,5 @@ def publish_runs(
         )
     catalog["season"]["status"] = "public-voting"
     catalog["generatedAt"] = datetime.now(UTC).isoformat()
-    catalog_path.write_text(json.dumps(catalog, indent=2) + "\n")
+    catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n")
     return catalog_path

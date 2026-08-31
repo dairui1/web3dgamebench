@@ -137,21 +137,15 @@ def run_once(
             raise RuntimeError(f"missing required environment variable {profile.credential_env}")
         environment[profile.runtime_env] = value
     started = time.monotonic()
-    try:
-        result = subprocess.run(
-            argv,
-            cwd=workspace,
-            input=prompt if invocation.stdin_prompt else None,
-            text=True,
-            capture_output=True,
-            timeout=profile.timeout_seconds,
-            env=environment,
-            check=False,
-        )
-        timed_out = False
-    except subprocess.TimeoutExpired as error:
-        result = subprocess.CompletedProcess(invocation.argv, 124, error.stdout or "", error.stderr or "")
-        timed_out = True
+    result = subprocess.run(
+        argv,
+        cwd=workspace,
+        input=prompt if invocation.stdin_prompt else None,
+        text=True,
+        capture_output=True,
+        env=environment,
+        check=False,
+    )
     stdout = result.stdout if isinstance(result.stdout, str) else ""
     stderr = result.stderr if isinstance(result.stderr, str) else ""
     (run_root / "events.jsonl").write_text(stdout, encoding="utf-8")
@@ -164,7 +158,7 @@ def run_once(
     manifest = json.loads(manifest_path.read_text())
     manifest.update(
         {
-            "status": "timeout" if timed_out else ("candidate-complete" if result.returncode == 0 else "candidate-failure"),
+            "status": "candidate-complete" if result.returncode == 0 else "candidate-failure",
             "exit_code": result.returncode,
             "duration_seconds": round(time.monotonic() - started, 3),
             "trace_format": invocation.trace_format,
