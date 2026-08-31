@@ -25,6 +25,11 @@ The public result is intentionally two-part:
 - `${WEB3DGAMEBENCH_RUNS_DIR:-~/.local/state/web3dgamebench/runs}`: private candidate workspaces and raw traces.
 - `web3dgamebench.dairui1.com`: public catalog, playable routes, arena voting, and leaderboard.
 
+Published runs also receive an immutable replay route at `/replay/<run-id>`. The publisher
+normalizes Codex, Claude Code, and Pi event streams into a compact replay timeline under
+`site/public/data/traces/`; raw `events.jsonl`, stderr, evaluator logs, and credentials remain in
+the private run directory.
+
 See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
 
 ## Operator quick start

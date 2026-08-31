@@ -6,6 +6,8 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .trace_replay import TraceReplayError, export_trace_replay
+
 
 class PublishError(RuntimeError):
     pass
@@ -89,6 +91,12 @@ def publish_runs(
         _copy_source(workspace, source_target)
         shutil.copytree(dist, play_target)
         _make_assets_relative(play_target)
+        trace_id = str(manifest.get("run_id") or run_root.name)
+        trace_target = root / "site/public/data/traces" / f"{trace_id}.json"
+        try:
+            replay = export_trace_replay(run_root, trace_target)
+        except TraceReplayError as error:
+            raise PublishError(str(error)) from error
         additions.setdefault(task_id, []).append(
             {
                 "id": f"{task_id}--{profile_id}",
@@ -97,6 +105,14 @@ def publish_runs(
                 "harness": profile["harness"],
                 "model": manifest.get("model_resolved") or profile["model"],
                 "playUrl": f"/playground/{task_id}/{profile_id}/",
+                "traceId": trace_id,
+                "replayUrl": f"/replay/{trace_id}",
+                "traceSummary": {
+                    "durationSeconds": replay["durationSeconds"],
+                    "eventCount": replay["summary"]["eventCount"],
+                    "toolCalls": replay["summary"]["toolCalls"],
+                    "errors": replay["summary"]["errors"],
+                },
                 "status": "published",
                 "runStatus": run_status,
             }

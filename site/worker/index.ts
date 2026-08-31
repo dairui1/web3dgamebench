@@ -12,6 +12,9 @@ type Submission = {
   harness: string;
   model: string;
   playUrl: string;
+  traceId?: string;
+  replayUrl?: string;
+  traceSummary?: { durationSeconds: number; eventCount: number; toolCalls: number; errors: number };
   status: string;
   runStatus?: string;
 };

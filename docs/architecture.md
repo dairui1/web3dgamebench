@@ -21,6 +21,19 @@ The publisher validates a trusted passing run, copies source into
 arena Worker's static assets. Raw traces, credentials, evaluator output, task prompts, and
 run manifests remain private.
 
+For every published run, the publisher also derives a bounded trace replay. It removes the
+candidate prompt, redacts credential-shaped values, clips large tool inputs and outputs, and
+normalizes harness-specific events into messages, changes, tools, errors, phases, and a common
+time axis. The derived replay is addressed by the immutable run ID:
+
+```text
+https://web3dgamebench.dairui1.com/replay/<run-id>
+```
+
+Catalog submissions carry `traceId`, `replayUrl`, and compact replay metrics. A publication fails
+when its runtime event stream is missing or cannot be normalized, so future published runs cannot
+silently ship without a replay path.
+
 Playable URLs are stable:
 
 ```text

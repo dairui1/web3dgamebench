@@ -10,15 +10,16 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#catalog" aria-label="Web3DGameBench home" data-i18n-aria="homeLabel">
+      <a class="brand" href="/#catalog" aria-label="Web3DGameBench home" data-i18n-aria="homeLabel">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span>Web3DGameBench</span>
       </a>
       <nav aria-label="Main navigation">
-        <a href="#catalog" data-route="catalog" data-i18n="navGames">Games</a>
-        <a href="#arena" data-route="arena" data-i18n="navArena">Arena</a>
-        <a href="#leaderboard" data-route="leaderboard" data-i18n="navLeaderboard">Leaderboard</a>
-        <a href="#about" data-route="about" data-i18n="navAbout">About</a>
+        <a href="/#catalog" data-route="catalog" data-i18n="navGames">Games</a>
+        <a href="/#traces" data-route="traces" data-i18n="navTraces">Traces</a>
+        <a href="/#arena" data-route="arena" data-i18n="navArena">Arena</a>
+        <a href="/#leaderboard" data-route="leaderboard" data-i18n="navLeaderboard">Leaderboard</a>
+        <a href="/#about" data-route="about" data-i18n="navAbout">About</a>
       </nav>
       <div class="top-actions">
         <div class="language-switch" role="group" aria-label="Language / 语言">
@@ -46,6 +47,11 @@
           <p id="catalog-count" data-i18n="loadingCatalog">Loading catalog...</p>
         </div>
         <div class="game-grid" id="game-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="view" data-view="traces" hidden>
+        <div class="page-title trace-index-title"><p class="eyebrow" data-i18n="tracesEyebrow">Agent execution</p><h1 data-i18n="tracesTitle">Trace replays</h1><p data-i18n="tracesIntro">Scrub through each run, jump between decisions and tools, and see how the finished game took shape.</p></div>
+        <div id="trace-index" class="trace-index"></div>
       </section>
 
       <section class="view" data-view="arena" hidden>
@@ -95,6 +101,47 @@
           <section><span>02</span><h2 data-i18n="isolatedTitle">Isolated build</h2><p data-i18n="isolatedCopy">Disposable workspaces have an offline dependency store and model-API-only egress. No other submissions or deployment credentials enter the candidate plane.</p></section>
           <section><span>03</span><h2 data-i18n="checksTitle">Playable checks</h2><p data-i18n="checksCopy">Build, canvas output, input, resize, restart, mobile controls, and a small runtime-state contract establish basic reliability.</p></section>
           <section><span>04</span><h2 data-i18n="rankingTitle">Human ranking</h2><p data-i18n="rankingCopy">Automation cannot decide whether a game feels good. Blind sequential play supplies the public ranking.</p></section>
+        </div>
+      </section>
+
+      <section class="view trace-view" data-view="replay" hidden>
+        <div class="empty-state" id="trace-loading" data-i18n="traceLoading">Loading trace replay...</div>
+        <div id="trace-player" hidden>
+          <header class="trace-replay-head">
+            <div><p class="eyebrow" data-i18n="traceReplayEyebrow">Trace replay</p><h1 id="trace-title"></h1><p id="trace-subtitle"></p></div>
+            <a href="/#traces" class="trace-back"><span aria-hidden="true">←</span> <span data-i18n="traceAllRuns">All runs</span></a>
+          </header>
+          <div class="trace-summary" id="trace-summary"></div>
+          <section class="trace-transport" aria-label="Trace playback controls" data-i18n-aria="tracePlaybackControls">
+            <div class="trace-transport-buttons">
+              <button type="button" id="trace-previous" class="trace-icon-button" title="Previous event" aria-label="Previous event" data-i18n-title="tracePrevious" data-i18n-aria="tracePrevious">‹</button>
+              <button type="button" id="trace-play" class="trace-play-button" title="Play trace" aria-label="Play trace" data-i18n-title="tracePlay" data-i18n-aria="tracePlay">▶</button>
+              <button type="button" id="trace-next" class="trace-icon-button" title="Next event" aria-label="Next event" data-i18n-title="traceNext" data-i18n-aria="traceNext">›</button>
+            </div>
+            <div class="trace-scrubber">
+              <div class="trace-time"><span id="trace-current-time">0:00</span><span id="trace-total-time">0:00</span></div>
+              <input id="trace-range" type="range" min="0" max="1" value="0" step="0.01" aria-label="Trace position" data-i18n-aria="tracePosition" />
+              <div class="trace-chapters" id="trace-chapters"></div>
+            </div>
+            <div class="trace-speed" role="group" aria-label="Playback speed" data-i18n-aria="traceSpeed">
+              <button type="button" data-trace-speed="30" aria-pressed="false">30×</button>
+              <button type="button" data-trace-speed="60" aria-pressed="true">60×</button>
+              <button type="button" data-trace-speed="120" aria-pressed="false">120×</button>
+              <button type="button" data-trace-speed="240" aria-pressed="false">240×</button>
+            </div>
+          </section>
+          <div class="trace-workspace">
+            <aside class="trace-rail">
+              <div class="trace-filters" role="group" aria-label="Trace event filters" data-i18n-aria="traceFilters">
+                <button type="button" data-trace-filter="all" aria-pressed="true">All</button>
+                <button type="button" data-trace-filter="agent" aria-pressed="false">Agent</button>
+                <button type="button" data-trace-filter="tools" aria-pressed="false">Tools</button>
+                <button type="button" data-trace-filter="errors" aria-pressed="false">Errors</button>
+              </div>
+              <div id="trace-event-list" class="trace-event-list"></div>
+            </aside>
+            <article id="trace-detail" class="trace-detail" aria-live="polite"></article>
+          </div>
         </div>
       </section>
     </main>

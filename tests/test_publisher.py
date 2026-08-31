@@ -30,7 +30,21 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
         "profile": {"id": "profile", "harness": "codex", "model": "model"},
         "workspace": str(workspace),
     }
+    manifest["run_id"] = "run-task-profile"
+    manifest["duration_seconds"] = 12.5
+    manifest["trace_format"] = "codex-jsonl-v1"
     (tmp_path / "run/manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "run/events.jsonl").write_text(
+        json.dumps({"type": "thread.started", "thread_id": "thread"})
+        + "\n"
+        + json.dumps(
+            {
+                "type": "item.completed",
+                "item": {"id": "one", "type": "agent_message", "text": "Starting work"},
+            }
+        )
+        + "\n"
+    )
     (tmp_path / "run/evaluation").mkdir()
     (tmp_path / "run/evaluation/report.json").write_text(
         json.dumps({"trusted": True, "passed": True})
@@ -46,4 +60,11 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     )
     updated = json.loads((root / "site/public/data/catalog.json").read_text())
     assert updated["tasks"][0]["submissions"][0]["playUrl"] == "/playground/task/profile/"
+    submission = updated["tasks"][0]["submissions"][0]
+    assert submission["traceId"] == "run-task-profile"
+    assert submission["replayUrl"] == "/replay/run-task-profile"
+    replay = json.loads(
+        (root / "site/public/data/traces/run-task-profile.json").read_text()
+    )
+    assert replay["events"][0]["title"] == "Agent update"
     assert "信号漂移" in (root / "site/public/data/catalog.json").read_text()

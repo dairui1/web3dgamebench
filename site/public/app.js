@@ -1,4 +1,5 @@
 import { formatMessage } from './i18n.js';
+import { createReplayViewer, formatTraceTime } from './replay.js';
 
 const views = [...document.querySelectorAll('[data-view]')];
 const navLinks = [...document.querySelectorAll('[data-route]')];
@@ -16,6 +17,10 @@ let replayMode = false;
 
 const t = (key, values) => formatMessage(language, key, values);
 const localized = (object, key) => language === 'zh' && object?.[`${key}Zh`] ? object[`${key}Zh`] : object?.[key] || '';
+const replayViewer = createReplayViewer({
+  translate: (key, values) => t(key, values),
+  onTitle: (title) => { document.title = title; },
+});
 
 function applyTranslations() {
   document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
@@ -25,13 +30,17 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n-aria]').forEach((element) => { element.setAttribute('aria-label', t(element.dataset.i18nAria)); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => { element.placeholder = t(element.dataset.i18nPlaceholder); });
   document.querySelectorAll('[data-language]').forEach((button) => { button.setAttribute('aria-pressed', String(button.dataset.language === language)); });
-  if (catalogData) renderCatalog();
+  if (catalogData) {
+    renderCatalog();
+    renderTraceIndex();
+  }
   if (currentPair) {
     renderArenaTask();
     syncSequence();
   }
   if (leaderboardData) renderLeaderboard();
   if (activeSide) updateStageLabels();
+  replayViewer.refreshLanguage();
 }
 
 function setLanguage(next) {
@@ -42,13 +51,18 @@ function setLanguage(next) {
 }
 
 function route() {
-  const selected = location.hash.replace('#', '') || 'catalog';
+  const replayMatch = location.pathname.match(/^\/replay\/([^/]+)\/?$/);
+  const hashRoute = location.hash.replace('#', '');
+  const selected = hashRoute || (replayMatch ? 'replay' : 'catalog');
   const valid = views.some((view) => view.dataset.view === selected) ? selected : 'catalog';
   views.forEach((view) => { view.hidden = view.dataset.view !== valid; });
-  navLinks.forEach((link) => link.classList.toggle('active', link.dataset.route === valid));
+  navLinks.forEach((link) => link.classList.toggle('active', link.dataset.route === (valid === 'replay' ? 'traces' : valid)));
   if (valid !== 'arena') closeStage();
+  if (valid !== 'replay') replayViewer.stop();
   if (valid === 'arena') loadPair();
   if (valid === 'leaderboard') loadLeaderboard();
+  if (valid === 'replay' && replayMatch) replayViewer.load(decodeURIComponent(replayMatch[1]));
+  if (valid !== 'replay') document.title = 'Web3DGameBench';
   scrollTo({ top: 0, behavior: 'instant' });
 }
 
@@ -74,6 +88,7 @@ function taskBrief(task, compact = false) {
 async function loadCatalog() {
   catalogData = await api('/api/catalog');
   renderCatalog();
+  renderTraceIndex();
 }
 
 function renderCatalog() {
@@ -86,10 +101,35 @@ function renderCatalog() {
       <h3>${escapeHtml(localized(task, 'title'))}</h3>
       <p>${escapeHtml(localized(task, 'summary'))}</p>
       <details class="catalog-brief"><summary>${t('evaluationBrief')}</summary>${taskBrief(task, false)}</details>
-      ${task.submissions.length ? `<div class="build-list">${task.submissions.map((item) => `<div class="build-row"><div><strong>${escapeHtml(item.model)}</strong><small>${escapeHtml(item.harness)}${item.runStatus === 'timeout' ? ` · ${t('timeoutBuild')}` : ''}</small></div><a href="${escapeHtml(item.playUrl)}" target="_blank" rel="noopener">${t('play')}</a></div>`).join('')}</div>` : ''}
-      <div class="card-foot"><span>${t('playableBuilds', { count: task.submissions.length })}</span><a href="#arena">${t('compare')} →</a></div>
+      ${task.submissions.length ? `<div class="build-list">${task.submissions.map((item) => `<div class="build-row"><div><strong>${escapeHtml(item.model)}</strong><small>${escapeHtml(item.harness)}${item.runStatus === 'timeout' ? ` · ${t('timeoutBuild')}` : ''}</small></div><div class="build-actions">${item.replayUrl ? `<a class="secondary-action" href="${escapeHtml(item.replayUrl)}">${t('replay')}</a>` : ''}<a href="${escapeHtml(item.playUrl)}" target="_blank" rel="noopener">${t('play')}</a></div></div>`).join('')}</div>` : ''}
+      <div class="card-foot"><span>${t('playableBuilds', { count: task.submissions.length })}</span><a href="/#arena">${t('compare')} →</a></div>
     </article>
   `).join('');
+}
+
+function renderTraceIndex() {
+  if (!catalogData) return;
+  const root = document.querySelector('#trace-index');
+  const tasks = catalogData.tasks.map((task) => {
+    const traces = task.submissions.filter((submission) => submission.replayUrl && submission.traceSummary);
+    return `
+      <section class="trace-index-group">
+        <header><div><span>${escapeHtml(localized(task, 'genre'))}</span><h2>${escapeHtml(localized(task, 'title'))}</h2></div><strong>${t('traceRuns', { count: traces.length })}</strong></header>
+        <div class="trace-index-list">
+          ${traces.map((submission, index) => `
+            <a class="trace-index-row" href="${escapeHtml(submission.replayUrl)}">
+              <span class="trace-index-number">${String(index + 1).padStart(2, '0')}</span>
+              <span class="trace-index-agent"><strong>${escapeHtml(submission.model)}</strong><small>${escapeHtml(submission.harness)}</small></span>
+              <span>${t('traceDurationShort', { time: formatTraceTime(submission.traceSummary.durationSeconds) })}</span>
+              <span>${t('traceEventsShort', { count: submission.traceSummary.eventCount })}</span>
+              <b>${t('replay')} →</b>
+            </a>
+          `).join('') || `<div class="empty-state">${t('traceNotFound')}</div>`}
+        </div>
+      </section>
+    `;
+  });
+  root.innerHTML = tasks.join('');
 }
 
 async function loadPair(force = false) {
