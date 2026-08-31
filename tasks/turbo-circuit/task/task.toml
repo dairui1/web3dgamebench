@@ -1,0 +1,31 @@
+id = "turbo-circuit"
+title = "Turbo Circuit"
+season = "season-1-draft"
+status = "draft-review"
+framework = "three.js"
+brief = "goal.en.md"
+review_brief = "goal.zh-CN.md"
+starter = "starter"
+reference_archetype = "Mario Kart"
+seed = 82939
+
+[goal]
+mode = "external-goal"
+completion = "contract-and-evidence"
+
+[viewport.desktop]
+width = 1440
+height = 900
+
+[viewport.phone]
+width = 390
+height = 844
+
+[checks]
+build = true
+canvas_nonblank = true
+keyboard_input = true
+pointer_or_touch_input = true
+restart = true
+resize = true
+runtime_state = true
