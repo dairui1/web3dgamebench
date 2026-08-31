@@ -230,14 +230,13 @@ def wrap_command(
         args.extend(["-e", f"{key}={value}"])
     args.append(config.image)
     if profile.harness == "pi":
-        args.extend(
-            [
-                argv[0],
-                "--extension",
-                "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
-                *argv[1:],
-            ]
-        )
+        command = list(argv)
+        insertion = command.index("--no-extensions") + 1
+        command[insertion:insertion] = [
+            "--extension",
+            "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
+        ]
+        args.extend(command)
     else:
         args.extend(argv)
     # Return redacted environment metadata separately; never persist values.

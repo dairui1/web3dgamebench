@@ -23,10 +23,12 @@ Do not stop after building an RPG scene or a combat demo. Continue until the ful
 - One friendly quest-giver with approach cue, dialogue panel, accept action, in-progress dialogue, and completion/reward dialogue.
 - Nearest-target or explicit target selection with a visible target frame and range feedback.
 - A basic attack plus two abilities: one damage ability with cooldown and one heal or defensive ability with cooldown and resource cost.
-- Three hostile creatures near the ruin with aggro range, pursuit, attacks, damage reactions, defeat state, and one deterministic relic drop after all required kills.
+- Three hostile creatures spanning at least two behavior roles, including a pursuer and a ranged or area attacker with a readable telegraph. They need aggro range, attacks, damage reactions, defeat state, and one deterministic relic drop after all required kills.
+- At least one telegraphed enemy attack must make the heal or defensive ability materially useful; its cooldown and resource cost must create a real timing decision rather than a decorative button.
 - Quest tracker with stages `available`, `accepted`, `creatures-defeated`, `relic-collected`, `ready-to-turn-in`, and `complete`.
 - Health, ability resource, cooldowns, target health, objective count, loot pickup, reward presentation, victory, failure, and restart.
 - Desktop keyboard/pointer controls and usable phone move, camera, target, interact, attack, and ability controls.
+- Minimum input convention: forward movement must respond to either W or Up Arrow on desktop, and the primary phone movement surface must occupy the lower-left control region.
 
 ## Execution checkpoints
 
@@ -40,13 +42,18 @@ Do not stop after building an RPG scene or a combat demo. Continue until the ful
 
 - The quest tracker and world cues agree on the current required action.
 - Enemies cannot attack through solid walls or continue damaging the player after defeat.
+- The two enemy roles remain behaviorally distinguishable, and the telegraphed threat leaves a fair, observable response window for the defensive or healing ability.
 - The relic cannot be collected before its drop condition, and the quest cannot complete without returning to the warden.
 - Dialogue, target frames, action controls, and the world remain usable without UI overlap on phone.
 - Page visibility pauses combat and cooldown progression safely.
 
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
+
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -55,6 +62,8 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `resource`: non-negative finite number;
 - `questStage`: `available`, `accepted`, `creatures-defeated`, `relic-collected`, `ready-to-turn-in`, or `complete`;
 - `enemiesDefeated`: integer from 0 to 3;
+- `enemyRolesDefeated`: non-negative integer counting distinct hostile behavior roles defeated;
+- `defensiveAbilityUses`: non-negative integer counting effective heals or damage-mitigation activations, not casts with no gameplay effect;
 - `relicCollected`: boolean;
 - `targetId`: string or `null`;
 - `seed`: `46349`;

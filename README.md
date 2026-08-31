@@ -22,8 +22,9 @@ The public result is intentionally two-part:
 
 The executable matrix is defined by `configs/seasons.toml` and `configs/profiles.toml`, not by
 this table. Run `uv run web3dgamebench plan --season <season-id>` and review the complete output
-before starting paid cells. At present, `pilot-2026-09` is the only runnable season and contains
-only `signal-drift`; the proposed Season 1 tasks remain review drafts.
+before starting paid cells. `pilot-2026-09` preserves the immutable Signal Drift pilot. `season-1`
+is the runnable private matrix for the ten frozen official tasks; no task prompt or generated game
+may be published until all 80 cells reach a terminal state.
 
 ## Boundaries
 
@@ -47,9 +48,19 @@ uv run web3dgamebench vendor
 docker build -t web3dgamebench-candidate:0.1.0 infra/candidate
 docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
 uv run web3dgamebench doctor
-uv run web3dgamebench plan --season pilot-2026-09
-uv run web3dgamebench matrix --season pilot-2026-09 --backend container
+uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
+uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --backend container
+# After an interruption or infrastructure failure, resume the same receipt:
+uv run web3dgamebench matrix --resume /path/to/matrix-receipt.json
+# After all 80 cells are terminal:
+uv run web3dgamebench publish --matrix /path/to/closed-matrix.json --games-repo ../web3dgamebench-games
 ```
+
+The first started `season-1` matrix becomes the season's canonical matrix. A later start is rejected;
+operators must resume its receipt instead. Candidate and evidence failures remain terminal benchmark
+results, while provider, harness, and evaluator infrastructure failures stop the matrix and remain
+resumable. Closing binds every run manifest, trace, evaluator report, evaluated source tree, and
+playable bundle digest. Publication revalidates those bindings and uses the frozen Season 1 catalog.
 
 The candidate image deliberately layers the pinned runtimes on ReconBench's local
 `reconbench-candidate:0.147.0` base. Candidate generation, production rendering, and browser

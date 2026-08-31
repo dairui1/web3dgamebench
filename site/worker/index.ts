@@ -79,7 +79,15 @@ async function arenaPair(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const requestedTask = url.searchParams.get('task');
   const eligible = data.tasks.filter((task) => task.submissions.filter((item) => item.status === 'published').length >= 2);
-  const task = eligible.find((item) => item.id === requestedTask) ?? eligible[0];
+  const requested = eligible.find((item) => item.id === requestedTask);
+  const taskVoteCounts = await env.DB.prepare(
+    "SELECT task_id, COUNT(*) AS count FROM votes WHERE choice IN ('left', 'right', 'tie') GROUP BY task_id",
+  ).all<{ task_id: string; count: number }>();
+  const votesByTask = new Map(taskVoteCounts.results.map((row) => [row.task_id, row.count]));
+  const minimumVotes = Math.min(...eligible.map((item) => votesByTask.get(item.id) ?? 0));
+  const leastVotedTasks = eligible.filter((item) => (votesByTask.get(item.id) ?? 0) === minimumVotes);
+  const leastVoted = leastVotedTasks[Math.floor(Math.random() * leastVotedTasks.length)];
+  const task = requested ?? leastVoted;
   if (!task) return json({ ready: false, reason: 'The first complete matrix has not been published yet.' });
   const submissions = task.submissions.filter((item) => item.status === 'published');
   const counts = await env.DB.prepare(

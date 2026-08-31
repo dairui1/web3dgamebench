@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "generatedAt": null,
+  "season": {
+    "id": "season-1",
+    "status": "private-running"
+  },
+  "tasks": [
+    {
+      "id": "canyon-strike",
+      "title": "Canyon Strike",
+      "titleZh": "峡谷突击（Canyon Strike）",
+      "summary": "Fly an authored canyon mission, destroy five air and ground targets, then extract.",
+      "summaryZh": "驾驶战机完成峡谷任务，摧毁五个空地目标后穿过撤离门。",
+      "genre": "3D air combat",
+      "genreZh": "3D 空战",
+      "evaluation": {
+        "objective": "Destroy three ground emplacements and two interceptors, then cross extraction before time or health runs out.",
+        "objectiveZh": "摧毁三座地面阵地和两架截击机，并在时间或生命耗尽前完成撤离。",
+        "controls": "Desktop and phone controls must support full flight, cannon fire, missile lock, launch, and restart.",
+        "controlsZh": "桌面端和手机端都必须支持完整飞行、机炮、导弹锁定、发射与重新开始。",
+        "checklist": [
+          {"text": "Flight, terrain collision, weapons, enemies, timer, and extraction form one causal mission.", "textZh": "飞行、地形碰撞、武器、敌人、计时与撤离组成有因果关系的完整任务。"},
+          {"text": "Targets and route cues stay readable at both required viewports.", "textZh": "目标与航线提示在两个规定视口都清晰可读。"},
+          {"text": "Victory requires all five targets and a real extraction crossing.", "textZh": "胜利必须同时满足摧毁五个目标与实际穿过撤离门。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "bombsite-retake",
+      "title": "Bombsite Retake",
+      "titleZh": "爆破点反攻（Bombsite Retake）",
+      "summary": "Retake a compact tactical site through one of two routes, defeat both defenders, and defuse.",
+      "summaryZh": "从两条路线之一反攻紧凑战术区域，击败两名防守者并完成拆除。",
+      "genre": "3D tactical shooter",
+      "genreZh": "3D 战术射击",
+      "evaluation": {
+        "objective": "Eliminate both defenders and complete the hold-to-defuse interaction before the planted device expires.",
+        "objectiveZh": "在装置倒计时结束前消灭两名防守者，并完成持续交互拆除。",
+        "controls": "Desktop pointer-lock and phone twin-stick play must expose fire, reload, crouch, interact, and restart.",
+        "controlsZh": "桌面指针锁定与手机双摇杆操作都要提供射击、换弹、蹲伏、交互和重新开始。",
+        "checklist": [
+          {"text": "Two topologically separate approaches create different cover and exposure decisions.", "textZh": "两条拓扑独立的进攻路线形成不同的掩体与暴露选择。"},
+          {"text": "Bots use readable line-of-sight combat without shooting through cover.", "textZh": "机器人依据清晰的视线规则战斗，不能穿透掩体射击。"},
+          {"text": "Neither kills alone nor an early defuse can trigger victory.", "textZh": "仅击杀敌人或提前拆除都不能单独触发胜利。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "first-night",
+      "title": "First Night",
+      "titleZh": "初夜生存（First Night）",
+      "summary": "Gather voxel resources, craft exact recipes, build a real shelter, place a beacon, and survive until dawn.",
+      "summaryZh": "采集体素资源，按精确配方制作物品，建成真实庇护所、放置信标并生存到黎明。",
+      "genre": "3D voxel survival",
+      "genreZh": "3D 体素生存",
+      "evaluation": {
+        "objective": "Complete gathering, crafting, spatial shelter construction, beacon placement, night defense, and dawn survival.",
+        "objectiveZh": "完成采集、制作、空间庇护所建造、信标放置、夜间防守与黎明生存。",
+        "controls": "Desktop and phone play must support movement, look, mining, placement, inventory, crafting, and restart.",
+        "controlsZh": "桌面端和手机端都要支持移动、观察、挖掘、放置、背包、制作与重新开始。",
+        "checklist": [
+          {"text": "World editing, inventory, and exact recipes are functional rather than decorative.", "textZh": "世界编辑、背包与精确配方必须真正可用，而非装饰。"},
+          {"text": "Shelter validity requires enclosed standable interior space and a roof.", "textZh": "有效庇护所必须具有封闭、可站立的内部空间和屋顶。"},
+          {"text": "Victory requires a placed beacon, valid shelter, and actual dawn.", "textZh": "胜利必须同时满足已放置信标、庇护所有效和实际到达黎明。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "village-quest",
+      "title": "Village Quest",
+      "titleZh": "村庄任务（Village Quest）",
+      "summary": "Accept a quest, fight two enemy roles, use a meaningful defensive ability, loot a relic, and turn it in.",
+      "summaryZh": "接取任务，对抗两类敌人并有效使用防御技能，拾取遗物后返回交付。",
+      "genre": "3D quest RPG",
+      "genreZh": "3D 任务角色扮演",
+      "evaluation": {
+        "objective": "Complete the full accept, travel, combat, loot, return, and explicit turn-in chain.",
+        "objectiveZh": "完成接取、旅行、战斗、拾取、返回与明确交付的完整任务链。",
+        "controls": "Desktop and phone controls must support movement, camera, targeting, interaction, attacks, abilities, and restart.",
+        "controlsZh": "桌面端和手机端都要支持移动、镜头、选敌、交互、攻击、技能与重新开始。",
+        "checklist": [
+          {"text": "Village, route, and ruin are distinct readable places tied to quest stages.", "textZh": "村庄、路线与遗迹是与任务阶段相连的清晰不同场所。"},
+          {"text": "At least two enemy roles and a telegraphed threat create a real defensive decision.", "textZh": "至少两类敌人与一次可预判威胁形成真实的防御决策。"},
+          {"text": "The relic cannot appear early and victory requires returning to the quest giver.", "textZh": "遗物不能提前出现，胜利必须返回任务发布者处交付。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "ashen-duel",
+      "title": "Ashen Duel",
+      "titleZh": "灰烬决斗（Ashen Duel）",
+      "summary": "Fight a readable two-phase guardian using stamina, committed attacks, dodges, and limited healing.",
+      "summaryZh": "运用耐力、不可随意取消的攻击、闪避和有限治疗，对抗可读的双阶段守卫。",
+      "genre": "3D boss combat",
+      "genreZh": "3D 首领战",
+      "evaluation": {
+        "objective": "Learn and defeat a two-phase boss with at least four telegraphed attacks while managing stamina and healing.",
+        "objectiveZh": "管理耐力与治疗，读懂并击败拥有至少四种预兆攻击的双阶段首领。",
+        "controls": "Desktop and phone controls must support movement, camera, lock-on, light and heavy attacks, dodge, heal, and restart.",
+        "controlsZh": "桌面端和手机端都要支持移动、镜头、锁定、轻重攻击、闪避、治疗与重新开始。",
+        "checklist": [
+          {"text": "Telegraph, active, and recovery windows create learnable punish opportunities.", "textZh": "预兆、生效与恢复阶段形成可学习的反击窗口。"},
+          {"text": "Stamina, commitment, dodge invulnerability, and punishable healing all matter.", "textZh": "耐力、动作承诺、闪避无敌帧与可被惩罚的治疗都具有实际意义。"},
+          {"text": "The second phase changes behavior, not only color.", "textZh": "第二阶段必须改变行为，而不只是换色。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "linked-chamber",
+      "title": "Linked Chamber",
+      "titleZh": "联结密室（Linked Chamber）",
+      "summary": "Place two linked portals, traverse them with the player and cube, power a door, and escape.",
+      "summaryZh": "放置一对联结传送门，让玩家和方块都穿越，压住开关并逃离密室。",
+      "genre": "3D spatial puzzle",
+      "genreZh": "3D 空间解谜",
+      "evaluation": {
+        "objective": "Use camera-correct paired portals and a portal-traversing cube to hold the switch and reach the exit.",
+        "objectiveZh": "利用视角正确的成对传送门，让方块穿越并压住开关后到达出口。",
+        "controls": "Desktop and phone controls must support movement, look, jump, interaction, both portal colors, and restart.",
+        "controlsZh": "桌面端和手机端都要支持移动、观察、跳跃、交互、两种传送门与重新开始。",
+        "checklist": [
+          {"text": "Portal views update from the paired camera and are not static colored surfaces.", "textZh": "传送门画面由配对相机实时更新，不能只是静态色块。"},
+          {"text": "Player and cube traversal preserve sensible orientation and avoid re-entry loops.", "textZh": "玩家与方块穿越后方向合理，并避免反复传送。"},
+          {"text": "The only solution requires the cube to traverse a portal and hold the switch.", "textZh": "唯一解法必须让方块穿越传送门并压住开关。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "star-course",
+      "title": "Star Course",
+      "titleZh": "星之旅程（Star Course）",
+      "summary": "Cross a three-part platform course, defeat an enemy, transfer between moving platforms, and earn the goal star.",
+      "summaryZh": "穿越三段平台关卡，击败敌人、完成移动平台换乘并取得目标之星。",
+      "genre": "3D platformer",
+      "genreZh": "3D 平台跳跃",
+      "evaluation": {
+        "objective": "Collect eight coins, complete a skill defeat and moving-platform transfer, then reach and collect the unlocked star.",
+        "objectiveZh": "收集八枚金币，完成技巧击败和移动平台换乘，再到达并取得已解锁的星星。",
+        "controls": "Desktop and phone controls must support nuanced movement, camera, jump timing, and restart.",
+        "controlsZh": "桌面端和手机端都要支持细腻移动、镜头、跳跃时机与重新开始。",
+        "checklist": [
+          {"text": "Movement, camera, coyote timing, landing, and checkpoints support reliable platforming.", "textZh": "移动、镜头、土狼时间、落地与检查点共同支持可靠的平台跳跃。"},
+          {"text": "A real transfer between moving platforms is unavoidable on the summit route.", "textZh": "通往山顶的路线必须经过一次真实的移动平台换乘。"},
+          {"text": "The star cannot unlock without eight coins and one skill-based enemy defeat.", "textZh": "未收集八枚金币且未完成一次技巧击败时，星星不能解锁。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "turbo-circuit",
+      "title": "Turbo Circuit",
+      "titleZh": "涡轮赛道（Turbo Circuit）",
+      "summary": "Race three rivals for three laps using earned drift boosts, two item types, and alternate lines.",
+      "summaryZh": "利用漂移加速、两类道具与替代路线，与三名对手完成三圈竞速。",
+      "genre": "3D arcade racing",
+      "genreZh": "3D 街机竞速",
+      "evaluation": {
+        "objective": "Win a validated three-lap race after earning a drift boost and using both boost and slow-field items.",
+        "objectiveZh": "完成有效三圈并取得第一名，过程中赚取漂移加速且使用加速和减速场两类道具。",
+        "controls": "Desktop and phone controls must support steering, acceleration, brake, drift, item use, and restart.",
+        "controlsZh": "桌面端和手机端都要支持转向、加速、刹车、漂移、使用道具与重新开始。",
+        "checklist": [
+          {"text": "Ordered checkpoints, wrong-way handling, recovery, and AI use the same legal course.", "textZh": "顺序检查点、逆行处理、脱困与 AI 都遵守同一条合法赛道。"},
+          {"text": "Drift changes handling and awards a duration-scaled boost rather than a free speed button.", "textZh": "漂移必须改变操控并按持续时间给予加速，不能只是免费加速按钮。"},
+          {"text": "Idle or no-drift play loses to at least one rival, and both item types matter in a winning run.", "textZh": "闲置或不漂移时至少输给一名对手，获胜过程中两类道具都必须有实际作用。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "frontier-command",
+      "title": "Frontier Command",
+      "titleZh": "边境指挥（Frontier Command）",
+      "summary": "Gather resources, build a barracks, train an army, survive a raid, and destroy the enemy keep.",
+      "summaryZh": "采集资源、建造兵营、训练军队、抵御突袭并摧毁敌方要塞。",
+      "genre": "3D real-time strategy",
+      "genreZh": "3D 即时战略",
+      "evaluation": {
+        "objective": "Execute a complete economy-to-assault loop, including production and a resolved enemy raid.",
+        "objectiveZh": "完成从经济到进攻的完整循环，包括生产与一次已解决的敌方突袭。",
+        "controls": "Desktop and phone controls must support camera, selection, commands, gathering, building, production, combat, and restart.",
+        "controlsZh": "桌面端和手机端都要支持镜头、选择、命令、采集、建造、生产、战斗与重新开始。",
+        "checklist": [
+          {"text": "Workers gather and return finite loads; buildings and units consume real resources and time.", "textZh": "工人采集并送回有限载荷，建筑和单位真实消耗资源与时间。"},
+          {"text": "Selection, navigation, combat, raid defense, and production remain readable and controllable.", "textZh": "选择、导航、战斗、守卫突袭与生产过程清晰且可控制。"},
+          {"text": "Victory requires a barracks, at least three trained soldiers, a resolved raid, and a destroyed enemy keep.", "textZh": "胜利必须具备兵营、至少三名已训练士兵、已解决的突袭和被摧毁的敌方要塞。"}
+        ]
+      },
+      "submissions": []
+    },
+    {
+      "id": "dinner-rush",
+      "title": "Dinner Rush",
+      "titleZh": "晚餐高峰（Dinner Rush）",
+      "summary": "Coordinate two chefs across preparation, cooking, plating, service, mistakes, and washing.",
+      "summaryZh": "协调两名厨师完成备料、烹饪、装盘、上菜、错误处理与清洗。",
+      "genre": "3D kitchen coordination",
+      "genreZh": "3D 厨房协作",
+      "evaluation": {
+        "objective": "Prepare and deliver five valid dishes from three recipes before the four-minute service ends.",
+        "objectiveZh": "在四分钟营业结束前，按三种配方制作并交付五份有效菜品。",
+        "controls": "Desktop and phone controls must support movement, chef switching, pickup/place, station actions, and restart.",
+        "controlsZh": "桌面端和手机端都要支持移动、切换厨师、拿取/放置、工作站操作与重新开始。",
+        "checklist": [
+          {"text": "All three recipes validate ingredients and preparation state rather than accepting arbitrary objects.", "textZh": "三种配方都要校验食材与加工状态，不能接受任意物体。"},
+          {"text": "Cooking, burning, disposal, dirty plates, and washing create recoverable coordination pressure.", "textZh": "烹饪、烧焦、丢弃、脏盘与清洗形成可恢复的协作压力。"},
+          {"text": "Five accepted deliveries win; timeout with fewer deliveries loses and restarts cleanly.", "textZh": "五份有效交付获胜；不足五份时超时失败，并可干净地重新开始。"}
+        ]
+      },
+      "submissions": []
+    }
+  ]
+}

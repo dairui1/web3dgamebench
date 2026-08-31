@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "ashen-duel",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 50,
+    "input_actions": 160,
+    "wait_actions": 100,
+    "total_wait_ms": 300000,
+    "max_wait_ms": 15000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The duel starts normally and reaches a controllable arena state.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "combat.commitment",
+      "weight": 15,
+      "description": "Light and heavy attacks have distinct timing and damage, spend stamina, and cannot be canceled without meaningful commitment.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "combat.dodge",
+      "weight": 15,
+      "description": "Boss telegraphs can be read and damage can be avoided through positioning or a visibly timed dodge window rather than arbitrary immunity.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "boss.patterns",
+      "weight": 20,
+      "description": "The boss demonstrates multiple distinguishable anticipation, active, and recovery patterns, and phase two materially changes the fight rather than only recoloring it.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "systems.healing",
+      "weight": 10,
+      "description": "Limited healing is readable, capped, and exposes the player to interruption or punishment while it is used.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "outcome.balance",
+      "weight": 10,
+      "description": "Damage, stamina, recovery openings, win/loss states, and restart form a coherent duel that is neither obviously impossible nor trivial.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "presentation.readability",
+      "weight": 10,
+      "description": "Characters, lock state, health, stamina, attack telegraphs, hit feedback, and arena boundaries remain readable during combat.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 15,
+      "description": "At 390 x 844 the full move, camera, lock, light, heavy, dodge, and heal control set is reachable and combat remains legible without overlap.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

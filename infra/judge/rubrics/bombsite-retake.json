@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "bombsite-retake",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 50,
+    "input_actions": 160,
+    "wait_actions": 100,
+    "total_wait_ms": 300000,
+    "max_wait_ms": 15000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The round starts normally and reaches a controllable first-person state.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "controls.fps",
+      "weight": 15,
+      "description": "Pointer look, collision-aware movement, sprint, crouch, and jump produce usable first-person control with a recoverable pointer-lock flow.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "combat.bots",
+      "weight": 15,
+      "description": "Two bots threaten from distinct positions, respect occluding geometry and line of sight, take damage, and can be defeated without unavoidable perfect aim.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "map.routes_cover",
+      "weight": 15,
+      "description": "The authored site visibly offers two viable approaches with meaningful occluding cover and recognizable landmarks rather than a flat shooting lane.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "objective.defuse",
+      "weight": 20,
+      "description": "The planted-device countdown creates pressure; progress stays locked at zero until both defenders are defeated, then requires an in-range held interaction and interrupts on release, death, range exit, or timeout.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "weapon.feedback",
+      "weight": 10,
+      "description": "Firing, hits, recoil or spread, ammunition, timed reload, impacts, and damage direction are visibly communicated and firing is blocked during reload.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "lifecycle.outcomes",
+      "weight": 10,
+      "description": "Defuse victory, timer or death failure, and immediate restart are coherent; killing defenders alone does not claim victory.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 10,
+      "description": "At 390 x 844 twin-stick movement/look plus fire, reload, crouch, and interact are usable without covering the crosshair or critical HUD.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

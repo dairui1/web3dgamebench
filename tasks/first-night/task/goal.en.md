@@ -22,10 +22,11 @@ Do not stop after rendering a voxel landscape. Continue until the world supports
 - A deterministic voxel island at least 24 x 24 blocks in footprint with height variation, soil, stone, trees, crystal deposits, and a visible safe spawn area.
 - First-person or close third-person movement with gravity, jumping, terrain collision, grounded checks, and safe recovery from nonlethal falls.
 - Raycast block targeting with visible selection, timed breaking, resource drops, inventory counts, placement on valid neighboring faces, and prevention of placing inside the player.
-- A hotbar containing collected block types, a beacon recipe requiring three wood and three stone, and a clear crafting interaction.
+- A hotbar containing collected block types, a beacon recipe that consumes exactly three wood and three stone, and a clear crafting interaction.
 - A day-dusk-night-dawn cycle with readable sky and lighting changes. Night spawns exactly two hostile creatures that pursue and damage the player but cannot attack through walls.
 - A basic player attack, health, damage feedback, resource counts, selected slot, objective checklist, time-of-day indicator, and restart flow.
 - Desktop keyboard and mouse controls plus usable phone move/look, jump, break, place, attack, slot, and craft controls.
+- Minimum input convention: forward movement must respond to either W or Up Arrow on desktop, and the primary phone movement surface must occupy the lower-left control region.
 
 ## Execution checkpoints
 
@@ -40,12 +41,17 @@ Do not stop after rendering a voxel landscape. Continue until the world supports
 - The player always knows which block is targeted, what was collected, what is selected, and what remains for the objective.
 - Breaking and placement modify the world consistently and do not create invisible collision leftovers.
 - Creatures navigate well enough to threaten an exposed player but walls provide meaningful protection.
-- The beacon cannot be placed before it is crafted; dawn alone cannot trigger victory. Victory logic must also validate that the beacon is supported above a small enclosed shelter rather than standing on open ground.
+- The beacon cannot be placed before it is crafted; dawn alone cannot trigger victory. A valid shelter must contain at least two horizontally adjacent standable interior cells, each with two air blocks of headroom, enclosed from the outside at body height by solid player-placed walls and covered by player-placed roof blocks. The beacon must be supported directly by that roof. A block-count threshold without this spatial enclosure is not valid.
+- Restart restores the original seeded terrain, inventory, beacon, shelter, creatures, health, and time-of-day state.
 - Touch controls permit the full objective without requiring hover, right-click, or a physical keyboard.
+
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
 
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -59,6 +65,8 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `beaconCrafted`: boolean;
 - `beaconPlaced`: boolean;
 - `shelterValid`: boolean;
+- `shelterCellCount`: non-negative integer counting standable interior cells that satisfy the enclosure test;
+- `dawnReached`: boolean that becomes true only when the day-night cycle enters dawn;
 - `hostilesAlive`: integer from 0 to 2;
 - `seed`: `37199`;
 - `restartCount`: non-negative integer.

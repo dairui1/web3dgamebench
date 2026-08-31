@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "frontier-command",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 64,
+    "input_actions": 240,
+    "wait_actions": 160,
+    "total_wait_ms": 420000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The match starts normally with one keep, three workers, readable resources, and usable camera control.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "command.selection",
+      "weight": 15,
+      "description": "Click/tap and desktop box selection, visible selected state, camera navigation, and move, gather, build, and attack commands produce immediate readable acknowledgement.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "economy.gather",
+      "weight": 15,
+      "description": "Workers visibly travel to wood or ore, gather a limited load, return to deposit it, and resume work; resources cannot increase without those steps.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "construction.production",
+      "weight": 15,
+      "description": "Barracks placement validates grid, blockers, units, boundaries, and affordability, then construction and a paid timed queue produce soldiers.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "combat.raid",
+      "weight": 15,
+      "description": "Units acquire targets, move, attack on cooldown, take damage, die, and can repel a readable timed enemy raid before assaulting defended enemy structures.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "pathing.units",
+      "weight": 10,
+      "description": "Selected units navigate around static blockers and each other without permanent clumping, illegal destinations, or unexplained teleportation.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "outcomes.causality",
+      "weight": 10,
+      "description": "Destroying the enemy keep after genuine gathering, barracks construction, and soldier production wins; losing the player keep fails; restart returns to a clean match.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 15,
+      "description": "At 390 x 844 selection, camera, move/attack, gather, build, and production remain usable without right-click, hover, or critical UI overlap.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "canyon-strike",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 50,
+    "input_actions": 160,
+    "wait_actions": 100,
+    "total_wait_ms": 300000,
+    "max_wait_ms": 15000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The mission starts normally and reaches a controllable flight state.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "flight.handling",
+      "weight": 15,
+      "description": "Pitch, yaw, roll, throttle, acceleration, chase camera, terrain collision, and horizon cues combine into stable, readable flight.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "weapons.lockon",
+      "weight": 15,
+      "description": "Cannon and limited missiles behave distinctly, and a visible lock sequence precedes genuinely guided missile behavior.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "targets.enemies",
+      "weight": 15,
+      "description": "Three ground emplacements and two airborne interceptors are distinguishable, attack or evade readably, take damage, and can be destroyed.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "mission.causality",
+      "weight": 20,
+      "description": "Victory requires destroying all five targets and then visibly flying through the extraction gate; reaching a count of five must not auto-win before extraction.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "systems.pressure",
+      "weight": 10,
+      "description": "Health, enemy attacks, lethal terrain impacts, timer, ammunition or cooldown, and target progression create observable mission pressure.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "presentation.readability",
+      "weight": 10,
+      "description": "Canyon route, aircraft, targets, extraction, radar or directional cues, HUD, impacts, and speed remain readable in motion.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 10,
+      "description": "At 390 x 844 flight, throttle, cannon, and missile controls are reachable and the forward route and mission HUD remain visible.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

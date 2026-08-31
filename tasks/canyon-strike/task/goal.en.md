@@ -26,6 +26,7 @@ Do not stop at the first playable prototype. Continue through game-feel, readabi
 - Terrain, canyon walls, route landmarks, target placement, and an extraction gate that form a coherent mission path.
 - Health, impact feedback, weapon cooldown/ammunition, mission timer, target counter, radar or directional target cues, and current objective.
 - Desktop keyboard controls and usable phone controls, such as a virtual flight stick plus weapon and throttle controls.
+- Minimum input convention: banking left must respond to either Left Arrow or A on desktop, and the primary phone flight stick must occupy the lower-left control region.
 - Pause on page visibility loss. Audio is optional and may start only after interaction.
 
 ## Execution checkpoints
@@ -44,9 +45,13 @@ Do not stop at the first playable prototype. Continue through game-feel, readabi
 - Victory requires the specified actions in order; it cannot occur through waiting or a debug shortcut.
 - The page resizes without resetting the mission or breaking input.
 
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
+
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -55,6 +60,7 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `missiles`: non-negative integer;
 - `targetsDestroyed`: integer from 0 to 5;
 - `targetsTotal`: `5`;
+- `extracted`: boolean that becomes true only after all five targets are destroyed and the aircraft crosses the extraction gate;
 - `missionSecondsRemaining`: non-negative finite number;
 - `seed`: `19031`;
 - `restartCount`: non-negative integer.

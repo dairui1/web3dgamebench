@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "first-night",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 64,
+    "input_actions": 220,
+    "wait_actions": 160,
+    "total_wait_ms": 420000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The survival run starts normally in a controllable, navigable voxel world.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "world.voxels",
+      "weight": 10,
+      "description": "The deterministic island visibly has navigable height variation, distinct resources, trees, landmarks, boundaries, and a safe spawn rather than a decorative flat grid.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "interaction.blocks",
+      "weight": 20,
+      "description": "Raycast selection, timed breaking, collection, hotbar choice, and neighboring-face placement visibly modify both geometry and collision while preventing placement inside the player.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "crafting.beacon",
+      "weight": 15,
+      "description": "Gathered wood and stone feed a real three-plus-three beacon recipe, and the beacon cannot be placed before it is visibly crafted.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "shelter.spatial",
+      "weight": 15,
+      "description": "The player can visibly construct a small enclosed shelter with a supported roof beacon, and its walls provide real protection; self-reported shelterValid or shelterCellCount fields alone are insufficient.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "survival.night",
+      "weight": 15,
+      "description": "Sky and lighting progress through dusk, night, and dawn; exactly two hostiles visibly pursue and damage an exposed player but cannot attack through shelter walls; victory also requires the placed beacon and valid shelter.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "lifecycle.outcomes",
+      "weight": 10,
+      "description": "Health, death or fall loss, gather-to-dawn victory, pause, and restart preserve coherent terrain and inventory state without debug shortcuts.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 10,
+      "description": "At 390 x 844 move/look, jump, break, place, attack, slot, and craft controls support the objective without hover, right-click, keyboard, or incoherent overlap.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

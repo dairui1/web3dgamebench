@@ -1,13 +1,14 @@
 # Web3DGameBench Season 1 Task Review
 
-Status: **draft for human review**. None of these tasks belongs to a runnable season yet.
+Status: **ready for the private Season 1 matrix**. The task contracts and task-aware evaluation
+inputs are frozen before the first scored cell starts.
 
-This review document does not define an execution matrix. A task becomes runnable only after it
-is assigned to a season in `configs/seasons.toml`; that season's profile list, resolved through
-`configs/profiles.toml`, is the authoritative harness and model set. Before any paid run, inspect
-the complete expansion with `uv run web3dgamebench plan --season <season-id>`.
+This review document does not define the execution matrix. `configs/seasons.toml` assigns all ten
+tasks to `season-1`; its profile list, resolved through `configs/profiles.toml`, is the authoritative
+harness and model set. Before any paid run, inspect the complete expansion with
+`uv run web3dgamebench plan --season season-1`.
 
-Signal Drift remains an immutable `Pilot 0` artifact. The proposed official season contains ten recognizable 3D game archetypes. Each task has one canonical English goal contract for candidate runs and one Chinese mirror for review. Goal mode must be activated by the harness outside the task prompt; the candidate prompt itself must never instruct a model to invoke `/goal`.
+Signal Drift remains an immutable `Pilot 0` artifact. The official season contains ten recognizable 3D game archetypes. Each task has one canonical English goal contract for candidate runs and one Chinese mirror for review. Persistent execution control is activated by the harness outside the task prompt; the candidate prompt itself never instructs a model to invoke `/goal`.
 
 | # | Task | Familiar reference | Core completion event | English | 中文 |
 |---|---|---|---|---|---|
@@ -22,9 +23,23 @@ Signal Drift remains an immutable `Pilot 0` artifact. The proposed official seas
 | 9 | Frontier Command | Warcraft III | Gather, build, train, and destroy the enemy keep | [EN](../tasks/frontier-command/task/goal.en.md) | [中文](../tasks/frontier-command/task/goal.zh-CN.md) |
 | 10 | Dinner Rush | Overcooked | Prepare and deliver the required orders before closing | [EN](../tasks/dinner-rush/task/goal.en.md) | [中文](../tasks/dinner-rush/task/goal.zh-CN.md) |
 
+## Differentiation rationale
+
+Season 1 does not use ten variations of the same movement demo. Its critical paths span flight
+physics, tactical combat, editable voxel state, quest state machines, boss telegraphs, paired
+portal rendering and spatial transforms, precision platforming, racing AI, RTS economy and navigation, and concurrent
+kitchen workflows. Each task couples several systems and requires a causally valid win path,
+desktop and phone interaction, restart integrity, and task-specific playtest evidence. A polished
+scene or a fabricated runtime object therefore cannot earn a complete semantic judgment.
+
+After the private matrix closes, retain per-task admission rate, rubric evidence coverage, score
+distribution, broken-vote rate, and pairwise preference entropy. Near-universal success, a
+near-universal floor, or criteria that are routinely unverified are calibration findings to address
+in the next season; they are not reasons to change a frozen Season 1 task after scored runs begin.
+
 ## Goal contract policy
 
-- The harness activates its native persistent-goal mechanism externally, then supplies the exact canonical English contract unchanged.
+- The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex uses native goal tools; Claude Code and Pi receive the equivalent runner-owned system policy and are labeled as such rather than being reported as native goal runs.
 - No fixed wall-clock or token limit is embedded in a task. Completion is evidence-based.
 - A candidate must not stop at a visual prototype. It completes only after the full win/loss loop, required controls, production build, and desktop/phone playtests pass.
 - Milestones are execution checkpoints, not permission to omit later work.

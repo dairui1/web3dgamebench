@@ -4,7 +4,7 @@
 
 Build a complete, polished, browser-native 3D tactical first-person shooter called **Bombsite Retake** with Three.js. Its shared gameplay reference is the familiar bomb-retake loop of **Counter-Strike 2**, but every name, map, weapon model, sound, texture, character, and interface asset must be original.
 
-The player enters a compact industrial site as the responding operator. A device is already planted and defended by two enemy bots. Reach the site through either of two viable routes, survive the firefight, secure the area, and hold the interact control long enough to defuse before the 90-second timer expires. Killing both defenders does not replace the defuse step.
+The player enters a compact industrial site as the responding operator. A device is already planted and defended by two enemy bots. Reach the site through either of two viable routes, survive the firefight, eliminate both defenders to secure the area, and hold the interact control long enough to defuse before the 90-second timer expires. Defuse progress must remain locked at zero until both defenders are defeated; killing them secures the site but does not replace the defuse step.
 
 ## Completion contract
 
@@ -22,10 +22,11 @@ Do not stop after producing a room with targets. Continue until the objective pr
 - First-person camera, collision-aware movement, walk, sprint, crouch, jump, pointer-lock aiming, and touch-look support.
 - One readable rifle with hitscan fire, magazine and reserve ammunition, reload timing, recoil or spread, muzzle feedback, impact feedback, and no firing while reloading.
 - Two bots that patrol or hold different angles, detect the player by range and line of sight, take cover or reposition, fire with telegraphed accuracy, and can be defeated.
-- One authored bombsite with two approach routes, occluding cover, recognizable landmarks, spawn protection from immediate fire, and no unreachable positions.
-- A planted device with escalating audio or visual urgency, 90-second countdown, interaction range, interrupted hold progress, and clear defuse completion.
+- One authored bombsite with two topologically separate approach routes until their final site entry, different exposure or cover tradeoffs, recognizable landmarks, spawn protection from immediate fire, and no unreachable positions.
+- A planted device with escalating audio or visual urgency, 90-second countdown, interaction range, defuse locked until both defenders are defeated, interrupted hold progress, and clear defuse completion.
 - Health, ammo, timer, enemies alive, defuse progress, hit direction, crosshair, current objective, victory, and failure UI.
 - Desktop keyboard and mouse controls plus usable phone twin-stick controls and explicit fire, reload, crouch, and interact buttons.
+- Minimum input convention: forward movement must respond to either W or Up Arrow on desktop, and the primary phone movement stick must occupy the lower-left control region.
 
 ## Execution checkpoints
 
@@ -39,13 +40,17 @@ Do not stop after producing a room with targets. Continue until the objective pr
 
 - The player can identify the site, timer pressure, enemies, cover, and interaction state without guessing.
 - Bots pose a threat without firing through solid geometry or using perfect unavoidable aim.
-- The player cannot defuse from outside the interaction zone, while dead, or after the timer expires.
+- Defuse progress cannot start or advance outside the interaction zone, while dead, with a defender alive, or after the timer expires. Releasing interact or leaving the zone resets the hold progress.
 - Pointer lock has a visible recovery path; touch controls do not obscure the crosshair or critical HUD.
 - Resize and page visibility changes preserve valid state and do not create phantom input.
+
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
 
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -56,6 +61,7 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `enemiesAlive`: integer from 0 to 2;
 - `bombSecondsRemaining`: non-negative finite number;
 - `defuseProgress`: finite number from 0 to 1;
+- `defuseStartedAfterClear`: boolean that becomes true only when valid defuse progress first advances after both defenders are defeated;
 - `seed`: `28417`;
 - `restartCount`: non-negative integer.
 

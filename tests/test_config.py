@@ -1,6 +1,15 @@
+import json
 from pathlib import Path
 
-from web3dgamebench.config import load_judges, load_profiles, load_task, validate_matrix
+import pytest
+
+from web3dgamebench.config import (
+    ConfigError,
+    load_judges,
+    load_profiles,
+    load_task,
+    validate_matrix,
+)
 from web3dgamebench.container import load_container_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,3 +54,106 @@ def test_candidate_runs_have_no_fixed_time_limit() -> None:
 def test_candidate_commands_have_a_bounded_runtime() -> None:
     config = load_container_config(ROOT)
     assert config.command_timeout_seconds == 1200
+
+
+def test_season_one_preflight_has_ten_tasks_and_eighty_cells() -> None:
+    season, profiles = validate_matrix(ROOT, "season-1")
+    assert season.status == "ready"
+    assert season.publish_prompts_after_close is True
+    assert len(season.tasks) == 10
+    assert len(season.tasks) * len(season.profiles) * season.attempts == 80
+    assert set(season.profiles).issubset(profiles)
+
+
+def test_task_retains_machine_readable_runtime_metadata() -> None:
+    task = load_task(ROOT, "first-night")
+    assert task.status == "ready"
+    assert task.framework == "three.js"
+    assert task.seed == 37199
+    assert task.goal_mode == "external-goal"
+    assert task.goal_completion == "contract-and-evidence"
+    assert task.viewports["desktop"].width == 1440
+    assert task.viewports["phone"].height == 844
+    assert task.checks.restart
+    assert task.checks.pointer_or_touch_input
+    assert task.review_brief == task.root / "goal.zh-CN.md"
+    assert task.reference_archetype == "Minecraft"
+
+
+def _write_test_task(tmp_path: Path, *, seed: str = "17", include_restart: bool = True) -> None:
+    task_root = tmp_path / "tasks/example/task"
+    (task_root / "starter").mkdir(parents=True)
+    (task_root / "brief.md").write_text("example", encoding="utf-8")
+    restart = "restart = true\n" if include_restart else ""
+    (task_root / "task.toml").write_text(
+        f'''id = "example"
+title = "Example"
+season = "season-1"
+status = "ready"
+framework = "three.js"
+brief = "brief.md"
+starter = "starter"
+seed = {seed}
+
+[goal]
+mode = "external-goal"
+completion = "contract-and-evidence"
+
+[viewport.desktop]
+width = 1440
+height = 900
+
+[viewport.phone]
+width = 390
+height = 844
+
+[checks]
+build = true
+canvas_nonblank = true
+keyboard_input = true
+pointer_or_touch_input = true
+{restart}resize = true
+runtime_state = true
+''',
+        encoding="utf-8",
+    )
+
+
+def test_task_rejects_boolean_seed_even_though_bool_is_an_int_subclass(tmp_path: Path) -> None:
+    _write_test_task(tmp_path, seed="true")
+    with pytest.raises(ConfigError, match="seed must be an integer"):
+        load_task(tmp_path, "example")
+
+
+def test_task_rejects_an_unimplemented_check_shape(tmp_path: Path) -> None:
+    _write_test_task(tmp_path, include_restart=False)
+    with pytest.raises(ConfigError, match="missing restart"):
+        load_task(tmp_path, "example")
+
+
+def test_season_one_preflight_rejects_a_malformed_runtime_contract(tmp_path: Path) -> None:
+    _write_test_task(tmp_path)
+    configs = tmp_path / "configs"
+    configs.mkdir()
+    (configs / "profiles.toml").write_text(
+        '[profiles.test]\nharness = "codex"\nmodel = "test"\n', encoding="utf-8"
+    )
+    (configs / "seasons.toml").write_text(
+        '[seasons.season-1]\nstatus = "ready"\ntasks = ["example"]\n'
+        'profiles = ["test"]\nattempts = 1\n'
+        'publish_prompts_after_close = true\n',
+        encoding="utf-8",
+    )
+    contract = json.loads(
+        (ROOT / "infra/evaluator/contracts/signal-drift.json").read_text()
+    )
+    contract["task_id"] = "example"
+    contract["seed"] = 17
+    contract["state_schema"]["required"]["seed"]["const"] = 17
+    contract["state_schema"]["required"]["charge"] = {"type": "mystery"}
+    contract_path = tmp_path / "infra/evaluator/contracts/example.json"
+    contract_path.parent.mkdir(parents=True)
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="unsupported"):
+        validate_matrix(tmp_path, "season-1")

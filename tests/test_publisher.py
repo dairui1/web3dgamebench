@@ -1,22 +1,29 @@
 import json
+import tomllib
 from pathlib import Path
 
-from web3dgamebench.publisher import publish_runs
+import pytest
+
+import web3dgamebench.publisher as publisher_module
+from web3dgamebench.evaluator import render_dist_sha256, render_source_sha256
+from web3dgamebench.publisher import PublishError, publish_runs
 
 
 def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     root = tmp_path / "bench"
     games = tmp_path / "games"
     workspace = tmp_path / "run/workspace"
-    dist = tmp_path / "run/render/dist"
+    render = tmp_path / "run/render"
+    dist = render / "dist"
     (root / "site/public/data").mkdir(parents=True)
     workspace.mkdir(parents=True)
     dist.mkdir(parents=True)
-    (workspace / "src.ts").write_text("source")
+    (workspace / "src.ts").write_text("mutable workspace")
     (workspace / "TASK.md").write_text("sealed until close")
+    (render / "src.ts").write_text("evaluated source")
     (dist / "index.html").write_text(
-        '<link rel="stylesheet" href="/assets/game.css">'
-        '<script type="module" src="/assets/game.js"></script>'
+        '<link rel="stylesheet" href="./assets/game.css">'
+        '<script type="module" src="./assets/game.js"></script>'
     )
     catalog = {
         "generatedAt": "old",
@@ -47,12 +54,24 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     )
     (tmp_path / "run/evaluation").mkdir()
     (tmp_path / "run/evaluation/report.json").write_text(
-        json.dumps({"trusted": True, "passed": True})
+        json.dumps(
+            {
+                "trusted": True,
+                "passed": True,
+                "evaluator": {"render_source_sha256": render_source_sha256(render)},
+                "evidence": {
+                    "render_source_sha256": render_source_sha256(render),
+                    "post_build_render_source_sha256": render_source_sha256(render),
+                    "render_source_unchanged": True,
+                    "render_dist_sha256": render_dist_sha256(dist),
+                },
+            }
+        )
     )
 
     publish_runs(root, [tmp_path / "run"], games)
 
-    assert (games / "games/task/profile/src.ts").read_text() == "source"
+    assert (games / "games/task/profile/src.ts").read_text() == "evaluated source"
     assert not (games / "games/task/profile/TASK.md").exists()
     assert (root / "site/public/playground/task/profile/index.html").read_text() == (
         '<link rel="stylesheet" href="./assets/game.css">'
@@ -68,3 +87,128 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     )
     assert replay["events"][0]["title"] == "Agent update"
     assert "信号漂移" in (root / "site/public/data/catalog.json").read_text()
+
+
+def test_season_one_run_requires_closed_matrix(tmp_path: Path) -> None:
+    root = tmp_path / "bench"
+    games = tmp_path / "games"
+    run = tmp_path / "run"
+    (root / "site/public/data").mkdir(parents=True)
+    (root / "site/public/data/catalog.json").write_text(
+        json.dumps(
+            {
+                "season": {"id": "season-1", "status": "private-running"},
+                "tasks": [{"id": "first-night", "submissions": []}],
+            }
+        )
+    )
+    run.mkdir()
+    (run / "manifest.json").write_text(
+        json.dumps(
+            {
+                "status": "candidate-complete",
+                "task": {"id": "first-night"},
+                "profile": {"id": "profile"},
+            }
+        )
+    )
+    (run / "evaluation").mkdir()
+    (run / "evaluation/report.json").write_text(
+        json.dumps({"trusted": True, "passed": True})
+    )
+    with pytest.raises(PublishError, match="closed matrix receipt"):
+        publish_runs(root, [run], games)
+
+
+def test_matrix_publication_requires_exact_trusted_run_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "bench"
+    (root / "site/public/data").mkdir(parents=True)
+    (root / "site/public/data/catalog.json").write_text(
+        json.dumps(
+            {
+                "season": {"id": "season-1", "status": "private-running"},
+                "tasks": [],
+            }
+        )
+    )
+    expected = tmp_path / "expected-run"
+    receipt = {
+        "season": "season-1",
+        "cells": [
+            {
+                "run": str(expected),
+                "trusted": True,
+                "task": "first-night",
+                "profile": "profile",
+                "attempt": 1,
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        publisher_module,
+        "validate_publication_receipt",
+        lambda _root, value: (value, {}),
+    )
+
+    with pytest.raises(PublishError, match="exactly match all trusted cells"):
+        publish_runs(
+            root,
+            [tmp_path / "different-run"],
+            tmp_path / "games",
+            matrix_receipt=receipt,
+        )
+
+
+def test_publish_rejects_render_modified_after_evaluation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    render = tmp_path / "run/render"
+    (render / "dist").mkdir(parents=True)
+    (render / "src.ts").write_text("evaluated")
+    digest = render_source_sha256(render)
+    (render / "src.ts").write_text("modified later")
+    evaluation = {
+        "evaluator": {"render_source_sha256": digest},
+        "evidence": {
+            "post_build_render_source_sha256": digest,
+            "render_source_unchanged": True,
+            "render_dist_sha256": render_dist_sha256(render / "dist"),
+        },
+    }
+
+    with pytest.raises(PublishError, match="changed after admission"):
+        publisher_module._verify_render_evidence(tmp_path / "run", evaluation)
+
+
+def test_frozen_season_one_catalog_matches_the_matrix_task_order() -> None:
+    catalog = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "configs/catalogs/season-1.json"
+        ).read_text(encoding="utf-8")
+    )
+    seasons = tomllib.loads(
+        (
+            Path(__file__).resolve().parents[1] / "configs/seasons.toml"
+        ).read_text(encoding="utf-8")
+    )["seasons"]
+
+    assert catalog["schema_version"] == 1
+    assert catalog["season"]["id"] == "season-1"
+    assert [task["id"] for task in catalog["tasks"]] == seasons["season-1"]["tasks"]
+    assert all(task["titleZh"] and task["summaryZh"] for task in catalog["tasks"])
+
+    current = {
+        "schema_version": 1,
+        "season": {"id": "season-1"},
+        "tasks": [{"id": task_id, "title": "drifted"} for task_id in seasons["season-1"]["tasks"]],
+    }
+    selected = publisher_module._publication_catalog(
+        Path(__file__).resolve().parents[1],
+        current,
+        "season-1",
+        {"season": {"tasks": seasons["season-1"]["tasks"]}},
+    )
+    assert selected["tasks"][0]["title"] == catalog["tasks"][0]["title"]

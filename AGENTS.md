@@ -17,11 +17,13 @@ Useful commands:
 
 ```bash
 uv run web3dgamebench doctor
-uv run web3dgamebench plan --season pilot-2026-09
+uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
 uv run web3dgamebench vendor
-uv run web3dgamebench run --task signal-drift --profile codex-sol-medium --backend native
-uv run web3dgamebench matrix --season pilot-2026-09 --backend container
-uv run web3dgamebench publish --season pilot-2026-09 --games-repo ../web3dgamebench-games
+uv run web3dgamebench run --task first-night --profile codex-sol-medium --backend container
+uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --backend container
+uv run web3dgamebench matrix --resume /path/to/matrix-receipt.json
+uv run web3dgamebench judge --task first-night --run /path/to/private-run
+uv run web3dgamebench publish --matrix /path/to/closed-matrix.json --games-repo ../web3dgamebench-games
 uv run pytest
 npm --prefix site test
 npm --prefix site run deploy

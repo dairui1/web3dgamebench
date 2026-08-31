@@ -19,7 +19,7 @@ Do not stop after making two models exchange damage. Continue until timing, comm
 
 ## Required game systems
 
-- Third-person movement, collision, orbit camera, manual recentering, and optional lock-on with a visible target marker.
+- Third-person movement, collision, orbit camera, manual recentering, and lock-on with a visible target marker.
 - Stamina that drains for attacks and dodge, prevents unaffordable actions, pauses regeneration briefly after use, and regenerates at a readable rate.
 - Light attack, slower heavy attack with higher damage, dodge with a short invulnerability window, hit reactions, and actions that cannot all be canceled instantly.
 - Three limited healing charges with an interruptible or punishable use animation and no healing above maximum health.
@@ -27,6 +27,7 @@ Do not stop after making two models exchange damage. Continue until timing, comm
 - A clear transition below 50% boss health that changes timing, combinations, reach, or arena pressure rather than only changing color.
 - Player health and stamina, boss health and phase, heal count, lock state, action prompts, victory, failure, and restart UI.
 - Desktop keyboard/pointer controls and usable phone move, camera, lock, light, heavy, dodge, and heal controls.
+- Minimum input convention: forward movement must respond to either W or Up Arrow on desktop, and the primary phone movement surface must occupy the lower-left control region.
 
 ## Execution checkpoints
 
@@ -44,9 +45,13 @@ Do not stop after making two models exchange damage. Continue until timing, comm
 - Stamina and healing decisions matter, but the initial state permits a fair win.
 - Touch controls remain reachable and do not resize or shift during combat.
 
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
+
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -56,6 +61,7 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `healsRemaining`: integer from 0 to 3;
 - `bossHealth`: finite number from 0 to 100;
 - `bossPhase`: `1` or `2`;
+- `bossPhaseReached`: `1` or `2`, recording the highest phase actually entered during the run;
 - `lockedOn`: boolean;
 - `seed`: `55213`;
 - `restartCount`: non-negative integer.

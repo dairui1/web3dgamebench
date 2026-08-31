@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "task_id": "turbo-circuit",
+  "seed": 82939,
+  "viewports": {
+    "desktop": {"width": 1440, "height": 900},
+    "phone": {"width": 390, "height": 844}
+  },
+  "state_global": "__WEB3DGAMEBENCH__",
+  "started_phases": ["countdown", "playing", "won", "lost"],
+  "probe_phases": ["playing"],
+  "observation_paths": ["player", "speed"],
+  "probes": {
+    "desktop": [
+      {
+        "id": "keyboard-accelerate",
+        "baseline_ms": 700,
+        "input": {"type": "keyboard", "key_alternatives": [["KeyW"], ["ArrowUp"]], "duration_ms": 700},
+        "observe": {"type": "state", "paths": ["speed"], "minimum_delta": 0.1, "baseline_multiplier": 1.5}
+      }
+    ],
+    "phone": [
+      {
+        "id": "touch-accelerate",
+        "baseline_ms": 700,
+        "input": {"type": "touch", "gesture": "discover-hold", "duration_ms": 700, "delta": [0, 0], "control_region": "right"},
+        "observe": {"type": "state", "paths": ["speed"], "minimum_delta": 0.1, "baseline_multiplier": 1.5}
+      }
+    ]
+  },
+  "restart": {
+    "desktop_method": "keyboard",
+    "match_initial_paths": [
+      {"path": "player", "tolerance": 3},
+      {"path": "lap", "tolerance": 0},
+      {"path": "checkpoint", "tolerance": 0},
+      {"path": "driftCharge", "tolerance": 0.05},
+      {"path": "driftBoostsEarned", "tolerance": 0},
+      {"path": "boostItemsUsed", "tolerance": 0},
+      {"path": "slowFieldsUsed", "tolerance": 0},
+      {"path": "finishCrossed", "tolerance": 0}
+    ],
+    "assertions": [
+      {"path": "phase", "one_of": ["ready", "countdown", "playing"]},
+      {"path": "lap", "equals": 1},
+      {"path": "checkpoint", "equals": 0},
+      {"path": "driftBoostsEarned", "equals": 0},
+      {"path": "boostItemsUsed", "equals": 0},
+      {"path": "slowFieldsUsed", "equals": 0},
+      {"path": "finishCrossed", "equals": false}
+    ]
+  },
+  "state_schema": {
+    "type": "object",
+    "required": {
+      "phase": {"type": "string", "enum": ["ready", "countdown", "playing", "paused", "won", "lost"]},
+      "score": {"type": "number"},
+      "player": {"type": "vec3"},
+      "lap": {"type": "integer", "minimum": 1, "maximum": 3},
+      "checkpoint": {"type": "integer", "minimum": 0},
+      "rank": {"type": "integer", "minimum": 1, "maximum": 4},
+      "speed": {"type": "number", "minimum": 0},
+      "driftCharge": {"type": "number", "minimum": 0, "maximum": 1},
+      "driftBoostsEarned": {"type": "integer", "minimum": 0},
+      "heldItem": {"type": "enum", "values": ["boost", "slow-field", null]},
+      "boostItemsUsed": {"type": "integer", "minimum": 0},
+      "slowFieldsUsed": {"type": "integer", "minimum": 0},
+      "finishCrossed": {"type": "boolean"},
+      "raceSeconds": {"type": "number", "minimum": 0},
+      "seed": {"type": "integer", "const": 82939},
+      "restartCount": {"type": "integer", "minimum": 0}
+    }
+  },
+  "invariants": [
+    {
+      "when": {"path": "phase", "equals": "won"},
+      "assert": [
+        {"path": "lap", "equals": 3},
+        {"path": "rank", "equals": 1},
+        {"path": "driftBoostsEarned", "minimum": 1},
+        {"path": "boostItemsUsed", "minimum": 1},
+        {"path": "slowFieldsUsed", "minimum": 1},
+        {"path": "finishCrossed", "equals": true}
+      ]
+    }
+  ]
+}

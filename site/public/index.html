@@ -64,7 +64,13 @@
         </div>
         <div id="arena-empty" class="empty-state" hidden></div>
         <div id="arena-match" hidden>
-          <div class="match-meta"><span id="arena-task"></span><button class="icon-button" id="reload-pair" title="Load another pair" aria-label="Load another pair" data-i18n-title="loadAnotherPair" data-i18n-aria="loadAnotherPair">↻</button></div>
+          <div class="match-meta">
+            <span id="arena-task"></span>
+            <div class="match-actions">
+              <label class="task-picker"><span data-i18n="arenaTaskPicker">Task pool</span><select id="arena-task-select"></select></label>
+              <button class="icon-button" id="reload-pair" title="Load another pair" aria-label="Load another pair" data-i18n-title="loadAnotherPair" data-i18n-aria="loadAnotherPair">↻</button>
+            </div>
+          </div>
           <section class="task-brief arena-brief" id="arena-brief"></section>
           <div class="sequence-launch" id="sequence-launch">
             <div class="sequence-steps" aria-hidden="true"><span class="active">A</span><i></i><span>B</span></div>

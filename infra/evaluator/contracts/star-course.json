@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "task_id": "star-course",
+  "seed": 73693,
+  "viewports": {
+    "desktop": {"width": 1440, "height": 900},
+    "phone": {"width": 390, "height": 844}
+  },
+  "state_global": "__WEB3DGAMEBENCH__",
+  "started_phases": ["playing", "won", "lost"],
+  "probe_phases": ["playing"],
+  "observation_paths": ["player"],
+  "probes": {
+    "desktop": [
+      {
+        "id": "keyboard-move",
+        "baseline_ms": 600,
+        "input": {"type": "keyboard", "key_alternatives": [["KeyW"], ["ArrowUp"]], "duration_ms": 600},
+        "observe": {"type": "state", "paths": ["player"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      },
+      {
+        "id": "pointer-orbit",
+        "baseline_ms": 500,
+        "input": {"type": "pointer", "gesture": "discover-look", "duration_ms": 500, "delta": [0.18, -0.08]},
+        "observe": {"type": "canvas", "minimum_delta": 0.01, "baseline_multiplier": 1.25}
+      }
+    ],
+    "phone": [
+      {
+        "id": "touch-move",
+        "baseline_ms": 600,
+        "input": {"type": "touch", "gesture": "discover-swipe", "duration_ms": 600, "delta": [0, -0.15], "control_region": "left"},
+        "observe": {"type": "state", "paths": ["player"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ]
+  },
+  "restart": {
+    "desktop_method": "keyboard",
+    "match_initial_paths": [
+      {"path": "player", "tolerance": 3},
+      {"path": "coinsCollected", "tolerance": 0},
+      {"path": "lives", "tolerance": 0},
+      {"path": "checkpoint", "tolerance": 0},
+      {"path": "enemiesDefeated", "tolerance": 0},
+      {"path": "movingPlatformTransfers", "tolerance": 0},
+      {"path": "starUnlocked", "tolerance": 0}
+    ],
+    "assertions": [
+      {"path": "phase", "one_of": ["ready", "playing"]},
+      {"path": "coinsCollected", "equals": 0},
+      {"path": "lives", "equals": 3},
+      {"path": "enemiesDefeated", "equals": 0},
+      {"path": "movingPlatformTransfers", "equals": 0},
+      {"path": "starUnlocked", "equals": false}
+    ]
+  },
+  "state_schema": {
+    "type": "object",
+    "required": {
+      "phase": {"type": "string", "enum": ["ready", "playing", "paused", "won", "lost"]},
+      "score": {"type": "number"},
+      "player": {"type": "vec3"},
+      "coinsCollected": {"type": "integer", "minimum": 0, "maximum": 12},
+      "coinsTotal": {"type": "integer", "const": 12},
+      "lives": {"type": "integer", "minimum": 0, "maximum": 3},
+      "checkpoint": {"type": "integer", "minimum": 0},
+      "enemiesDefeated": {"type": "integer", "minimum": 0, "maximum": 2},
+      "movingPlatformTransfers": {"type": "integer", "minimum": 0},
+      "starUnlocked": {"type": "boolean"},
+      "seed": {"type": "integer", "const": 73693},
+      "restartCount": {"type": "integer", "minimum": 0}
+    }
+  },
+  "invariants": [
+    {
+      "when": {"path": "starUnlocked", "equals": true},
+      "assert": [
+        {"path": "coinsCollected", "minimum": 8},
+        {"path": "enemiesDefeated", "minimum": 1},
+        {"path": "movingPlatformTransfers", "minimum": 1}
+      ]
+    },
+    {
+      "when": {"path": "phase", "equals": "won"},
+      "assert": [
+        {"path": "starUnlocked", "equals": true}
+      ]
+    }
+  ]
+}

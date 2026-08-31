@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "village-quest",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 56,
+    "input_actions": 180,
+    "wait_actions": 120,
+    "total_wait_ms": 360000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The quest starts normally in a controllable third-person village state.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "world.route",
+      "weight": 10,
+      "description": "Village, connecting route, and ruin are visibly distinct, authored, navigable places with useful landmarks and collision.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "quest.accept",
+      "weight": 10,
+      "description": "Approaching the warden exposes readable dialogue and an explicit accept action that changes both objective tracking and later NPC dialogue.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "combat.abilities",
+      "weight": 15,
+      "description": "Visible targeting and range feedback support a basic attack, damage ability, and heal or defense ability with real cooldown/resource constraints; at least two enemy roles create different threats and defensive or healing decisions visibly improve survival.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "quest.loot",
+      "weight": 15,
+      "description": "At least two distinguishable enemy roles pursue and attack without hitting through walls or after death, and the relic visibly drops only after all three required defeats and must be collected.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "quest.turnin",
+      "weight": 20,
+      "description": "The player must return to the warden with the collected relic and explicitly turn in for reward and victory; combat or pickup alone cannot complete the quest.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "presentation.readability",
+      "weight": 10,
+      "description": "Quest stage, world cues, dialogue, target frame, cooldowns, health/resource, loot, reward, and current objective agree and remain readable.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 15,
+      "description": "At 390 x 844 move, camera, target, interact, attack, and both ability controls support the quest chain without UI overlap.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

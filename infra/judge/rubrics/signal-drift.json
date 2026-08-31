@@ -1,46 +1,67 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "task_id": "signal-drift",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 40,
+    "input_actions": 120,
+    "wait_actions": 80,
+    "total_wait_ms": 240000,
+    "max_wait_ms": 15000,
+    "max_input_duration_ms": 10000
+  },
   "criteria": [
     {
       "id": "core.starts",
       "weight": 10,
-      "description": "The game starts normally and enters a controllable playing state."
+      "description": "The game starts normally and enters a controllable playing state.",
+      "evidence_requirement": "visual"
     },
     {
       "id": "controls.flight",
       "weight": 15,
-      "description": "Desktop steering changes the craft trajectory on both axes with readable camera response."
+      "description": "Desktop steering changes the craft trajectory on both axes with readable camera response.",
+      "evidence_requirement": "interaction"
     },
     {
       "id": "objective.completion",
       "weight": 15,
-      "description": "Relay restoration leads to an extraction objective with observable victory behavior, or the terminal path is otherwise directly evidenced."
+      "description": "Relay restoration leads to an extraction objective with observable victory behavior, or the terminal path is otherwise directly evidenced.",
+      "evidence_requirement": "interaction"
     },
     {
       "id": "objective.relays",
       "weight": 15,
-      "description": "The ordered relay objective is understandable and appears to be a real gameplay progression system."
+      "description": "The ordered relay objective is understandable and appears to be a real gameplay progression system.",
+      "evidence_requirement": "interaction"
     },
     {
       "id": "systems.pressure",
       "weight": 15,
-      "description": "Charge, hazards, collisions, or course boundaries create observable gameplay pressure rather than decoration only."
+      "description": "Charge, hazards, collisions, or course boundaries create observable gameplay pressure rather than decoration only.",
+      "evidence_requirement": "interaction"
     },
     {
       "id": "presentation.readability",
       "weight": 15,
-      "description": "The 3D route, craft, objective, hazards, HUD, and motion feedback are visually readable during play."
+      "description": "The 3D route, craft, objective, hazards, HUD, and motion feedback are visually readable during play.",
+      "evidence_requirement": "visual"
     },
     {
       "id": "lifecycle.restart",
       "weight": 5,
-      "description": "Pause or restart works and returns the game to a valid state without obvious corruption."
+      "description": "Pause or restart works and returns the game to a valid state without obvious corruption.",
+      "evidence_requirement": "interaction"
     },
     {
       "id": "mobile.usability",
       "weight": 10,
-      "description": "At 390 x 844 the game remains readable and exposes pointer or touch steering sufficient to interact with the course without incoherent overlap."
+      "description": "At 390 x 844 the game remains readable and exposes pointer or touch steering sufficient to interact with the course without incoherent overlap.",
+      "evidence_requirement": "interaction"
     }
   ]
 }

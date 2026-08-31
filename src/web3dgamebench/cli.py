@@ -12,8 +12,16 @@ from . import __version__
 from .config import ConfigError, validate_matrix
 from .evaluator import evaluate_run
 from .judge import run_judge
-from .publisher import publish_runs
-from .runner import run_once, runs_dir
+from .matrix import (
+    MatrixInterrupted,
+    create_plan_for_matrix,
+    create_preflight_plan,
+    resume_matrix,
+    start_matrix,
+    write_preflight_plan,
+)
+from .publisher import load_publication_matrix, publish_runs
+from .runner import run_once
 
 
 def project_root() -> Path:
@@ -21,24 +29,55 @@ def project_root() -> Path:
 
 
 def command_plan(args: argparse.Namespace) -> int:
-    season, profiles = validate_matrix(project_root(), args.season)
-    cells = []
-    for task in season.tasks:
-        for profile_id in season.profiles:
-            for attempt in range(1, season.attempts + 1):
-                profile = profiles[profile_id]
-                cells.append(
-                    {
-                        "task": task,
-                        "profile": profile_id,
-                        "harness": profile.harness,
-                        "model": profile.model,
-                        "effort": profile.effort or "official-default",
-                        "attempt": attempt,
-                    }
-                )
-    print(json.dumps({"season": season.id, "status": season.status, "cells": cells}, indent=2))
+    root = project_root()
+    plan = create_preflight_plan(root, args.season)
+    if args.output:
+        path = write_preflight_plan(Path(args.output), plan)
+        print(path)
+    else:
+        print(json.dumps(plan, indent=2))
     return 0
+
+
+def _help_has(executable: str, arguments: tuple[str, ...], flags: set[str]) -> bool:
+    path = shutil.which(executable)
+    if path is None:
+        return False
+    try:
+        result = subprocess.run(
+            [path, *arguments],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    output = f"{result.stdout}\n{result.stderr}"
+    return result.returncode == 0 and all(flag in output for flag in flags)
+
+
+def _codex_goal_capability() -> bool:
+    path = shutil.which("codex")
+    if path is None:
+        return False
+    try:
+        result = subprocess.run(
+            [path, "features", "list"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode:
+        return False
+    return any(
+        fields[:3] == ["goals", "stable", "true"]
+        for line in result.stdout.splitlines()
+        if len(fields := line.split()) >= 3
+    )
 
 
 def command_doctor(_: argparse.Namespace) -> int:
@@ -51,12 +90,55 @@ def command_doctor(_: argparse.Namespace) -> int:
         "npm": shutil.which("npm") is not None,
         "docker": shutil.which("docker") is not None,
     }
-    try:
-        validate_matrix(root, "pilot-2026-09")
-        checks["pilot_config"] = True
-    except (ConfigError, ValueError) as error:
-        checks["pilot_config"] = False
-        checks["pilot_error"] = str(error)
+    checks.update(
+        {
+            "codex_runtime_contract": _help_has(
+                "codex",
+                ("exec", "--help"),
+                {
+                    "--config",
+                    "--enable",
+                    "--strict-config",
+                    "--ignore-user-config",
+                    "--ephemeral",
+                    "--json",
+                },
+            )
+            and _codex_goal_capability(),
+            "claude_runtime_contract": _help_has(
+                "claude",
+                ("--help",),
+                {
+                    "--append-system-prompt",
+                    "--setting-sources",
+                    "--no-session-persistence",
+                    "--output-format",
+                    "--strict-mcp-config",
+                },
+            ),
+            "pi_runtime_contract": _help_has(
+                "pi",
+                ("--help",),
+                {
+                    "--append-system-prompt",
+                    "--no-session",
+                    "--no-context-files",
+                    "--mode",
+                    "--no-approve",
+                },
+            ),
+        }
+    )
+    for season_id, check_name in (
+        ("pilot-2026-09", "pilot_config"),
+        ("season-1", "season_1_config"),
+    ):
+        try:
+            validate_matrix(root, season_id)
+            checks[check_name] = True
+        except (ConfigError, ValueError) as error:
+            checks[check_name] = False
+            checks[f"{check_name}_error"] = str(error)
     if checks["docker"]:
         result = subprocess.run(["docker", "version"], capture_output=True, check=False)
         checks["docker_daemon"] = result.returncode == 0
@@ -142,59 +224,41 @@ def command_judge(args: argparse.Namespace) -> int:
         project_root(),
         task_id=args.task,
         submission_id=args.submission,
+        run_root=(Path(args.run).expanduser().resolve() if args.run else None),
+        dist_path=(Path(args.dist).expanduser().resolve() if args.dist else None),
         judge_id=args.judge,
         timeout_seconds=args.timeout,
     )
     print(report)
-    return 0
+    return 0 if json.loads(report.read_text()).get("status") == "complete" else 1
 
 
 def command_matrix(args: argparse.Namespace) -> int:
     root = project_root()
-    season, _ = validate_matrix(root, args.season)
-    matrix_id = f"{season.id}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
-    receipt_path = runs_dir() / f"matrix-{matrix_id}.json"
-    receipt = {
-        "schema_version": 1,
-        "matrix_id": matrix_id,
-        "season": season.id,
-        "backend": args.backend,
-        "status": "running",
-        "cells": [],
-    }
-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
-    receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
-    for task in season.tasks:
-        for profile in season.profiles:
-            for attempt in range(1, season.attempts + 1):
-                cell = {"task": task, "profile": profile, "attempt": attempt}
-                try:
-                    run_root = run_once(
-                        root, task, profile, attempt, backend=args.backend
-                    )
-                    report_path = evaluate_run(root, run_root)
-                    report = json.loads(report_path.read_text())
-                    manifest = json.loads((run_root / "manifest.json").read_text())
-                    cell.update(
-                        {
-                            "run": str(run_root),
-                            "evaluation": str(report_path),
-                            "playable": bool(report.get("passed")),
-                            "passed": manifest.get("status") == "candidate-complete"
-                            and bool(report.get("passed")),
-                        }
-                    )
-                except (OSError, RuntimeError, ValueError) as error:
-                    cell.update({"infrastructure_error": str(error), "passed": False})
-                receipt["cells"].append(cell)
-                receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
-    receipt["status"] = (
-        "complete" if not any("infrastructure_error" in cell for cell in receipt["cells"]) else "incomplete"
-    )
-    receipt["completed_at"] = datetime.now(UTC).isoformat()
-    receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+    try:
+        if args.resume:
+            receipt_path = resume_matrix(
+                root,
+                Path(args.resume),
+                backend=args.backend,
+            )
+        else:
+            plan_path = (
+                Path(args.plan).expanduser().resolve()
+                if args.plan
+                else create_plan_for_matrix(root, args.season)
+            )
+            receipt_path = start_matrix(
+                root,
+                plan_path,
+                backend=args.backend or "container",
+            )
+    except MatrixInterrupted as error:
+        print(error.receipt_path)
+        return 130
     print(receipt_path)
-    return 0 if receipt["status"] == "complete" else 1
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    return 0 if receipt.get("status") == "complete" else 1
 
 
 def command_publish(args: argparse.Namespace) -> int:
@@ -204,11 +268,13 @@ def command_publish(args: argparse.Namespace) -> int:
         if args.games_repo
         else root.parent / "web3dgamebench-games"
     )
+    matrix_receipt = None
+    if args.matrix:
+        matrix_receipt, runs = load_publication_matrix(root, Path(args.matrix))
+    else:
+        runs = [Path(item).expanduser().resolve() for item in args.run]
     catalog = publish_runs(
-        root,
-        [Path(item).expanduser().resolve() for item in args.run],
-        games_repo,
-        replace=args.replace,
+        root, runs, games_repo, replace=args.replace, matrix_receipt=matrix_receipt
     )
     print(catalog)
     return 0
@@ -245,6 +311,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.set_defaults(func=command_doctor)
     plan = commands.add_parser("plan")
     plan.add_argument("--season", required=True)
+    plan.add_argument("--output")
     plan.set_defaults(func=command_plan)
     run = commands.add_parser("run")
     run.add_argument("--task", required=True)
@@ -259,16 +326,35 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.set_defaults(func=command_evaluate)
     judge = commands.add_parser("judge")
     judge.add_argument("--task", required=True)
-    judge.add_argument("--submission", required=True)
+    judge_source = judge.add_mutually_exclusive_group(required=True)
+    judge_source.add_argument(
+        "--submission",
+        help="published submission ID under site/public/playground/<task>/",
+    )
+    judge_source.add_argument(
+        "--run",
+        help="private benchmark run root; judges its immutable render/dist build",
+    )
+    judge_source.add_argument(
+        "--dist",
+        help="explicit private static dist directory containing index.html",
+    )
     judge.add_argument("--judge", default="pi-sol-medium")
     judge.add_argument("--timeout", type=int, default=900)
     judge.set_defaults(func=command_judge)
     matrix = commands.add_parser("matrix")
-    matrix.add_argument("--season", required=True)
-    matrix.add_argument("--backend", choices=("native", "container"), default="container")
+    matrix_source = matrix.add_mutually_exclusive_group(required=True)
+    matrix_source.add_argument("--season")
+    matrix_source.add_argument("--plan")
+    matrix_source.add_argument("--resume")
+    matrix.add_argument("--backend", choices=("native", "container"))
     matrix.set_defaults(func=command_matrix)
     publish = commands.add_parser("publish")
-    publish.add_argument("--run", action="append", required=True)
+    publish_source = publish.add_mutually_exclusive_group(required=True)
+    publish_source.add_argument("--run", action="append")
+    publish_source.add_argument(
+        "--matrix", help="closed matrix receipt; publishes every trusted cell"
+    )
     publish.add_argument("--games-repo")
     publish.add_argument("--replace", action="store_true")
     publish.set_defaults(func=command_publish)

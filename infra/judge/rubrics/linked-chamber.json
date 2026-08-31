@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "linked-chamber",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 56,
+    "input_actions": 200,
+    "wait_actions": 120,
+    "total_wait_ms": 360000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The chamber starts normally with usable first-person movement, gravity, collision, and look control.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "portals.placement_views",
+      "weight": 20,
+      "description": "Blue and amber controls place and replace portals only on marked compatible surfaces, visibly reject invalid hits, and each linked face shows at least a camera-correct single-layer render-target view that updates with camera motion.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "portals.traversal",
+      "weight": 20,
+      "description": "The player traverses both ways between portals on differently oriented surface normals with sensible facing and redirected momentum, without immediate ping-pong re-entry or geometry traps.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "cube.traversal",
+      "weight": 15,
+      "description": "The cube can be picked up, visibly carried, released, and actually transported through a portal before it is placed on the weighted switch.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "puzzle.causality",
+      "weight": 15,
+      "description": "The authored solution requires both portals and cube traversal; cube weight visibly powers a reversible door, and the exit wins only while the switch remains pressed.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "recovery.robustness",
+      "weight": 10,
+      "description": "Invalid placement, repeated crossings, cube drops, falls, and restart recover without trapping the player or making the cube permanently unreachable.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "presentation.readability",
+      "weight": 5,
+      "description": "Valid surfaces, paired portal identity, live portal views, crosshair feedback, cube, switch-to-door connection, and objective are visually legible.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 10,
+      "description": "At 390 x 844 move/look, jump, interact, blue portal, and amber portal controls support traversal and cube manipulation without overlap.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

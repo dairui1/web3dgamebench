@@ -4,7 +4,7 @@
 
 Build a complete, polished, browser-native 3D kitchen coordination game called **Dinner Rush** with Three.js. Its shared gameplay reference is the familiar station-to-station ingredient preparation, cooking, plating, order timing, mistakes, and score loop of **Overcooked**. Use original names, chefs, kitchen layout, recipes, food models, sounds, icons, and interface assets.
 
-The player controls two chefs in one compact restaurant kitchen, switching between them at any time. During a four-minute service, prepare and deliver five valid dishes drawn from three recipe types. Victory requires five accepted deliveries before closing. The run is lost when time expires with fewer than five deliveries; burned food and wrong dishes cost time or score but remain recoverable.
+The player controls two chefs in one compact restaurant kitchen, switching between them at any time. During a four-minute service, prepare and deliver five valid dishes drawn from three recipe types. Victory requires five accepted deliveries before closing, with each chef making a visible preparation or transport contribution to at least one accepted dish. The run is lost when time expires with fewer than five deliveries; burned food and wrong dishes cost time or score but remain recoverable.
 
 ## Completion contract
 
@@ -20,7 +20,7 @@ Do not stop after making ingredients move between counters. Continue until the f
 ## Required game systems
 
 - An angled 3D kitchen camera that keeps stations and both chefs legible, with collision-aware chef movement and a clear active-chef indicator.
-- Instant switching between two independently positioned chefs. Each chef carries at most one ingredient, tool, plate, or prepared item.
+- Instant switching between two independently positioned chefs. Each chef carries at most one ingredient, tool, plate, or prepared item, and each must contribute a real preparation or transport action to at least one dish that is eventually accepted.
 - Ingredient bins, at least two counters, chopping board, pot or pan station, plate stack, serving window, trash, and sink. Interaction targets must be highlighted or otherwise unambiguous.
 - Three recipes with visible step requirements:
   - garden salad: chopped tomato plus chopped leaf on a plate;
@@ -30,6 +30,7 @@ Do not stop after making ingredients move between counters. Continue until the f
 - A deterministic order queue showing recipe, remaining patience, next orders, accepted delivery, rejected dish, tip or score, combo, and service time.
 - Five-delivery victory, time-expired loss, pause, restart, and no unrecoverable state caused by depleted plates or discarded ingredients.
 - Desktop keyboard controls plus usable phone movement, switch-chef, pickup/place/interact, and action controls.
+- Minimum input convention: forward movement must respond to either W or Up Arrow on desktop, and the primary phone movement surface must occupy the lower-left control region.
 
 ## Execution checkpoints
 
@@ -47,9 +48,13 @@ Do not stop after making ingredients move between counters. Continue until the f
 - All required orders remain achievable within the supplied stations, ingredients, plates, and time balance.
 - Touch controls do not obscure active stations, order cards, or the controlled chef.
 
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
+
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -57,6 +62,8 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `chefs`: two `{ x, y, z, carrying }` objects with finite positions and string or `null` carrying values;
 - `serviceSecondsRemaining`: non-negative finite number;
 - `ordersDelivered`: integer from 0 to 5;
+- `chef0AcceptedContributions`: integer from 0 to 5, counting accepted dishes to which chef 0 contributed a real preparation or transport action, at most once per dish;
+- `chef1AcceptedContributions`: integer from 0 to 5, with the same rule for chef 1;
 - `activeOrders`: non-negative integer;
 - `dirtyPlates`: non-negative integer;
 - `burnedItems`: non-negative integer;

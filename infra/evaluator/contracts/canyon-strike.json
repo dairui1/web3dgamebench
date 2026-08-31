@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "task_id": "canyon-strike",
+  "seed": 19031,
+  "viewports": {
+    "desktop": {"width": 1440, "height": 900},
+    "phone": {"width": 390, "height": 844}
+  },
+  "state_global": "__WEB3DGAMEBENCH__",
+  "started_phases": ["playing", "won", "lost"],
+  "probe_phases": ["playing"],
+  "observation_paths": ["player"],
+  "probes": {
+    "desktop": [
+      {
+        "id": "keyboard-bank",
+        "baseline_ms": 600,
+        "input": {"type": "keyboard", "key_alternatives": [["ArrowLeft"], ["KeyA"]], "duration_ms": 600},
+        "observe": {"type": "state", "paths": ["player.x"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ],
+    "phone": [
+      {
+        "id": "touch-bank",
+        "baseline_ms": 600,
+        "input": {"type": "touch", "gesture": "discover-swipe", "duration_ms": 600, "delta": [-0.18, -0.08], "control_region": "left"},
+        "observe": {"type": "state", "paths": ["player.x", "player.y"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ]
+  },
+  "restart": {
+    "desktop_method": "keyboard",
+    "match_initial_paths": [
+      {"path": "player.x", "tolerance": 5},
+      {"path": "player.y", "tolerance": 5},
+      {"path": "player.z", "tolerance": 40},
+      {"path": "health", "tolerance": 5},
+      {"path": "targetsDestroyed", "tolerance": 0},
+      {"path": "extracted", "tolerance": 0}
+    ],
+    "assertions": [
+      {"path": "phase", "one_of": ["ready", "playing"]},
+      {"path": "targetsDestroyed", "equals": 0},
+      {"path": "extracted", "equals": false}
+    ]
+  },
+  "state_schema": {
+    "type": "object",
+    "required": {
+      "phase": {"type": "string", "enum": ["ready", "playing", "paused", "won", "lost"]},
+      "score": {"type": "number"},
+      "player": {"type": "vec3"},
+      "health": {"type": "number", "minimum": 0, "maximum": 100},
+      "missiles": {"type": "integer", "minimum": 0},
+      "targetsDestroyed": {"type": "integer", "minimum": 0, "maximum": 5},
+      "targetsTotal": {"type": "integer", "const": 5},
+      "extracted": {"type": "boolean"},
+      "missionSecondsRemaining": {"type": "number", "minimum": 0},
+      "seed": {"type": "integer", "const": 19031},
+      "restartCount": {"type": "integer", "minimum": 0}
+    }
+  },
+  "invariants": [
+    {
+      "when": {"path": "phase", "equals": "won"},
+      "assert": [
+        {"path": "targetsDestroyed", "equals": 5},
+        {"path": "extracted", "equals": true}
+      ]
+    }
+  ]
+}

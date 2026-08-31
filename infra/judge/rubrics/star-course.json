@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "star-course",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 56,
+    "input_actions": 180,
+    "wait_actions": 120,
+    "total_wait_ms": 360000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The course starts normally and reaches a controllable third-person state.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "movement.camera",
+      "weight": 20,
+      "description": "Acceleration, deceleration, facing, grounded checks, air steering, variable jump timing, forgiving jump input, and orbit/follow camera produce controllable platforming with visible landing areas.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "course.sections",
+      "weight": 10,
+      "description": "A grassy opening, moving-platform ravine, and summit tower form a readable connected route with authored landmarks rather than disconnected test boxes.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "platforms.carry",
+      "weight": 15,
+      "description": "At least three moving platforms follow predictable paths and visibly carry the player without tunneling, instant crushing, or uncorrected sliding; a successful route requires at least one actual moving-platform transfer.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "progression.coins_star",
+      "weight": 15,
+      "description": "Twelve placed coins persist during a life, no more than seven are obtainable by simply following the direct main route, and the summit star remains unavailable until at least eight are collected.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "danger.recovery",
+      "weight": 10,
+      "description": "Two readable enemies support a skill-based defeat interaction, at least one defeat is required on the victory route, and hazards, three lives, and checkpoints create fair danger with safe respawn.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "lifecycle.outcomes",
+      "weight": 10,
+      "description": "Checkpoint progress, life loss, star victory, all-lives failure, and restart form a coherent course loop.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 15,
+      "description": "At 390 x 844 movement, camera, and jump controls stay stable and leave enough unobscured view to judge platform depth and HUD state.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

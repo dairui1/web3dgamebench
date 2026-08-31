@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "dinner-rush",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 64,
+    "input_actions": 220,
+    "wait_actions": 160,
+    "total_wait_ms": 420000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "Service starts normally with a navigable kitchen, active orders, and a controllable chef.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "coordination.chefs",
+      "weight": 10,
+      "description": "The player can switch instantly between two independently positioned chefs, move each, read which chef and carried item are active, and make each chef visibly contribute to at least one eventually accepted dish.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "workflow.recipes",
+      "weight": 20,
+      "description": "Salad, mushroom soup, and skillet plate have visibly distinct required ingredients and preparation state machines rather than one generic delivery shortcut.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "stations.timing",
+      "weight": 15,
+      "description": "Pickup/place, chopping, cooking, burn windows, plating, trash, dirty-plate return, and washing expose readable timed station state and recovery.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "validation.mistakes",
+      "weight": 15,
+      "description": "Wrong, incomplete, raw, or burned dishes are visibly rejected or penalized and remain recoverable; arbitrary objects are not accepted as valid orders.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "orders.outcomes",
+      "weight": 15,
+      "description": "A deterministic patience queue, score or tip, combo, service timer, five-accepted-delivery victory, timeout loss, and restart form a coherent service loop.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "presentation.readability",
+      "weight": 10,
+      "description": "Both chefs, carried items, stations, cooking danger, order cards, interaction target, and critical HUD remain visually distinguishable.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 10,
+      "description": "At 390 x 844 movement, chef switching, pickup/place/interact, and action controls are usable without obscuring stations, orders, or the active chef.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

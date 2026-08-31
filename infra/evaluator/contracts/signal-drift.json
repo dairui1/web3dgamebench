@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "task_id": "signal-drift",
+  "seed": 94721,
+  "viewports": {
+    "desktop": {"width": 1440, "height": 900},
+    "phone": {"width": 390, "height": 844}
+  },
+  "state_global": "__WEB3DGAMEBENCH__",
+  "state_global_aliases": ["__AETHERPLAY__"],
+  "started_phases": ["playing", "won", "lost"],
+  "probe_phases": ["playing"],
+  "observation_paths": ["player"],
+  "probes": {
+    "desktop": [
+      {
+        "id": "keyboard-steer",
+        "baseline_ms": 600,
+        "input": {"type": "keyboard", "keys": ["ArrowLeft"], "duration_ms": 600},
+        "observe": {"type": "state", "paths": ["player.x"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ],
+    "phone": [
+      {
+        "id": "touch-steer",
+        "baseline_ms": 600,
+        "input": {"type": "touch", "gesture": "discover-swipe", "duration_ms": 600, "delta": [-0.18, 0], "control_region": "left"},
+        "observe": {"type": "state", "paths": ["player.x"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ]
+  },
+  "restart": {
+    "fallback": "reload",
+    "require_increment": false,
+    "match_initial_paths": [
+      {"path": "player.x", "tolerance": 5},
+      {"path": "player.y", "tolerance": 5},
+      {"path": "player.z", "tolerance": 30},
+      {"path": "relaysRestored", "tolerance": 0},
+      {"path": "charge", "tolerance": 5}
+    ],
+    "assertions": [
+      {"path": "phase", "one_of": ["ready", "playing"]},
+      {"path": "relaysRestored", "equals": 0}
+    ]
+  },
+  "state_schema": {
+    "type": "object",
+    "required": {
+      "phase": {"type": "string", "enum": ["ready", "playing", "paused", "won", "lost"]},
+      "score": {"type": "number"},
+      "player": {"type": "vec3"},
+      "relaysRestored": {"type": "integer", "minimum": 0, "maximum": 3},
+      "charge": {"type": "number"},
+      "seed": {"type": "integer", "const": 94721},
+      "restartCount": {"type": "integer", "minimum": 0}
+    }
+  },
+  "invariants": [
+    {
+      "when": {"path": "phase", "equals": "won"},
+      "assert": [{"path": "relaysRestored", "equals": 3}]
+    }
+  ]
+}

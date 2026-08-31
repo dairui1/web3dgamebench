@@ -28,6 +28,7 @@ Do not stop after placing units on terrain. Continue until the player can execut
 - An enemy base with one keep, two defenders, and one timed raid against the player. The enemy keep must not be vulnerable before the match begins.
 - Wood, ore, population, selection, build actions, production queue, health bars, current objective, warnings, victory, failure, and restart UI.
 - Desktop pointer/keyboard controls and usable phone selection, camera, move/attack, gather, build, and production controls.
+- Minimum input convention: camera-forward pan must respond to either W or Up Arrow on desktop; phone camera pan must work from a direct gesture on the battlefield or an explicit visible control.
 
 ## Execution checkpoints
 
@@ -45,9 +46,13 @@ Do not stop after placing units on terrain. Continue until the player can execut
 - Enemy attacks create pressure without arriving before the player can form a basic response.
 - Phone controls expose every required command without relying on right-click or hover.
 
+- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
+
 ## Runtime inspection contract
 
 Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during play. It must contain:
+
+The object must be complete and schema-valid from the first rendered frame, reflect the initial playable state before start, and return to that state after restart except for `restartCount`. During play, `R` must restart immediately, and phone mode must expose a visible restart control whose text, `aria-label`, or title identifies it as Restart; either path increments `restartCount` exactly once.
 
 - `phase`: `ready`, `playing`, `paused`, `won`, or `lost`;
 - `score`: finite number;
@@ -57,7 +62,9 @@ Expose `window.__WEB3DGAMEBENCH__` as a JSON-serializable object updated during 
 - `selectedUnits`: non-negative integer;
 - `workersAlive`: integer from 0 to 3;
 - `soldiersAlive`: non-negative integer;
+- `soldiersTrained`: non-negative integer counting completed barracks production;
 - `barracksBuilt`: boolean;
+- `raidResolved`: boolean that becomes true only after the timed enemy raid has occurred and no raid attacker remains;
 - `playerKeepHealth`: finite number from 0 to 100;
 - `enemyKeepHealth`: finite number from 0 to 100;
 - `seed`: `91373`;

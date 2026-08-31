@@ -2,7 +2,47 @@
   "schema_version": 1,
   "starters": [
     {
+      "starter": "tasks/ashen-duel/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/bombsite-retake/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/canyon-strike/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/dinner-rush/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/first-night/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/frontier-command/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/linked-chamber/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
       "starter": "tasks/signal-drift/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/star-course/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/turbo-circuit/task/starter",
+      "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
+    },
+    {
+      "starter": "tasks/village-quest/task/starter",
       "package_lock_sha256": "2af0d58ec5311a71fbf0775d3be52d0ba6d772bd7e78297c5fec25c7f5d0d163"
     }
   ]

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "task_id": "frontier-command",
+  "seed": 91373,
+  "viewports": {
+    "desktop": {"width": 1440, "height": 900},
+    "phone": {"width": 390, "height": 844}
+  },
+  "state_global": "__WEB3DGAMEBENCH__",
+  "started_phases": ["playing", "won", "lost"],
+  "probe_phases": ["playing"],
+  "observation_paths": ["camera"],
+  "probes": {
+    "desktop": [
+      {
+        "id": "keyboard-pan",
+        "baseline_ms": 600,
+        "input": {"type": "keyboard", "key_alternatives": [["KeyW"], ["ArrowUp"]], "duration_ms": 600},
+        "observe": {"type": "state", "paths": ["camera"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      },
+      {
+        "id": "pointer-drag-pan",
+        "baseline_ms": 600,
+        "input": {"type": "pointer", "gesture": "drag", "duration_ms": 600, "delta": [0.18, -0.08]},
+        "observe": {"type": "state", "paths": ["camera"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ],
+    "phone": [
+      {
+        "id": "touch-pan",
+        "baseline_ms": 600,
+        "input": {"type": "touch", "gesture": "discover-swipe", "duration_ms": 600, "delta": [-0.18, -0.08], "control_region": "canvas"},
+        "observe": {"type": "state", "paths": ["camera"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ]
+  },
+  "restart": {
+    "desktop_method": "keyboard",
+    "match_initial_paths": [
+      {"path": "camera", "tolerance": 3},
+      {"path": "wood", "tolerance": 0},
+      {"path": "ore", "tolerance": 0},
+      {"path": "selectedUnits", "tolerance": 0},
+      {"path": "workersAlive", "tolerance": 0},
+      {"path": "soldiersAlive", "tolerance": 0},
+      {"path": "soldiersTrained", "tolerance": 0},
+      {"path": "barracksBuilt", "tolerance": 0},
+      {"path": "raidResolved", "tolerance": 0},
+      {"path": "playerKeepHealth", "tolerance": 2},
+      {"path": "enemyKeepHealth", "tolerance": 2}
+    ],
+    "assertions": [
+      {"path": "phase", "one_of": ["ready", "playing"]},
+      {"path": "workersAlive", "equals": 3},
+      {"path": "soldiersAlive", "equals": 0},
+      {"path": "soldiersTrained", "equals": 0},
+      {"path": "barracksBuilt", "equals": false},
+      {"path": "raidResolved", "equals": false}
+    ]
+  },
+  "state_schema": {
+    "type": "object",
+    "required": {
+      "phase": {"type": "string", "enum": ["ready", "playing", "paused", "won", "lost"]},
+      "score": {"type": "number"},
+      "camera": {"type": "vec3"},
+      "wood": {"type": "integer", "minimum": 0},
+      "ore": {"type": "integer", "minimum": 0},
+      "selectedUnits": {"type": "integer", "minimum": 0},
+      "workersAlive": {"type": "integer", "minimum": 0, "maximum": 3},
+      "soldiersAlive": {"type": "integer", "minimum": 0},
+      "soldiersTrained": {"type": "integer", "minimum": 0},
+      "barracksBuilt": {"type": "boolean"},
+      "raidResolved": {"type": "boolean"},
+      "playerKeepHealth": {"type": "number", "minimum": 0, "maximum": 100},
+      "enemyKeepHealth": {"type": "number", "minimum": 0, "maximum": 100},
+      "seed": {"type": "integer", "const": 91373},
+      "restartCount": {"type": "integer", "minimum": 0}
+    }
+  },
+  "invariants": [
+    {
+      "when": {"path": "phase", "equals": "won"},
+      "assert": [
+        {"path": "enemyKeepHealth", "equals": 0},
+        {"path": "soldiersTrained", "minimum": 3},
+        {"path": "barracksBuilt", "equals": true},
+        {"path": "raidResolved", "equals": true}
+      ]
+    }
+  ]
+}

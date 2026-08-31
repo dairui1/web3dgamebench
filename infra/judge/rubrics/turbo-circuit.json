@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "task_id": "turbo-circuit",
+  "minimum_evidence_coverage": 70,
+  "viewports": {
+    "desktop": { "width": 1440, "height": 900, "mobile": false },
+    "phone": { "width": 390, "height": 844, "mobile": true }
+  },
+  "budgets": {
+    "observations": 64,
+    "input_actions": 240,
+    "wait_actions": 160,
+    "total_wait_ms": 420000,
+    "max_wait_ms": 20000,
+    "max_input_duration_ms": 10000
+  },
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 5,
+      "description": "The race starts through a readable countdown and reaches a controllable driving state.",
+      "evidence_requirement": "visual"
+    },
+    {
+      "id": "handling.track",
+      "weight": 15,
+      "description": "Acceleration, braking or reverse, speed-scaled steering, grip, collisions, chase camera, off-road slowdown, and recovery create readable kart handling on an authored loop.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "drift.boost",
+      "weight": 15,
+      "description": "Holding and releasing drift visibly changes handling, charges through readable stages, and awards a duration-scaled short boost rather than an always-on speed button.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "course.rules",
+      "weight": 15,
+      "description": "At least eight ordered checkpoints validate three laps, wrong-way and skipped/reversed crossings do not advance progress, and two deliberate alternate lines plus boost pads are usable.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "rivals.ranking",
+      "weight": 15,
+      "description": "Three visually distinct rivals follow the same legal course, overtake or can be overtaken, recover from obstacles, and at least one beats an idle or no-drift player so ranking cannot be won passively.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "items.pressure",
+      "weight": 10,
+      "description": "Both boost and slow-field items occur during a normal deterministic race, are visibly held one at a time, and explicit use produces distinguishable race effects.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "finish.lifecycle",
+      "weight": 10,
+      "description": "Three-lap finish order produces first-place victory or lower-rank completed loss, with coherent timer, result, and immediate restart.",
+      "evidence_requirement": "interaction"
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 15,
+      "description": "At 390 x 844 steering, accelerator, brake, drift, and item controls remain fixed and reachable without covering rank, lap, or the near road.",
+      "evidence_requirement": "interaction"
+    }
+  ]
+}

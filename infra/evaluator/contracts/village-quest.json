@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "task_id": "village-quest",
+  "seed": 46349,
+  "viewports": {
+    "desktop": {"width": 1440, "height": 900},
+    "phone": {"width": 390, "height": 844}
+  },
+  "state_global": "__WEB3DGAMEBENCH__",
+  "started_phases": ["playing", "won", "lost"],
+  "probe_phases": ["playing"],
+  "observation_paths": ["player"],
+  "probes": {
+    "desktop": [
+      {
+        "id": "keyboard-move",
+        "baseline_ms": 600,
+        "input": {"type": "keyboard", "key_alternatives": [["KeyW"], ["ArrowUp"]], "duration_ms": 600},
+        "observe": {"type": "state", "paths": ["player"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      },
+      {
+        "id": "pointer-orbit",
+        "baseline_ms": 500,
+        "input": {"type": "pointer", "gesture": "discover-look", "duration_ms": 500, "delta": [0.18, -0.08]},
+        "observe": {"type": "canvas", "minimum_delta": 0.01, "baseline_multiplier": 1.25}
+      }
+    ],
+    "phone": [
+      {
+        "id": "touch-move",
+        "baseline_ms": 600,
+        "input": {"type": "touch", "gesture": "discover-swipe", "duration_ms": 600, "delta": [0, -0.15], "control_region": "left"},
+        "observe": {"type": "state", "paths": ["player"], "minimum_delta": 0.05, "baseline_multiplier": 1.5}
+      }
+    ]
+  },
+  "restart": {
+    "desktop_method": "keyboard",
+    "match_initial_paths": [
+      {"path": "player", "tolerance": 3},
+      {"path": "health", "tolerance": 3},
+      {"path": "questStage", "tolerance": 0},
+      {"path": "enemiesDefeated", "tolerance": 0},
+      {"path": "enemyRolesDefeated", "tolerance": 0},
+      {"path": "defensiveAbilityUses", "tolerance": 0},
+      {"path": "relicCollected", "tolerance": 0},
+      {"path": "targetId", "tolerance": 0}
+    ],
+    "assertions": [
+      {"path": "phase", "one_of": ["ready", "playing"]},
+      {"path": "questStage", "equals": "available"},
+      {"path": "enemiesDefeated", "equals": 0},
+      {"path": "enemyRolesDefeated", "equals": 0},
+      {"path": "defensiveAbilityUses", "equals": 0},
+      {"path": "relicCollected", "equals": false}
+    ]
+  },
+  "state_schema": {
+    "type": "object",
+    "required": {
+      "phase": {"type": "string", "enum": ["ready", "playing", "paused", "won", "lost"]},
+      "score": {"type": "number"},
+      "player": {"type": "vec3"},
+      "health": {"type": "number", "minimum": 0, "maximum": 100},
+      "resource": {"type": "number", "minimum": 0},
+      "questStage": {
+        "type": "string",
+        "enum": ["available", "accepted", "creatures-defeated", "relic-collected", "ready-to-turn-in", "complete"]
+      },
+      "enemiesDefeated": {"type": "integer", "minimum": 0, "maximum": 3},
+      "enemyRolesDefeated": {"type": "integer", "minimum": 0, "maximum": 3},
+      "defensiveAbilityUses": {"type": "integer", "minimum": 0},
+      "relicCollected": {"type": "boolean"},
+      "targetId": {"type": "string-or-null"},
+      "seed": {"type": "integer", "const": 46349},
+      "restartCount": {"type": "integer", "minimum": 0}
+    }
+  },
+  "invariants": [
+    {
+      "when": {"path": "relicCollected", "equals": true},
+      "assert": [{"path": "enemiesDefeated", "equals": 3}]
+    },
+    {
+      "when": {"path": "phase", "equals": "won"},
+      "assert": [
+        {"path": "questStage", "equals": "complete"},
+        {"path": "enemiesDefeated", "equals": 3},
+        {"path": "enemyRolesDefeated", "minimum": 2},
+        {"path": "defensiveAbilityUses", "minimum": 1},
+        {"path": "relicCollected", "equals": true}
+      ]
+    }
+  ]
+}

@@ -14,6 +14,7 @@ let currentPair = null;
 let played = { left: false, right: false };
 let activeSide = null;
 let replayMode = false;
+let arenaTaskFilter = new URLSearchParams(location.search).get('task') || '';
 
 const t = (key, values) => formatMessage(language, key, values);
 const localized = (object, key) => language === 'zh' && object?.[`${key}Zh`] ? object[`${key}Zh`] : object?.[key] || '';
@@ -89,6 +90,7 @@ async function loadCatalog() {
   catalogData = await api('/api/catalog');
   renderCatalog();
   renderTraceIndex();
+  if (currentPair) renderArenaTask();
 }
 
 function renderCatalog() {
@@ -138,7 +140,8 @@ async function loadPair(force = false) {
   const empty = document.querySelector('#arena-empty');
   const match = document.querySelector('#arena-match');
   try {
-    const pair = await api('/api/arena/pair');
+    const query = arenaTaskFilter ? `?task=${encodeURIComponent(arenaTaskFilter)}` : '';
+    const pair = await api(`/api/arena/pair${query}`);
     if (!pair.ready) {
       empty.hidden = false;
       match.hidden = true;
@@ -162,6 +165,13 @@ async function loadPair(force = false) {
 function renderArenaTask() {
   document.querySelector('#arena-task').textContent = localized(currentPair.task, 'title');
   document.querySelector('#arena-brief').innerHTML = taskBrief(currentPair.task, false);
+  const picker = document.querySelector('#arena-task-select');
+  const eligible = (catalogData?.tasks || []).filter((task) => task.submissions.filter((item) => item.status === 'published').length >= 2);
+  picker.innerHTML = [
+    `<option value="">${escapeHtml(t('arenaBalancedRotation'))}</option>`,
+    ...eligible.map((task) => `<option value="${escapeHtml(task.id)}">${escapeHtml(localized(task, 'title'))}</option>`),
+  ].join('');
+  picker.value = eligible.some((task) => task.id === arenaTaskFilter) ? arenaTaskFilter : '';
 }
 
 function syncSequence() {
@@ -271,6 +281,11 @@ addEventListener('hashchange', route);
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && activeSide) closeStage(); });
 document.querySelectorAll('[data-language]').forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.language)));
 document.querySelector('#reload-pair').addEventListener('click', () => { currentPair = null; loadPair(true); });
+document.querySelector('#arena-task-select').addEventListener('change', (event) => {
+  arenaTaskFilter = event.target.value;
+  currentPair = null;
+  loadPair(true);
+});
 document.querySelector('#begin-sequence').addEventListener('click', () => playSide(played.left ? 'right' : 'left'));
 document.querySelector('#finish-stage').addEventListener('click', finishStage);
 document.querySelector('#exit-stage').addEventListener('click', closeStage);
