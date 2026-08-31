@@ -11,6 +11,7 @@ from pathlib import Path
 from . import __version__
 from .config import ConfigError, validate_matrix
 from .evaluator import evaluate_run
+from .judge import run_judge
 from .publisher import publish_runs
 from .runner import run_once, runs_dir
 
@@ -136,6 +137,18 @@ def command_evaluate(args: argparse.Namespace) -> int:
     return 0 if json.loads(report.read_text()).get("passed") else 1
 
 
+def command_judge(args: argparse.Namespace) -> int:
+    report = run_judge(
+        project_root(),
+        task_id=args.task,
+        submission_id=args.submission,
+        judge_id=args.judge,
+        timeout_seconds=args.timeout,
+    )
+    print(report)
+    return 0
+
+
 def command_matrix(args: argparse.Namespace) -> int:
     root = project_root()
     season, _ = validate_matrix(root, args.season)
@@ -244,6 +257,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = commands.add_parser("evaluate")
     evaluate.add_argument("--run", required=True)
     evaluate.set_defaults(func=command_evaluate)
+    judge = commands.add_parser("judge")
+    judge.add_argument("--task", required=True)
+    judge.add_argument("--submission", required=True)
+    judge.add_argument("--judge", default="pi-sol-medium")
+    judge.add_argument("--timeout", type=int, default=900)
+    judge.set_defaults(func=command_judge)
     matrix = commands.add_parser("matrix")
     matrix.add_argument("--season", required=True)
     matrix.add_argument("--backend", choices=("native", "container"), default="container")

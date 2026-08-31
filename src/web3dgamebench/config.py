@@ -39,6 +39,16 @@ class Task:
     brief: Path
 
 
+@dataclass(frozen=True)
+class JudgeProfile:
+    id: str
+    harness: str
+    provider: str
+    model: str
+    effort: str
+    runs: int
+
+
 def _toml(path: Path) -> dict:
     try:
         return tomllib.loads(path.read_text(encoding="utf-8"))
@@ -62,6 +72,24 @@ def load_profiles(root: Path) -> dict[str, Profile]:
             runtime_env=value.get("runtime_env"),
         )
     return profiles
+
+
+def load_judges(root: Path) -> dict[str, JudgeProfile]:
+    raw = _toml(root / "configs" / "judges.toml").get("judges", {})
+    judges: dict[str, JudgeProfile] = {}
+    for judge_id, value in raw.items():
+        runs = int(value.get("runs", 1))
+        if runs < 1:
+            raise ConfigError(f"judge {judge_id} must run at least once")
+        judges[judge_id] = JudgeProfile(
+            id=judge_id,
+            harness=str(value["harness"]),
+            provider=str(value["provider"]),
+            model=str(value["model"]),
+            effort=str(value["effort"]),
+            runs=runs,
+        )
+    return judges
 
 
 def load_seasons(root: Path) -> dict[str, Season]:

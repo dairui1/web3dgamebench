@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from web3dgamebench.config import load_profiles, load_task, validate_matrix
+from web3dgamebench.config import load_judges, load_profiles, load_task, validate_matrix
 from web3dgamebench.container import load_container_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +24,15 @@ def test_pilot_matrix_has_requested_eight_profiles() -> None:
 def test_all_profiles_have_unique_ids() -> None:
     profiles = load_profiles(ROOT)
     assert len(profiles) == len(set(profiles))
+
+
+def test_pilot_judge_uses_one_medium_pi_rollout() -> None:
+    judge = load_judges(ROOT)["pi-sol-medium"]
+    assert judge.harness == "pi"
+    assert judge.provider == "openai-codex"
+    assert judge.model == "gpt-5.6-sol"
+    assert judge.effort == "medium"
+    assert judge.runs == 1
 
 
 def test_candidate_runs_have_no_fixed_time_limit() -> None:

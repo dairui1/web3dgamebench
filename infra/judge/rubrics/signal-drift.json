@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "task_id": "signal-drift",
+  "criteria": [
+    {
+      "id": "core.starts",
+      "weight": 10,
+      "description": "The game starts normally and enters a controllable playing state."
+    },
+    {
+      "id": "controls.flight",
+      "weight": 15,
+      "description": "Desktop steering changes the craft trajectory on both axes with readable camera response."
+    },
+    {
+      "id": "objective.completion",
+      "weight": 15,
+      "description": "Relay restoration leads to an extraction objective with observable victory behavior, or the terminal path is otherwise directly evidenced."
+    },
+    {
+      "id": "objective.relays",
+      "weight": 15,
+      "description": "The ordered relay objective is understandable and appears to be a real gameplay progression system."
+    },
+    {
+      "id": "systems.pressure",
+      "weight": 15,
+      "description": "Charge, hazards, collisions, or course boundaries create observable gameplay pressure rather than decoration only."
+    },
+    {
+      "id": "presentation.readability",
+      "weight": 15,
+      "description": "The 3D route, craft, objective, hazards, HUD, and motion feedback are visually readable during play."
+    },
+    {
+      "id": "lifecycle.restart",
+      "weight": 5,
+      "description": "Pause or restart works and returns the game to a valid state without obvious corruption."
+    },
+    {
+      "id": "mobile.usability",
+      "weight": 10,
+      "description": "At 390 x 844 the game remains readable and exposes pointer or touch steering sufficient to interact with the course without incoherent overlap."
+    }
+  ]
+}
