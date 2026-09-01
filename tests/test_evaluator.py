@@ -65,6 +65,44 @@ def test_primary_canvas_rejects_page_without_visible_canvas() -> None:
         container_evaluator._primary_canvas(page)
 
 
+def test_missing_canvas_is_a_trusted_candidate_failure() -> None:
+    class TimeoutError(Exception):
+        pass
+
+    TimeoutError.__module__ = "playwright._impl._errors"
+
+    class Page:
+        def wait_for_selector(self, selector: str, *, timeout: int) -> None:
+            assert selector == "canvas:visible"
+            assert timeout == 15_000
+            raise TimeoutError("missing")
+
+    checks: list[dict] = []
+
+    assert not container_evaluator._wait_for_visible_canvas(Page(), "phone", checks)
+    assert checks == [
+        {
+            "name": "phone.canvas-visible",
+            "passed": False,
+            "detail": "no visible canvas appeared within 15000ms",
+        }
+    ]
+
+
+def test_visible_canvas_records_admission_check() -> None:
+    class Page:
+        def wait_for_selector(self, selector: str, *, timeout: int) -> None:
+            assert selector == "canvas:visible"
+            assert timeout == 15_000
+
+    checks: list[dict] = []
+
+    assert container_evaluator._wait_for_visible_canvas(Page(), "desktop", checks)
+    assert checks == [
+        {"name": "desktop.canvas-visible", "passed": True, "detail": None}
+    ]
+
+
 def _contract(task_id: str) -> dict:
     task = load_task(ROOT, task_id)
     viewports = {

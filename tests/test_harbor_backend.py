@@ -2,9 +2,16 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from web3dgamebench.config import load_profiles
 from web3dgamebench.container import ContainerConfig
-from web3dgamebench.harbor_backend import HARBOR_COMMIT, _write_task, execute_harbor
+from web3dgamebench.harbor_backend import (
+    HARBOR_COMMIT,
+    HarborBackendError,
+    _write_task,
+    execute_harbor,
+)
 from web3dgamebench.runtimes import build_invocation
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +78,15 @@ def test_harbor_task_materialization_is_profile_generic_and_preserves_boundaries
     assert "pids_limit: 1024" in compose
     assert compose.count("- --allow") == 2
     assert "internal: true" in compose
+    dockerfile = (task / "environment/Dockerfile").read_text(encoding="utf-8")
+    dependency_copy = dockerfile.index(
+        "COPY --chown=candidate:candidate starter/package.json starter/package-lock.json"
+    )
+    install = dockerfile.index("RUN npm ci")
+    starter_copy = dockerfile.index(
+        "COPY --chown=candidate:candidate starter/ /workspace/"
+    )
+    assert dependency_copy < install < starter_copy
 
 
 def test_harbor_trial_is_converted_to_canonical_workspace_and_provenance(
@@ -146,3 +162,58 @@ def test_harbor_trial_is_converted_to_canonical_workspace_and_provenance(
     assert provenance["task_checksum"] == "checksum"
     assert provenance["exception"] is None
     assert provenance["adapter_lock_sha256"]
+
+
+def test_harbor_failure_preserves_provenance_without_workspace(
+    monkeypatch, tmp_path: Path
+) -> None:
+    root = minimal_root(tmp_path)
+    workspace = tmp_path / "run/workspace"
+    workspace.mkdir(parents=True)
+    (workspace / "TASK.md").write_text("task\n", encoding="utf-8")
+    (workspace / "package.json").write_text('{"private":true}\n', encoding="utf-8")
+    run_root = workspace.parent
+    profile = load_profiles(ROOT)["codex-sol-medium"]
+    invocation = build_invocation(profile, Path("/workspace"), "instruction")
+
+    monkeypatch.setattr("web3dgamebench.harbor_backend.harbor_version", lambda: "0.22.0")
+    monkeypatch.setattr(
+        "web3dgamebench.harbor_backend.load_container_config",
+        lambda _root: container_config(),
+    )
+
+    def failed(argv, **_kwargs):
+        jobs_dir = Path(argv[argv.index("--jobs-dir") + 1])
+        job_name = argv[argv.index("--job-name") + 1]
+        trial = jobs_dir / job_name / "trial-1"
+        trial.mkdir(parents=True)
+        result = {
+            "task_checksum": "checksum",
+            "exception_info": {
+                "exception_type": "BuildError",
+                "message": "sensitive-provider-message",
+            },
+        }
+        (trial / "result.json").write_text(json.dumps(result), encoding="utf-8")
+        (jobs_dir / job_name / "result.json").write_text("{}", encoding="utf-8")
+        return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr("web3dgamebench.harbor_backend.run_captured", failed)
+
+    with pytest.raises(
+        HarborBackendError,
+        match=r"did not preserve /workspace \(BuildError\)",
+    ):
+        execute_harbor(
+            root,
+            run_root,
+            workspace,
+            task_id="canyon-strike",
+            profile=profile,
+            instruction="instruction",
+            invocation=invocation,
+        )
+
+    provenance = json.loads((run_root / "harbor.json").read_text(encoding="utf-8"))
+    assert provenance["exception"] == {"type": "BuildError"}
+    assert "sensitive-provider-message" not in json.dumps(provenance)

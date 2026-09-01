@@ -99,14 +99,14 @@ def _write_task(
         f"""FROM {config.image}
 
 USER root
-COPY --chown=candidate:candidate starter/ /workspace/
 COPY npm-cache/ /vendor/npm-cache/
 COPY codex_goal_runner.py /usr/local/bin/web3dgamebench-codex-goal
 COPY chromium /usr/local/bin/chromium
 COPY pi_command_timeout.js /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js
 COPY pi_goal_runner.ts /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts
 RUN chmod 0555 /usr/local/bin/web3dgamebench-codex-goal /usr/local/bin/chromium \\
-    && chown -R candidate:candidate /workspace
+    && mkdir -p /workspace \\
+    && chown candidate:candidate /workspace
 
 USER candidate
 WORKDIR /workspace
@@ -121,7 +121,9 @@ ENV HOME=/home/candidate \\
     npm_config_audit=false \\
     npm_config_fund=false \\
     npm_config_update_notifier=false
-RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; fi
+COPY --chown=candidate:candidate starter/package.json starter/package-lock.json /workspace/
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY --chown=candidate:candidate starter/ /workspace/
 """,
         encoding="utf-8",
     )
@@ -327,16 +329,6 @@ def execute_harbor(
     trial_root = _unique_trial(job_root)
     trial_result_path = trial_root / "result.json"
     trial_result = json.loads(trial_result_path.read_text(encoding="utf-8"))
-    artifact_workspace = trial_root / "artifacts/workspace"
-    if not artifact_workspace.is_dir():
-        raise HarborBackendError("Harbor trial did not preserve /workspace")
-    shutil.rmtree(workspace)
-    shutil.copytree(artifact_workspace, workspace)
-
-    event_source = trial_root / "artifacts/events.jsonl"
-    stderr_source = trial_root / "artifacts/stderr.log"
-    stdout = event_source.read_text(errors="replace") if event_source.is_file() else ""
-    stderr = stderr_source.read_text(errors="replace") if stderr_source.is_file() else ""
     exception = trial_result.get("exception_info")
     exception_summary = None
     if isinstance(exception, dict):
@@ -365,6 +357,21 @@ def execute_harbor(
         "exception": exception_summary,
     }
     (run_root / "harbor.json").write_text(json.dumps(provenance, indent=2) + "\n")
+
+    artifact_workspace = trial_root / "artifacts/workspace"
+    if not artifact_workspace.is_dir():
+        exception_type = (
+            exception_summary.get("type") if exception_summary is not None else None
+        )
+        detail = f" ({exception_type})" if exception_type else ""
+        raise HarborBackendError(f"Harbor trial did not preserve /workspace{detail}")
+    shutil.rmtree(workspace)
+    shutil.copytree(artifact_workspace, workspace)
+
+    event_source = trial_root / "artifacts/events.jsonl"
+    stderr_source = trial_root / "artifacts/stderr.log"
+    stdout = event_source.read_text(errors="replace") if event_source.is_file() else ""
+    stderr = stderr_source.read_text(errors="replace") if stderr_source.is_file() else ""
     plane = {
         "image": config.image,
         "image_digest": subprocess.run(

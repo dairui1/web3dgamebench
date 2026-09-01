@@ -910,6 +910,27 @@ def _runtime_request_allowed(
     )
 
 
+def _wait_for_visible_canvas(page: Any, label: str, checks: list[dict]) -> bool:
+    try:
+        page.wait_for_selector("canvas:visible", timeout=15_000)
+    except Exception as error:
+        error_type = type(error)
+        if error_type.__name__ != "TimeoutError" or not error_type.__module__.startswith(
+            "playwright."
+        ):
+            raise
+        checks.append(
+            check(
+                f"{label}.canvas-visible",
+                False,
+                "no visible canvas appeared within 15000ms",
+            )
+        )
+        return False
+    checks.append(check(f"{label}.canvas-visible", True))
+    return True
+
+
 def _evaluate_viewport(
     browser: Any,
     label: str,
@@ -955,7 +976,8 @@ def _evaluate_viewport(
             else None,
         )
         page.goto(url, wait_until="networkidle", timeout=30_000)
-        page.wait_for_selector("canvas:visible", timeout=15_000)
+        if not _wait_for_visible_canvas(page, label, checks):
+            return
         state_before = _state(page, contract)
         if enabled["runtime_state"]:
             errors = state_errors(state_before, contract)
