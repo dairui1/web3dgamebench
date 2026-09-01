@@ -121,8 +121,8 @@ ENV HOME=/home/candidate \\
     npm_config_audit=false \\
     npm_config_fund=false \\
     npm_config_update_notifier=false
-COPY --chown=candidate:candidate starter/package.json starter/package-lock.json /workspace/
-RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY --chown=candidate:candidate starter/package*.json /workspace/
+RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; fi
 COPY --chown=candidate:candidate starter/ /workspace/
 """,
         encoding="utf-8",

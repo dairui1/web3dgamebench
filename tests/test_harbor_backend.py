@@ -80,9 +80,9 @@ def test_harbor_task_materialization_is_profile_generic_and_preserves_boundaries
     assert "internal: true" in compose
     dockerfile = (task / "environment/Dockerfile").read_text(encoding="utf-8")
     dependency_copy = dockerfile.index(
-        "COPY --chown=candidate:candidate starter/package.json starter/package-lock.json"
+        "COPY --chown=candidate:candidate starter/package*.json"
     )
-    install = dockerfile.index("RUN npm ci")
+    install = dockerfile.index("npm ci --ignore-scripts")
     starter_copy = dockerfile.index(
         "COPY --chown=candidate:candidate starter/ /workspace/"
     )
