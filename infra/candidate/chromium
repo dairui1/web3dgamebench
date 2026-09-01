@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Run Chromium as a supervised process group and reap it when its caller exits."""
+
+from __future__ import annotations
+
+import ctypes
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+CHROMIUM = "/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell"
+_STOP = False
+
+
+def _set_parent_death_signal(signum: int) -> None:
+    if sys.platform.startswith("linux"):
+        ctypes.CDLL(None).prctl(1, signum, 0, 0, 0)
+
+
+def _request_stop(_signum: int, _frame: object) -> None:
+    global _STOP
+    _STOP = True
+
+
+def _terminate_group(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        process.wait(timeout=3)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        process.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def main() -> int:
+    initial_parent = os.getppid()
+    _set_parent_death_signal(signal.SIGTERM)
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, _request_stop)
+
+    home = Path("/tmp/web3dgamebench-home")
+    os.environ["HOME"] = str(home)
+    os.environ["XDG_CACHE_HOME"] = str(home / ".cache")
+    (home / ".cache").mkdir(parents=True, exist_ok=True)
+    (home / ".local/share").mkdir(parents=True, exist_ok=True)
+
+    args = list(sys.argv[1:])
+    owned_profile: Path | None = None
+    if not any(arg == "--user-data-dir" or arg.startswith("--user-data-dir=") for arg in args):
+        owned_profile = Path(tempfile.mkdtemp(prefix="web3dgamebench-chromium-"))
+        args.append(f"--user-data-dir={owned_profile}")
+    command = [
+        os.environ.get("WEB3DGAMEBENCH_CHROMIUM_BIN", CHROMIUM),
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-extensions",
+        "--disable-gpu",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--no-first-run",
+        *args,
+    ]
+    process = subprocess.Popen(
+        command,
+        start_new_session=True,
+        preexec_fn=lambda: _set_parent_death_signal(signal.SIGKILL),
+    )
+    try:
+        while process.poll() is None:
+            if _STOP or os.getppid() != initial_parent:
+                _terminate_group(process)
+                break
+            time.sleep(0.2)
+        return process.wait()
+    finally:
+        _terminate_group(process)
+        if owned_profile is not None:
+            shutil.rmtree(owned_profile, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

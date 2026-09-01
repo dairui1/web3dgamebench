@@ -1,13 +1,13 @@
 # Web3DGameBench
 
-Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks, with no fixed candidate runtime limit. Individual Pi shell commands are capped at 20 minutes so a completed but unclosed browser probe returns control to the agent without ending the overall task. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
+Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Each candidate cell has a two-hour wall-clock ceiling; individual Pi shell commands are capped at 20 minutes so a completed but unclosed browser probe returns control to the agent before the cell ceiling. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
 
 The public result is intentionally two-part:
 
 1. Deterministic checks establish that a submission builds, renders, responds to input, works on desktop and phone, and exposes a small runtime inspection contract.
 2. Blind pairwise play determines the leaderboard. Visitors compare two games from the same task without seeing the model name; ratings use a Bradley-Terry fit.
 
-## Pilot matrix
+## Core profiles
 
 | Profile | Harness | Model | Thinking |
 | --- | --- | --- | --- |
@@ -16,6 +16,7 @@ The public result is intentionally two-part:
 | `codex-luna-max` | Codex | `gpt-5.6-luna` | `max` |
 | `claude-sonnet-default` | Claude Code | `claude-sonnet-5` | official default |
 | `claude-opus-default` | Claude Code | `claude-opus-5` | official default |
+| `claude-fable-default` | Claude Code | `claude-fable-5` | optional backfill |
 | `pi-deepseek-v4-flash` | pi | `opencode-go/deepseek-v4-flash` | provider default |
 | `pi-qwen3-8-flash` | pi | `opencode-go/qwen3.8-flash` | provider default |
 | `pi-glm-5-3-flash` | pi | `opencode-go/glm-5.3-flash` | provider default |
@@ -25,6 +26,10 @@ this table. Run `uv run web3dgamebench plan --season <season-id>` and review the
 before starting paid cells. `pilot-2026-09` preserves the immutable Signal Drift pilot. `season-1`
 is the runnable private matrix for the ten frozen official tasks; no task prompt or generated game
 may be published until all 80 cells reach a terminal state.
+
+Claude Fable is a separate optional lane, not a ninth core profile. It never blocks the 80-cell
+matrix or publication. A quota-limited run is recorded as `quota-deferred` and can be resumed later,
+for the whole season or selected tasks, against the same frozen core plan.
 
 ## Boundaries
 
@@ -45,6 +50,12 @@ charged by subscription products such as Codex, Claude Code, or OpenCode Go.
 
 See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
 
+The authoritative Season 1 execution path is `web3dgamebench matrix --backend container`, not
+Harbor. The Harbor adapter under `experiments/harbor_parity/` is a non-scoring compatibility lab;
+its artifacts cannot enter a matrix receipt or publication. Promoting Harbor would require all ten
+tasks, all eight profiles, immutable receipt conversion, and publisher parity to pass before a new
+plan and smoke receipt are frozen.
+
 ## Operator quick start
 
 ```bash
@@ -54,9 +65,14 @@ docker build -t web3dgamebench-candidate:0.1.0 infra/candidate
 docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
 uv run web3dgamebench doctor
 uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
-uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --backend container
+uv run web3dgamebench smoke --plan /path/to/season-1-plan.json
+uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend container
 # After an interruption or infrastructure failure, resume the same receipt:
 uv run web3dgamebench matrix --resume /path/to/matrix-receipt.json
+# Optional, quota-aware Fable lane; repeat this command later to resume deferred cells:
+uv run web3dgamebench fable --core-plan /path/to/season-1-plan.json
+# Or backfill selected tasks into the same receipt:
+uv run web3dgamebench fable --core-plan /path/to/season-1-plan.json --task canyon-strike
 # After all 80 cells are terminal:
 uv run web3dgamebench publish --matrix /path/to/closed-matrix.json --games-repo ../web3dgamebench-games
 ```

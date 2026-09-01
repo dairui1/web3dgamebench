@@ -8,6 +8,8 @@ proxy_port = 8888
 memory = "8g"
 cpus = "6"
 command_timeout_seconds = 1200
+candidate_total_timeout_seconds = 7200
+pids_limit = 1024
 
 # Model APIs only. Do not add galleries, GitHub, npm, CDNs, or the public site.
 egress_allow = [

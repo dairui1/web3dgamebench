@@ -6,18 +6,17 @@ Build a complete, polished, browser-native 3D third-person quest RPG called **Vi
 
 The player arrives in a small village, speaks to the warden, accepts a quest, travels to a nearby ruin, defeats three corrupted creatures, collects the dropped relic, and returns to the warden for a reward. Victory requires an explicit quest turn-in, not merely defeating enemies.
 
-## Completion contract
+## Operational completion contract
 
-Complete the goal only when all of the following are true:
+The feature lists below define the intended submission and its quality criteria. They do not require exhaustive self-proof. Complete the goal when all of the following operational checks pass:
 
-- The entire accept, travel, fight, loot, return, and turn-in sequence is playable and clearly communicated.
-- Third-person movement, camera, NPC interaction, dialogue, targeting, abilities, enemy behavior, drops, quest state, and reward all function.
-- The village and ruin read as distinct authored places connected by a navigable route.
-- The production build succeeds and the full quest chain has been played at both required viewports.
+- `npm run build` succeeds and emits the static production bundle to `dist/`.
+- The production build loads at 1440 x 900 and 390 x 844 with a visible, nonblank, interactive 3D scene, no horizontal overflow beyond 2 CSS pixels, and no uncaught page exception or `console.error` during the checked flow.
+- One brief smoke check at each viewport confirms that the game can enter its active play state, one primary control changes observable game state, and restart returns to a valid initial state.
 
-Do not stop after building an RPG scene or a combat demo. Continue until the full quest contract can be completed without guessing.
+Keep these checks bounded. Rerun a failed check only after a relevant fix, and stop once it passes. Do not create an autopilot or repeatedly run full victories, losses, missions, matches, races, services, nights, courses, quests, fights, or puzzle solutions solely to prove completion. Those paths, feature completeness, balance, polish, and game feel are evaluated after submission; shortcomings affect the result, not whether the agent must continue self-testing. Report only the checks actually run.
 
-## Required game systems
+## Target game systems
 
 - Third-person movement with collision, an orbiting follow camera, readable player facing, and click/tap or key-based interaction.
 - One friendly quest-giver with approach cue, dialogue panel, accept action, in-progress dialogue, and completion/reward dialogue.
@@ -36,9 +35,9 @@ Do not stop after building an RPG scene or a combat demo. Continue until the ful
 2. Implement the NPC dialogue and quest state machine from availability through acceptance.
 3. Implement targeting, abilities, enemies, combat feedback, defeat, relic drop, and collection.
 4. Complete return and turn-in behavior, reward, UI, failure/restart, environment polish, and readable landmarks.
-5. Build and play the entire quest at 1440 x 900 and 390 x 844; verify every quest transition and recovery path.
+5. Build once after the final relevant change, then run the bounded operational smoke checks at 1440 x 900 and 390 x 844. Fix only observed build, startup, blank-frame, input, restart, exception, or layout failures before completing.
 
-## Quality gates
+## Quality targets
 
 - The quest tracker and world cues agree on the current required action.
 - Enemies cannot attack through solid walls or continue damaging the player after defeat.
@@ -73,4 +72,4 @@ You may add fields. Do not expose evaluator-only shortcuts or callable functions
 
 ## Constraints and final evidence
 
-Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the build result and an end-to-end quest playtest at desktop and phone sizes honestly.
+Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the production build result and the two bounded viewport smoke checks honestly. Full win/loss or end-to-end playthrough evidence is neither required nor requested.

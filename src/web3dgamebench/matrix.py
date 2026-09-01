@@ -7,7 +7,9 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +53,7 @@ _JUDGE_CELL_STATUSES = {
 }
 _GOAL_RUNTIME_FIELDS = {"activation_status", "lifecycle", "receipt_sha256"}
 _CLOSURE_REQUIRED_FILES = ("manifest.json", "events.jsonl", "stderr.log")
+_RECEIPT_WRITE_LOCK = threading.Lock()
 _TOOLCHAIN_PROBE = r"""
 import json
 import subprocess
@@ -64,6 +67,10 @@ commands = {
     "node_version": ["node", "--version"],
     "npm_version": ["npm", "--version"],
     "pi_help": ["pi", "--help"],
+    "pi_goal_version": [
+        "python3", "-c",
+        "import json; print(json.load(open('/usr/lib/node_modules/@narumitw/pi-goal/package.json'))['version'])",
+    ],
     "pi_version": ["pi", "--version"],
 }
 outputs = {}
@@ -186,6 +193,7 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
         "codex_version",
         "claude_version",
         "pi_version",
+        "pi_goal_version",
         "node_version",
         "npm_version",
         *_REQUIRED_CLI_FLAGS,
@@ -224,6 +232,9 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
             "npm_version",
         )
     }
+    if probe["pi_goal_version"]["stdout"] != "0.54.4":
+        raise MatrixError("candidate image does not contain pi-goal 0.54.4")
+    versions["pi_goal"] = probe["pi_goal_version"]["stdout"]
     capabilities = {
         name: {
             "output_sha256": _text_sha256(probe[name]["stdout"]),
@@ -371,8 +382,11 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "configs/container.toml", "container-config"),
         (root / "vendor/manifest.json", "vendor-manifest"),
         (root / "infra/candidate/Dockerfile", "candidate-image"),
+        (root / "infra/candidate/chromium", "candidate-browser-runtime"),
+        (root / "infra/candidate/codex_goal_runner.py", "candidate-goal-runtime"),
         (root / "infra/candidate/egress_proxy.py", "candidate-egress"),
         (root / "infra/candidate/pi_command_timeout.js", "candidate-command-limit"),
+        (root / "infra/candidate/pi_goal_runner.ts", "candidate-goal-runtime"),
         (root / "infra/evaluator/Dockerfile", "evaluator-image"),
         (root / "infra/evaluator/evaluate.py", "evaluator"),
         (root / "infra/judge/pi/playtest-judge.ts", "judge-runtime"),
@@ -381,10 +395,13 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "src/web3dgamebench/config.py", "matrix-runtime"),
         (root / "src/web3dgamebench/container.py", "matrix-runtime"),
         (root / "src/web3dgamebench/evaluator.py", "evaluator-host"),
+        (root / "src/web3dgamebench/fable_backfill.py", "optional-backfill-runtime"),
         (root / "src/web3dgamebench/judge.py", "judge-host"),
         (root / "src/web3dgamebench/matrix.py", "matrix-runtime"),
+        (root / "src/web3dgamebench/process.py", "candidate-process-runtime"),
         (root / "src/web3dgamebench/runner.py", "candidate-runtime"),
         (root / "src/web3dgamebench/runtimes.py", "candidate-runtime"),
+        (root / "src/web3dgamebench/smoke.py", "preflight-runtime"),
         (root / "src/web3dgamebench/runtime_contracts.py", "runtime-contract-loader"),
         (root / "src/web3dgamebench/runtime_schema.py", "runtime-schema"),
     ]
@@ -427,6 +444,7 @@ def _load_vendor_locks(root: Path) -> dict[str, str]:
 
 def create_preflight_plan(root: Path, season_id: str) -> dict[str, Any]:
     season, profiles = validate_matrix(root, season_id)
+    container_config = load_container_config(root)
     runtime_environment = _runtime_environment(root)
     files: dict[str, dict[str, Any]] = {}
     for path, role in _global_inputs(root):
@@ -529,7 +547,11 @@ def create_preflight_plan(root: Path, season_id: str) -> dict[str, Any]:
         "profiles": _profile_snapshots(season, profiles),
         "tasks": tasks,
         "runtime_control": {
-            "candidate_total_timeout_seconds": None,
+            "candidate_total_timeout_seconds": container_config.candidate_total_timeout_seconds,
+            "candidate_pids_limit": container_config.pids_limit,
+            "task_order": "serial",
+            "harness_order": "parallel",
+            "models_within_harness": "serial",
             "interruptible": True,
             "resume_supported": True,
         },
@@ -768,6 +790,12 @@ def _canonical_closure_path(season_id: str) -> Path:
     return runs_dir() / "matrices" / f"closed-{safe}.json"
 
 
+def _canonical_invalidation_path(season_id: str, matrix_id: str) -> Path:
+    safe_season = season_id.replace("/", "_").replace(os.sep, "_")
+    safe_matrix = matrix_id.replace("/", "_").replace(os.sep, "_")
+    return runs_dir() / "matrices" / f"invalidated-{safe_season}-{safe_matrix}.json"
+
+
 def _claim_canonical_matrix(
     season_id: str, receipt_path: Path, receipt: dict[str, Any]
 ) -> Path | None:
@@ -789,6 +817,63 @@ def _claim_canonical_matrix(
             f"season-1 already has a canonical matrix; resume the receipt named in {path}"
         ) from error
     return path
+
+
+def invalidate_canonical_matrix(season_id: str, *, reason: str) -> Path:
+    """Withdraw an unclosed canonical matrix while preserving its claim and receipt."""
+
+    reason = reason.strip()
+    if not reason:
+        raise MatrixError("canonical matrix invalidation requires a reason")
+    with SeasonLock(season_id):
+        canonical_path = _canonical_matrix_path(season_id)
+        closure_path = _canonical_closure_path(season_id)
+        if closure_path.exists():
+            raise MatrixError("a closed canonical matrix cannot be invalidated")
+        try:
+            canonical = json.loads(canonical_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            raise MatrixError(f"canonical matrix record is missing or invalid: {canonical_path}") from error
+        if not isinstance(canonical, dict):
+            raise MatrixError(f"canonical matrix record is invalid: {canonical_path}")
+        matrix_id = canonical.get("matrix_id")
+        raw_receipt = canonical.get("receipt")
+        if not isinstance(matrix_id, str) or not isinstance(raw_receipt, str):
+            raise MatrixError(f"canonical matrix record is invalid: {canonical_path}")
+        receipt_path = Path(raw_receipt).expanduser().resolve()
+        receipt = _load_receipt(receipt_path)
+        _assert_canonical_matrix(season_id, receipt_path, receipt)
+        if receipt.get("status") == "complete":
+            raise MatrixError("a complete canonical matrix cannot be invalidated")
+
+        preserved_claim = canonical_path.with_name(
+            f"claim-{season_id}-{matrix_id}.json".replace("/", "_")
+        )
+        marker_path = _canonical_invalidation_path(season_id, matrix_id)
+        marker = {
+            "schema_version": 1,
+            "season": season_id,
+            "matrix_id": matrix_id,
+            "claim": str(preserved_claim.resolve()),
+            "claim_file_sha256": _file_sha256(canonical_path),
+            "receipt": str(receipt_path),
+            "receipt_digest_sha256_before": receipt.get("receipt_digest_sha256"),
+            "receipt_file_sha256_before": _file_sha256(receipt_path),
+            "reason": reason,
+            "invalidated_at": _now(),
+        }
+        _write_immutable_json_once(marker_path, marker, label="canonical matrix invalidation")
+        if preserved_claim.exists():
+            raise MatrixError(f"preserved canonical claim already exists: {preserved_claim}")
+        os.replace(canonical_path, preserved_claim)
+        receipt["status"] = "invalidated"
+        receipt["invalidation"] = {
+            "marker": str(marker_path.resolve()),
+            "reason": reason,
+            "invalidated_at": marker["invalidated_at"],
+        }
+        _write_receipt(receipt_path, receipt)
+        return marker_path
 
 
 def _assert_canonical_matrix(
@@ -875,10 +960,12 @@ def _seal_canonical_matrix(
 
 
 def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
-    receipt["updated_at"] = _now()
-    receipt.pop("receipt_digest_sha256", None)
-    receipt["receipt_digest_sha256"] = _receipt_digest(receipt)
-    _atomic_json_replace(path, receipt)
+    # Parallel cells share one receipt; serialize digesting and atomic replacement.
+    with _RECEIPT_WRITE_LOCK:
+        receipt["updated_at"] = _now()
+        receipt.pop("receipt_digest_sha256", None)
+        receipt["receipt_digest_sha256"] = _receipt_digest(receipt)
+        _atomic_json_replace(path, receipt)
 
 
 def _load_receipt(path: Path) -> dict[str, Any]:
@@ -1162,42 +1249,35 @@ def trusted_cell_gate(
                 "candidate_sha256"
             ):
                 failures.append("goal prompt digest mismatch")
-            if profile["harness"] == "codex":
-                if goal.get("native_goal") is not True:
-                    failures.append("Codex native goal was not enabled")
-                if goal.get("activation_method") != (
-                    "codex-native-goal-via-developer-instructions"
-                ):
-                    failures.append("Codex goal activation method mismatch")
-                if goal.get("activation_status") != "observed-complete":
-                    failures.append("Codex goal lifecycle did not complete")
-                lifecycle = goal.get("lifecycle")
-                if not isinstance(lifecycle, list) or not any(
-                    isinstance(event, dict)
-                    and event.get("tool") == "create_goal"
-                    and event.get("objective_sha256") == goal.get("objective_sha256")
-                    for event in lifecycle
-                ):
-                    failures.append("Codex goal creation evidence is missing")
-                if not isinstance(lifecycle, list) or not any(
-                    isinstance(event, dict)
-                    and event.get("tool") == "update_goal"
-                    and event.get("status") == "complete"
-                    for event in lifecycle
-                ):
-                    failures.append("Codex goal completion evidence is missing")
-            else:
-                expected_method = f"{profile['harness']}-system-persistence-policy"
-                if goal.get("native_goal") is not False:
-                    failures.append("system persistence policy was mislabeled native")
-                if goal.get("lifecycle_observable") is not False:
-                    failures.append("system persistence lifecycle was mislabeled observable")
-                if goal.get("activation_method") != expected_method:
-                    failures.append("system persistence activation method mismatch")
-                if goal.get("activation_status") != "configured":
-                    failures.append("system persistence policy was not configured")
-                if goal.get("lifecycle") != []:
-                    failures.append("system persistence policy has false lifecycle evidence")
+            expected_methods = {
+                "codex": "codex-app-server-thread-goal-set",
+                "claude-code": "claude-code-native-slash-goal",
+                "pi": "pi-goal-native-slash-command",
+            }
+            harness = profile["harness"]
+            if goal.get("native_goal") is not True:
+                failures.append(f"{harness} native goal was not enabled")
+            if goal.get("lifecycle_observable") is not True:
+                failures.append(f"{harness} goal lifecycle is not observable")
+            if goal.get("activation_method") != expected_methods[harness]:
+                failures.append(f"{harness} goal activation method mismatch")
+            if goal.get("activation_status") != "observed-complete":
+                failures.append(f"{harness} goal lifecycle did not complete")
+            lifecycle = goal.get("lifecycle")
+            if not isinstance(lifecycle, list) or not any(
+                isinstance(event, dict)
+                and event.get("tool") == "create_goal"
+                and event.get("objective_sha256") == goal.get("objective_sha256")
+                for event in lifecycle
+            ):
+                failures.append(f"{harness} goal creation evidence is missing")
+            if not isinstance(lifecycle, list) or not any(
+                isinstance(event, dict)
+                and event.get("tool") == "update_goal"
+                and event.get("status") == "complete"
+                for event in lifecycle
+            ):
+                failures.append(f"{harness} goal completion evidence is missing")
 
     evaluator = report.get("evaluator")
     frozen_files = plan["frozen_inputs"]["files"]
@@ -1273,7 +1353,10 @@ def _execute_cell(
     receipt_path: Path,
     receipt: dict[str, Any],
     cell: dict[str, Any],
+    cancel_event: threading.Event | None = None,
 ) -> None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise KeyboardInterrupt
     run_root = _existing_candidate(cell)
     if run_root is None:
         run_root = run_once(
@@ -1282,6 +1365,7 @@ def _execute_cell(
             cell["profile"],
             cell["attempt"],
             backend=receipt["backend"],
+            cancel_event=cancel_event,
         )
         cell["run"] = str(run_root)
         manifest = _candidate_manifest(run_root)
@@ -1316,6 +1400,8 @@ def _execute_cell(
             if archived is not None:
                 cell.setdefault("infrastructure_attempts", []).append(str(archived))
     if not report_path.is_file():
+        if cancel_event is not None and cancel_event.is_set():
+            raise KeyboardInterrupt
         archived = _archive_incomplete_evaluation(run_root)
         if archived is not None:
             cell.setdefault("infrastructure_attempts", []).append(str(archived))
@@ -1352,66 +1438,169 @@ def _drive_matrix(
     receipt_path: Path,
     receipt: dict[str, Any],
 ) -> None:
-    for cell in receipt["cells"]:
-        if cell.get("status") not in _RESUMABLE_CELL_STATUSES:
+    task_order = list(dict.fromkeys(cell["task"] for cell in receipt["cells"]))
+    stop_after_task = False
+    for task_id in task_order:
+        task_cells = [cell for cell in receipt["cells"] if cell["task"] == task_id]
+        active_cells = [
+            cell
+            for cell in task_cells
+            if cell.get("status") in _RESUMABLE_CELL_STATUSES
+        ]
+        if not active_cells:
             continue
+
         try:
             plan = _verify_plan_file(plan_path, receipt)
             verify_frozen_inputs(root, plan)
-            cell.update(
-                {
-                    "status": "running",
-                    "started_at": _now(),
-                    "passed": False,
-                    "trusted": False,
-                }
-            )
-            cell.pop("infrastructure_error", None)
-            cell.pop("interrupted_at", None)
-            _write_receipt(receipt_path, receipt)
-            _execute_cell(root, plan, receipt_path, receipt, cell)
-        except RunInterrupted as error:
-            cell.update(
-                {
-                    "status": "interrupted",
-                    "run": str(error.run_root),
-                    "interrupted_at": _now(),
-                }
-            )
-            receipt["status"] = "interrupted"
-            _write_receipt(receipt_path, receipt)
-            raise MatrixInterrupted(receipt_path) from error
-        except KeyboardInterrupt as error:
-            cell.update({"status": "interrupted", "interrupted_at": _now()})
-            receipt["status"] = "interrupted"
-            _write_receipt(receipt_path, receipt)
-            raise MatrixInterrupted(receipt_path) from error
-        except PlanDriftError as error:
-            cell.update(
-                {
-                    "status": "infrastructure-error",
-                    "passed": False,
-                    "trusted": False,
-                    "infrastructure_error": str(error),
-                    "completed_at": _now(),
-                }
-            )
+        except PlanDriftError:
             receipt["status"] = "invalidated"
             _write_receipt(receipt_path, receipt)
             raise
-        except (OSError, RuntimeError, ValueError) as error:
-            cell.update(
-                {
-                    "status": "infrastructure-error",
-                    "passed": False,
-                    "trusted": False,
-                    "infrastructure_error": str(error),
-                    "completed_at": _now(),
-                }
-            )
-            _write_receipt(receipt_path, receipt)
-            break
+
+        for cell in active_cells:
+            cell.pop("infrastructure_error", None)
+            cell.pop("interrupted_at", None)
         _write_receipt(receipt_path, receipt)
+
+        interrupted: BaseException | None = None
+        plan_drift: PlanDriftError | None = None
+        cancel_event = threading.Event()
+        harness_cells: dict[str, list[dict[str, Any]]] = {}
+        for cell in active_cells:
+            profile = plan["profiles"].get(cell["profile"])
+            harness = profile.get("harness") if isinstance(profile, dict) else None
+            if not isinstance(harness, str):
+                raise MatrixError(
+                    f"matrix plan has no harness for profile {cell['profile']}"
+                )
+            harness_cells.setdefault(harness, []).append(cell)
+
+        def execute_harness_chain(
+            cells: list[dict[str, Any]],
+            current_plan: dict[str, Any] = plan,
+            stop: threading.Event = cancel_event,
+        ) -> list[tuple[dict[str, Any], BaseException]]:
+            failures: list[tuple[dict[str, Any], BaseException]] = []
+            for cell in cells:
+                if stop.is_set():
+                    break
+                cell.update(
+                    {
+                        "status": "running",
+                        "started_at": _now(),
+                        "passed": False,
+                        "trusted": False,
+                    }
+                )
+                _write_receipt(receipt_path, receipt)
+                try:
+                    _execute_cell(
+                        root,
+                        current_plan,
+                        receipt_path,
+                        receipt,
+                        cell,
+                        stop,
+                    )
+                except RunInterrupted as error:
+                    stop.set()
+                    cell.update(
+                        {
+                            "status": "interrupted",
+                            "run": str(error.run_root),
+                            "interrupted_at": _now(),
+                        }
+                    )
+                    failures.append((cell, error))
+                    _write_receipt(receipt_path, receipt)
+                    break
+                except KeyboardInterrupt as error:
+                    stop.set()
+                    cell.update(
+                        {"status": "interrupted", "interrupted_at": _now()}
+                    )
+                    failures.append((cell, error))
+                    _write_receipt(receipt_path, receipt)
+                    break
+                except PlanDriftError as error:
+                    stop.set()
+                    cell.update(
+                        {
+                            "status": "infrastructure-error",
+                            "passed": False,
+                            "trusted": False,
+                            "infrastructure_error": str(error),
+                            "completed_at": _now(),
+                        }
+                    )
+                    failures.append((cell, error))
+                    _write_receipt(receipt_path, receipt)
+                    break
+                except (OSError, RuntimeError, ValueError) as error:
+                    cell.update(
+                        {
+                            "status": "infrastructure-error",
+                            "passed": False,
+                            "trusted": False,
+                            "infrastructure_error": str(error),
+                            "completed_at": _now(),
+                        }
+                    )
+                    failures.append((cell, error))
+                _write_receipt(receipt_path, receipt)
+            return failures
+
+        executor = ThreadPoolExecutor(
+            max_workers=len(harness_cells),
+            thread_name_prefix=f"matrix-{task_id}",
+        )
+        futures = set()
+        try:
+            futures = {
+                executor.submit(execute_harness_chain, cells)
+                for cells in harness_cells.values()
+            }
+            pending = set(futures)
+            while pending:
+                done, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
+                for future in done:
+                    for _cell, failure in future.result():
+                        if isinstance(failure, (RunInterrupted, KeyboardInterrupt)):
+                            interrupted = interrupted or failure
+                        elif isinstance(failure, PlanDriftError):
+                            plan_drift = plan_drift or failure
+                        else:
+                            stop_after_task = True
+        except KeyboardInterrupt as error:
+            interrupted = interrupted or error
+            cancel_event.set()
+            for future in futures:
+                future.cancel()
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+            for future in futures:
+                if future.cancelled() or not future.done():
+                    continue
+                for _cell, failure in future.result():
+                    if isinstance(failure, (RunInterrupted, KeyboardInterrupt)):
+                        interrupted = interrupted or failure
+                    elif isinstance(failure, PlanDriftError):
+                        plan_drift = plan_drift or failure
+                    else:
+                        stop_after_task = True
+
+        _write_receipt(receipt_path, receipt)
+        if plan_drift is not None:
+            receipt["status"] = "invalidated"
+            _write_receipt(receipt_path, receipt)
+            raise plan_drift
+        if interrupted is not None:
+            receipt["status"] = "interrupted"
+            _write_receipt(receipt_path, receipt)
+            raise MatrixInterrupted(receipt_path) from interrupted
+        if stop_after_task:
+            break
 
     unfinished = any(
         cell.get("status") in _RESUMABLE_CELL_STATUSES | {"running"}
@@ -1435,16 +1624,35 @@ def _drive_matrix(
     _write_receipt(receipt_path, receipt)
 
 
-def start_matrix(root: Path, plan_path: Path, *, backend: str = "container") -> Path:
+def start_matrix(
+    root: Path,
+    plan_path: Path,
+    *,
+    backend: str = "container",
+    smoke_receipt: Path | None = None,
+) -> Path:
     plan_path = plan_path.expanduser().resolve()
     plan = load_preflight_plan(plan_path)
     season_id = plan["season"]["id"]
     if season_id == "season-1" and backend != "container":
         raise MatrixError("season-1 matrices require the container backend")
+    smoke = None
+    if season_id == "season-1":
+        if smoke_receipt is None:
+            raise MatrixError("season-1 matrices require a fresh --smoke-receipt")
+        from .smoke import verify_smoke_receipt
+
+        smoke = verify_smoke_receipt(plan_path, plan, smoke_receipt)
     verify_frozen_inputs(root, plan)
     with SeasonLock(season_id):
         receipt_path = runs_dir() / f"matrix-{plan['plan_id']}-{uuid.uuid4().hex[:8]}.json"
         receipt = _new_receipt(plan_path, plan, backend)
+        if smoke is not None:
+            receipt["harness_smoke"] = {
+                "receipt": str(smoke_receipt.expanduser().resolve()),
+                "receipt_digest_sha256": smoke["receipt_digest_sha256"],
+                "smoke_id": smoke["smoke_id"],
+            }
         receipt["receipt_path"] = str(receipt_path.resolve())
         _write_receipt(receipt_path, receipt)
         _claim_canonical_matrix(season_id, receipt_path, receipt)
@@ -1457,6 +1665,8 @@ def start_matrix(root: Path, plan_path: Path, *, backend: str = "container") -> 
 def resume_matrix(root: Path, receipt_path: Path, *, backend: str | None = None) -> Path:
     receipt_path = receipt_path.expanduser().resolve()
     receipt = load_matrix_receipt(receipt_path)
+    if receipt.get("status") == "invalidated":
+        raise MatrixError("an invalidated matrix cannot be resumed")
     if backend is not None and backend != receipt.get("backend"):
         raise MatrixError("resume backend does not match the original matrix")
     season_id = receipt.get("season")

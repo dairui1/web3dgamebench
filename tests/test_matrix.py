@@ -1,6 +1,7 @@
 import copy
 import json
 import shutil
+import threading
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,7 +53,11 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
 ) -> None:
     assert len(season_plan["cells"]) == 80
     assert len({cell["cell_id"] for cell in season_plan["cells"]}) == 80
-    assert season_plan["runtime_control"]["candidate_total_timeout_seconds"] is None
+    assert season_plan["runtime_control"]["candidate_total_timeout_seconds"] == 7200
+    assert season_plan["runtime_control"]["candidate_pids_limit"] == 1024
+    assert season_plan["runtime_control"]["task_order"] == "serial"
+    assert season_plan["runtime_control"]["harness_order"] == "parallel"
+    assert season_plan["runtime_control"]["models_within_harness"] == "serial"
     assert season_plan["runtime_control"]["resume_supported"] is True
     assert season_plan["runtime_environment"]["container_images"]["candidate"][
         "id"
@@ -61,7 +66,8 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
         "id"
     ].startswith("sha256:")
     versions = season_plan["runtime_environment"]["candidate_toolchain"]["versions"]
-    assert set(versions) == {"codex", "claude", "pi", "node", "npm"}
+    assert set(versions) == {"codex", "claude", "pi", "pi_goal", "node", "npm"}
+    assert versions["pi_goal"] == "0.54.4"
     assert all(versions.values())
     capabilities = season_plan["runtime_environment"]["candidate_toolchain"][
         "capabilities"
@@ -71,6 +77,9 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
     assert len(season_plan["plan_digest_sha256"]) == 64
 
     frozen = season_plan["frozen_inputs"]["files"]
+    assert frozen["src/web3dgamebench/fable_backfill.py"]["roles"] == [
+        "optional-backfill-runtime"
+    ]
     for task_id, task in season_plan["tasks"].items():
         assert task["brief_path"] in frozen
         assert task["starter_lock_path"] in frozen
@@ -191,6 +200,61 @@ def test_season_one_canonical_matrix_cannot_be_replaced(
         matrix_module._verify_canonical_publication_receipt(first)
 
 
+def test_unclosed_canonical_matrix_can_be_auditably_invalidated(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    runs = tmp_path / "runs"
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(runs))
+    first = _new_receipt(plan_path, season_plan, "container")
+    first_path = runs / "first.json"
+    first["receipt_path"] = str(first_path.resolve())
+    _write_receipt(first_path, first)
+    matrix_module._claim_canonical_matrix("season-1", first_path, first)
+
+    marker_path = matrix_module.invalidate_canonical_matrix(
+        "season-1", reason="native goal activation was not wired"
+    )
+
+    marker = json.loads(marker_path.read_text())
+    invalidated = matrix_module._load_receipt(first_path)
+    assert marker["matrix_id"] == first["matrix_id"]
+    assert Path(marker["claim"]).is_file()
+    assert invalidated["status"] == "invalidated"
+    assert invalidated["invalidation"]["marker"] == str(marker_path.resolve())
+    assert not matrix_module._canonical_matrix_path("season-1").exists()
+
+    second = _new_receipt(plan_path, season_plan, "container")
+    second_path = runs / "second.json"
+    second["receipt_path"] = str(second_path.resolve())
+    _write_receipt(second_path, second)
+    matrix_module._claim_canonical_matrix("season-1", second_path, second)
+    matrix_module._assert_canonical_matrix("season-1", second_path, second)
+
+
+def test_closed_canonical_matrix_cannot_be_invalidated(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    runs = tmp_path / "runs"
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(runs))
+    receipt = _new_receipt(plan_path, season_plan, "container")
+    receipt_path = runs / "receipt.json"
+    receipt["receipt_path"] = str(receipt_path.resolve())
+    _write_receipt(receipt_path, receipt)
+    matrix_module._claim_canonical_matrix("season-1", receipt_path, receipt)
+    closure = matrix_module._canonical_closure_path("season-1")
+    closure.parent.mkdir(parents=True, exist_ok=True)
+    closure.write_text("{}\n")
+
+    with pytest.raises(MatrixError, match="closed canonical"):
+        matrix_module.invalidate_canonical_matrix("season-1", reason="not allowed")
+
+
 def test_run_closure_detects_post_matrix_artifact_changes(tmp_path: Path) -> None:
     run = tmp_path / "run"
     (run / "evaluation").mkdir(parents=True)
@@ -291,22 +355,16 @@ def _trusted_evidence(
     )
     assert invocation.goal_activation is not None
     goal = asdict(invocation.goal_activation)
-    lifecycle = (
-        [
-            {
-                "tool": "create_goal",
-                "objective_sha256": goal["objective_sha256"],
-            },
-            {"tool": "update_goal", "status": "complete"},
-        ]
-        if profile["harness"] == "codex"
-        else []
-    )
+    lifecycle = [
+        {
+            "tool": "create_goal",
+            "objective_sha256": goal["objective_sha256"],
+        },
+        {"tool": "update_goal", "status": "complete"},
+    ]
     goal.update(
         {
-            "activation_status": (
-                "observed-complete" if profile["harness"] == "codex" else "configured"
-            ),
+            "activation_status": "observed-complete",
             "lifecycle": lifecycle,
         }
     )
@@ -377,7 +435,7 @@ def test_trusted_gate_rejects_missing_task_goal_and_model_evidence(
     assert trusted is False
     assert "resolved model is incompatible with the profile" in failures
     assert "workspace TASK.md was not preserved" in failures
-    assert "Codex goal lifecycle did not complete" in failures
+    assert "codex goal lifecycle did not complete" in failures
 
 
 def _terminalize(receipt: dict) -> None:
@@ -426,7 +484,7 @@ def test_resume_only_runs_resumable_cells(
 
     called: list[str] = []
 
-    def execute(_root, _plan, _receipt_path, _receipt, cell):
+    def execute(_root, _plan, _receipt_path, _receipt, cell, _cancel_event=None):
         called.append(cell["cell_id"])
         cell.update(
             status="completed",
@@ -443,9 +501,82 @@ def test_resume_only_runs_resumable_cells(
 
     assert resume_matrix(ROOT, receipt_path) == receipt_path
     closed = load_matrix_receipt(receipt_path)
-    assert called == [receipt["cells"][index]["cell_id"] for index in (3, 4, 5)]
+    assert set(called) == {
+        receipt["cells"][index]["cell_id"] for index in (3, 4, 5)
+    }
     assert closed["status"] == "complete"
     assert validate_closed_receipt(closed) is closed
+
+
+def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    receipt_path = tmp_path / "receipt.json"
+    receipt = _new_receipt(plan_path, season_plan, "container")
+    _terminalize(receipt)
+    first_two_tasks = receipt["cells"][:16]
+    for cell in first_two_tasks:
+        cell.update(status="pending", run=None, passed=False, trusted=False)
+
+    condition = threading.Condition()
+    profiles = load_profiles(ROOT)
+    first_started = 0
+    first_finished = 0
+    second_saw_finished: list[int] = []
+    active_by_harness = {"codex": 0, "claude-code": 0, "pi": 0}
+    maximum_by_harness = {"codex": 0, "claude-code": 0, "pi": 0}
+    start_order = {"codex": [], "claude-code": [], "pi": []}
+
+    def execute(_root, _plan, _receipt_path, _receipt, cell, _cancel_event=None):
+        nonlocal first_started, first_finished
+        harness = profiles[cell["profile"]].harness
+        if cell["task"] == "canyon-strike":
+            with condition:
+                first_started += 1
+                active_by_harness[harness] += 1
+                maximum_by_harness[harness] = max(
+                    maximum_by_harness[harness], active_by_harness[harness]
+                )
+                start_order[harness].append(cell["profile"])
+                condition.notify_all()
+                assert condition.wait_for(lambda: first_started >= 3, timeout=2)
+                active_by_harness[harness] -= 1
+                first_finished += 1
+        else:
+            with condition:
+                second_saw_finished.append(first_finished)
+        cell.update(
+            status="completed",
+            run=f"/runs/{cell['cell_id']}",
+            passed=True,
+            trusted=True,
+            artifacts=copy.deepcopy(receipt["cells"][16]["artifacts"]),
+        )
+
+    monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
+    monkeypatch.setattr(matrix_module, "verify_frozen_inputs", lambda *_args: None)
+    monkeypatch.setattr(matrix_module, "_execute_cell", execute)
+
+    matrix_module._drive_matrix(
+        ROOT, plan_path, season_plan, receipt_path, receipt
+    )
+
+    assert first_started == 8
+    assert maximum_by_harness == {"codex": 1, "claude-code": 1, "pi": 1}
+    assert start_order == {
+        "codex": ["codex-sol-medium", "codex-terra-high", "codex-luna-max"],
+        "claude-code": ["claude-sonnet-default", "claude-opus-default"],
+        "pi": [
+            "pi-deepseek-v4-flash",
+            "pi-qwen3-8-flash",
+            "pi-glm-5-3-flash",
+        ],
+    }
+    assert second_saw_finished == [8] * 8
+    assert receipt["status"] == "complete"
 
 
 def test_resume_recovers_complete_canonical_receipt_missing_closure(

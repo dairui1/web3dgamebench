@@ -6,18 +6,17 @@ Build a complete, polished, browser-native 3D kitchen coordination game called *
 
 The player controls two chefs in one compact restaurant kitchen, switching between them at any time. During a four-minute service, prepare and deliver five valid dishes drawn from three recipe types. Victory requires five accepted deliveries before closing, with each chef making a visible preparation or transport contribution to at least one accepted dish. The run is lost when time expires with fewer than five deliveries; burned food and wrong dishes cost time or score but remain recoverable.
 
-## Completion contract
+## Operational completion contract
 
-Complete the goal only when all of the following are true:
+The feature lists below define the intended submission and its quality criteria. They do not require exhaustive self-proof. Complete the goal when all of the following operational checks pass:
 
-- Chef movement and switching, pickup/place, ingredient supply, chopping, cooking, burning, plating, delivery, disposal, washing, orders, scoring, victory, failure, and restart all function.
-- Recipes validate their required ingredients and preparation states rather than accepting arbitrary objects.
-- The kitchen layout creates meaningful travel and task-order decisions while remaining navigable by both chefs.
-- The production build succeeds and complete service runs have been played at both required viewports.
+- `npm run build` succeeds and emits the static production bundle to `dist/`.
+- The production build loads at 1440 x 900 and 390 x 844 with a visible, nonblank, interactive 3D scene, no horizontal overflow beyond 2 CSS pixels, and no uncaught page exception or `console.error` during the checked flow.
+- One brief smoke check at each viewport confirms that the game can enter its active play state, one primary control changes observable game state, and restart returns to a valid initial state.
 
-Do not stop after making ingredients move between counters. Continue until the full timed order workflow, recoverable mistakes, readable station state, and two-chef coordination create a complete game.
+Keep these checks bounded. Rerun a failed check only after a relevant fix, and stop once it passes. Do not create an autopilot or repeatedly run full victories, losses, missions, matches, races, services, nights, courses, quests, fights, or puzzle solutions solely to prove completion. Those paths, feature completeness, balance, polish, and game feel are evaluated after submission; shortcomings affect the result, not whether the agent must continue self-testing. Report only the checks actually run.
 
-## Required game systems
+## Target game systems
 
 - An angled 3D kitchen camera that keeps stations and both chefs legible, with collision-aware chef movement and a clear active-chef indicator.
 - Instant switching between two independently positioned chefs. Each chef carries at most one ingredient, tool, plate, or prepared item, and each must contribute a real preparation or transport action to at least one dish that is eventually accepted.
@@ -38,9 +37,9 @@ Do not stop after making ingredients move between counters. Continue until the f
 2. Implement ingredient supply, chopping, cooking, burning, plating, washing, trash, and all three recipe state machines.
 3. Implement deterministic orders, patience, validation, delivery, scoring, combo, timer, five-order victory, failure, and restart.
 4. Improve food and station readability, animations, progress feedback, kitchen lighting, effects, urgency cues, and UI hierarchy.
-5. Build and play complete winning and losing services at 1440 x 900 and 390 x 844; test every recipe, burned food, rejected dishes, dirty plates, resize, and recovery.
+5. Build once after the final relevant change, then run the bounded operational smoke checks at 1440 x 900 and 390 x 844. Fix only observed build, startup, blank-frame, input, restart, exception, or layout failures before completing.
 
-## Quality gates
+## Quality targets
 
 - The player can see what each chef carries and the state of every active cooking station.
 - Wrong, incomplete, raw, or burned dishes are rejected consistently with a clear reason.
@@ -75,4 +74,4 @@ You may add fields. Do not expose evaluator-only shortcuts or callable functions
 
 ## Constraints and final evidence
 
-Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the build result, at least one five-order victory, and a tested timeout failure at desktop and phone sizes honestly.
+Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the production build result and the two bounded viewport smoke checks honestly. Full win/loss or end-to-end playthrough evidence is neither required nor requested.

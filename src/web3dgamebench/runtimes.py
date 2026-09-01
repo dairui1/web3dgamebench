@@ -35,7 +35,7 @@ class Invocation:
     goal_activation: GoalActivation | None
 
 
-_GOAL_CONTROL_VERSION = "web3dgamebench-external-goal-v1"
+_GOAL_CONTROL_VERSION = "web3dgamebench-native-goal-v2"
 _GOAL_OBJECTIVE = "Complete and verify the benchmark contract in the unmodified TASK.md."
 
 
@@ -43,7 +43,7 @@ def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _control_prompt(*, native_goal: bool) -> str:
+def _control_prompt() -> str:
     common = f"""Web3DGameBench external persistent-goal control ({_GOAL_CONTROL_VERSION}).
 This control is supplied by the benchmark runner and is separate from TASK.md.
 Persistent objective: {_GOAL_OBJECTIVE}
@@ -51,15 +51,7 @@ Keep working autonomously across context compaction until the complete task cont
 Before finishing, build the production bundle and inspect the game at every required viewport.
 Finish only after the implementation and truthful verification evidence satisfy the task contract.
 Do not weaken, rewrite, or add this control to TASK.md, and do not claim checks you did not run."""
-    if not native_goal:
-        return common
-    return (
-        common
-        + "\nThis Codex runtime provides its native goal tools. At the start of the run, call "
-        + f'create_goal exactly once with objective "{_GOAL_OBJECTIVE}" and omit token_budget. '
-        + "Keep that goal active while working. Call update_goal with status complete only after "
-        + "the objective and verification requirements are actually satisfied."
-    )
+    return common
 
 
 def _goal_activation(
@@ -79,18 +71,17 @@ def _goal_activation(
             "external-goal requires completion policy contract-and-evidence"
         )
 
-    native_goal = profile.harness == "codex"
-    control_prompt = _control_prompt(native_goal=native_goal)
-    if native_goal:
-        activation_method = "codex-native-goal-via-developer-instructions"
-        evidence = "trace:create_goal"
+    native_goal = True
+    control_prompt = _control_prompt()
+    if profile.harness == "codex":
+        activation_method = "codex-app-server-thread-goal-set"
+        evidence = "rpc:thread/goal/set"
     elif profile.harness == "claude-code":
-        # Claude and Pi retain system instructions through compaction but expose no goal lifecycle.
-        activation_method = "claude-code-system-persistence-policy"
-        evidence = "argv:--append-system-prompt"
+        activation_method = "claude-code-native-slash-goal"
+        evidence = "trace:goal-status"
     elif profile.harness == "pi":
-        activation_method = "pi-system-persistence-policy"
-        evidence = "argv:--append-system-prompt"
+        activation_method = "pi-goal-native-slash-command"
+        evidence = "trace:goal-state"
     else:
         raise ValueError(f"unsupported harness: {profile.harness}")
 
@@ -102,7 +93,7 @@ def _goal_activation(
         "harness": profile.harness,
         "activation_method": activation_method,
         "native_goal": native_goal,
-        "lifecycle_observable": native_goal,
+        "lifecycle_observable": True,
         "evidence": evidence,
         "objective_sha256": _sha256_text(_GOAL_OBJECTIVE),
         "candidate_prompt_sha256": _sha256_text(prompt),
@@ -146,7 +137,7 @@ def parse_goal_lifecycle(stdout: str) -> list[dict[str, str]]:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-        for call in _named_goal_tools(event):
+        for call in [*_native_goal_events(event), *_named_goal_tools(event)]:
             tool = str(call["tool"])
             status = call.get("status")
             objective_sha256 = call.get("objective_sha256")
@@ -167,6 +158,34 @@ def parse_goal_lifecycle(stdout: str) -> list[dict[str, str]]:
             seen[key] = len(lifecycle)
             lifecycle.append(dict(call))
     return lifecycle
+
+
+def _native_goal_events(event: dict) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    if event.get("type") == "assistant":
+        message = event.get("message")
+        if isinstance(message, dict) and message.get("model") == "<synthetic>":
+            for block in message.get("content", []):
+                text = block.get("text") if isinstance(block, dict) else None
+                if isinstance(text, str) and text.startswith("Goal set: "):
+                    objective = text.removeprefix("Goal set: ")
+                    found.append({"tool": "create_goal", "objective_sha256": _sha256_text(objective)})
+    if event.get("type") == "result" and event.get("terminal_reason") in {"completed", "blocked"}:
+        status = "complete" if event["terminal_reason"] == "completed" else "blocked"
+        found.append({"tool": "update_goal", "status": status})
+    if event.get("type") == "entry_appended":
+        entry = event.get("entry")
+        if isinstance(entry, dict) and entry.get("customType") == "goal-state":
+            data = entry.get("data")
+            goal = data.get("goal") if isinstance(data, dict) else None
+            if isinstance(goal, dict):
+                status = goal.get("status")
+                objective = goal.get("text")
+                if status == "active" and isinstance(objective, str):
+                    found.append({"tool": "create_goal", "objective_sha256": _sha256_text(objective)})
+                elif status in {"complete", "blocked"}:
+                    found.append({"tool": "update_goal", "status": status})
+    return found
 
 
 def _named_goal_tools(value: object) -> list[dict[str, str]]:
@@ -222,50 +241,22 @@ def build_invocation(
     if profile.harness == "codex":
         if not profile.effort:
             raise ValueError("Codex profiles require an explicit effort")
-        external = isolation == "container"
         argv = [
-            "codex",
-            "exec",
-            "-C",
+            "python3",
+            "/usr/local/bin/web3dgamebench-codex-goal",
+            "--cwd",
             str(workspace),
             "--model",
             profile.model,
-            "-c",
-            f'model_reasoning_effort="{profile.effort}"',
-            "-c",
-            'approval_policy="never"',
-            "-c",
-            f"sandbox_workspace_write.network_access={str(external).lower()}",
-            "-c",
-            'web_search="disabled"',
+            "--effort",
+            profile.effort,
+            "--objective",
+            _GOAL_OBJECTIVE,
+            "--developer-instructions",
+            control_prompt or "",
+            "--final",
+            str(final_path),
         ]
-        if control_prompt:
-            argv.extend(
-                [
-                    "-c",
-                    f"developer_instructions={json.dumps(control_prompt)}",
-                    "--enable",
-                    "goals",
-                ]
-            )
-        argv.extend(
-            [
-                "--disable",
-                "multi_agent",
-                "--sandbox",
-                "danger-full-access" if external else "workspace-write",
-                "--json",
-                "--ephemeral",
-                "--ignore-user-config",
-                "--strict-config",
-                "--skip-git-repo-check",
-                "--color",
-                "never",
-                "--output-last-message",
-                str(final_path),
-                "-",
-            ]
-        )
         return Invocation(
             argv=tuple(argv),
             stdin_prompt=True,
@@ -282,7 +273,6 @@ def build_invocation(
             profile.model,
             "--setting-sources",
             "project",
-            "--no-session-persistence",
             "--no-chrome",
             "--strict-mcp-config",
             "--tools",
@@ -294,11 +284,12 @@ def build_invocation(
             "--output-format",
             "stream-json",
             "--verbose",
+            "--include-hook-events",
         ]
         if control_prompt:
             argv.extend(["--append-system-prompt", control_prompt])
         # The pilot intentionally omits --effort so Claude Code uses the official default.
-        argv.append(prompt)
+        argv.append(f"/goal {_GOAL_OBJECTIVE}")
         return Invocation(
             argv=tuple(argv),
             stdin_prompt=False,
@@ -319,19 +310,18 @@ def build_invocation(
             "--mode",
             "json",
             "--print",
-            "--no-session",
             "--no-context-files",
             "--no-extensions",
             "--no-skills",
             "--no-prompt-templates",
             "--no-themes",
             "--tools",
-            "read,bash,edit,write,grep,find,ls",
+            "read,bash,edit,write,grep,find,ls,goal_complete,goal_blocked,goal_wait",
             "--no-approve",
         ]
         if control_prompt:
             argv.extend(["--append-system-prompt", control_prompt])
-        argv.append(prompt)
+        argv.append(f"/benchmark-goal {_GOAL_OBJECTIVE}")
         return Invocation(
             argv=tuple(argv),
             stdin_prompt=False,

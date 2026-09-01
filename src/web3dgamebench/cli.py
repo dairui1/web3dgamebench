@@ -16,12 +16,13 @@ from .matrix import (
     MatrixInterrupted,
     create_plan_for_matrix,
     create_preflight_plan,
+    invalidate_canonical_matrix,
     resume_matrix,
     start_matrix,
     write_preflight_plan,
 )
 from .publisher import load_publication_matrix, publish_runs
-from .runner import run_once
+from .runner import run_once, runs_dir
 
 
 def project_root() -> Path:
@@ -154,6 +155,15 @@ def command_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_smoke(args: argparse.Namespace) -> int:
+    from .smoke import run_smoke
+
+    receipt = run_smoke(project_root(), Path(args.plan))
+    print(receipt)
+    value = json.loads(receipt.read_text(encoding="utf-8"))
+    return 0 if value.get("status") == "passed" else 1
+
+
 def command_vendor(_: argparse.Namespace) -> int:
     root = project_root()
     cache = root / "vendor/npm-cache"
@@ -252,6 +262,7 @@ def command_matrix(args: argparse.Namespace) -> int:
                 root,
                 plan_path,
                 backend=args.backend or "container",
+                smoke_receipt=(Path(args.smoke_receipt) if args.smoke_receipt else None),
             )
     except MatrixInterrupted as error:
         print(error.receipt_path)
@@ -281,6 +292,10 @@ def command_publish(args: argparse.Namespace) -> int:
 
 
 def command_invalidate(args: argparse.Namespace) -> int:
+    if args.matrix_season:
+        marker = invalidate_canonical_matrix(args.matrix_season, reason=args.reason)
+        print(marker)
+        return 0
     run_root = Path(args.run).expanduser().resolve()
     manifest_path = run_root / "manifest.json"
     if not manifest_path.is_file():
@@ -303,6 +318,22 @@ def command_invalidate(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_fable(args: argparse.Namespace) -> int:
+    from .fable_backfill import run_backfill
+
+    core_plan = Path(args.core_plan).expanduser().resolve()
+    receipt = (
+        Path(args.receipt).expanduser().resolve()
+        if args.receipt
+        else runs_dir() / f"fable-backfill-{core_plan.stem}.json"
+    )
+    result = run_backfill(
+        project_root(), core_plan, receipt, set(args.task) or None
+    )
+    print(result)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="web3dgamebench")
     parser.add_argument("--version", action="version", version=__version__)
@@ -319,6 +350,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--attempt", type=int, default=1)
     run.add_argument("--backend", choices=("native", "container"), default="container")
     run.set_defaults(func=command_run)
+    smoke = commands.add_parser("smoke")
+    smoke.add_argument("--plan", required=True)
+    smoke.set_defaults(func=command_smoke)
     vendor = commands.add_parser("vendor")
     vendor.set_defaults(func=command_vendor)
     evaluate = commands.add_parser("evaluate")
@@ -348,6 +382,7 @@ def build_parser() -> argparse.ArgumentParser:
     matrix_source.add_argument("--plan")
     matrix_source.add_argument("--resume")
     matrix.add_argument("--backend", choices=("native", "container"))
+    matrix.add_argument("--smoke-receipt")
     matrix.set_defaults(func=command_matrix)
     publish = commands.add_parser("publish")
     publish_source = publish.add_mutually_exclusive_group(required=True)
@@ -359,9 +394,18 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--replace", action="store_true")
     publish.set_defaults(func=command_publish)
     invalidate = commands.add_parser("invalidate")
-    invalidate.add_argument("--run", required=True)
+    invalidate_source = invalidate.add_mutually_exclusive_group(required=True)
+    invalidate_source.add_argument("--run")
+    invalidate_source.add_argument("--matrix-season")
     invalidate.add_argument("--reason", required=True)
     invalidate.set_defaults(func=command_invalidate)
+    fable = commands.add_parser(
+        "fable", help="run or resume the optional quota-deferred Claude Fable lane"
+    )
+    fable.add_argument("--core-plan", required=True)
+    fable.add_argument("--receipt")
+    fable.add_argument("--task", action="append", default=[])
+    fable.set_defaults(func=command_fable)
     return parser
 
 

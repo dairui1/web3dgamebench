@@ -362,6 +362,28 @@ def _activate_point(page: Any, x: float, y: float, *, mobile: bool) -> None:
         page.mouse.click(x, y)
 
 
+def _primary_canvas(page: Any) -> Any:
+    canvases = page.locator("canvas:visible")
+    index = canvases.evaluate_all(
+        """(elements) => {
+          let best = -1;
+          let bestArea = -1;
+          elements.forEach((canvas, index) => {
+            const rect = canvas.getBoundingClientRect();
+            const area = rect.width * rect.height;
+            if (area > bestArea) {
+              best = index;
+              bestArea = area;
+            }
+          });
+          return best;
+        }"""
+    )
+    if index < 0:
+        raise ValueError("page has no visible canvas")
+    return canvases.nth(index)
+
+
 def _start(page: Any, contract: dict, *, mobile: bool) -> None:
     def control_key(control: dict) -> tuple[int, float]:
         label = str(control.get("label", "")).casefold()
@@ -389,7 +411,7 @@ def _start(page: Any, contract: dict, *, mobile: bool) -> None:
         if isinstance(state, dict) and state.get("phase") in contract["started_phases"]:
             return
     if mobile:
-        box = page.locator("canvas").first.bounding_box()
+        box = _primary_canvas(page).bounding_box()
         if box:
             page.touchscreen.tap(
                 box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
@@ -455,7 +477,7 @@ def observation_changed(before: object, after: object, paths: list[str]) -> bool
 def _canvas_signature(page: Any) -> bytes:
     from PIL import Image  # type: ignore[import-not-found]
 
-    shot = page.locator("canvas").first.screenshot()
+    shot = _primary_canvas(page).screenshot()
     return Image.open(io.BytesIO(shot)).convert("RGB").resize((48, 48)).tobytes()
 
 
@@ -510,7 +532,7 @@ def _apply_probe_input(
             page.keyboard.up(key)
         return {"type": input_type, "keys": input_recipe["keys"]}
 
-    box = page.locator("canvas").first.bounding_box()
+    box = _primary_canvas(page).bounding_box()
     if not box:
         raise ValueError("probe canvas has no bounding box")
     dx = input_recipe["delta"][0] * box["width"]
@@ -838,14 +860,14 @@ def _restart(page: Any, contract: dict, before_count: int, *, mobile: bool) -> d
             return {"sent": True, "method": "discovered-control", "index": index}
     if contract["restart"].get("fallback") == "reload":
         page.reload(wait_until="networkidle", timeout=30_000)
-        page.wait_for_selector("canvas", timeout=15_000)
+        page.wait_for_selector("canvas:visible", timeout=15_000)
         page.wait_for_timeout(250)
         return {"sent": True, "method": "reload"}
     return {"sent": False, "method": "none"}
 
 
 def _canvas_metrics(page: Any) -> dict:
-    return page.locator("canvas").first.evaluate(
+    return _primary_canvas(page).evaluate(
         """(canvas) => {
           const rect = canvas.getBoundingClientRect();
           return {width: rect.width, height: rect.height,
@@ -933,7 +955,7 @@ def _evaluate_viewport(
             else None,
         )
         page.goto(url, wait_until="networkidle", timeout=30_000)
-        page.wait_for_selector("canvas", timeout=15_000)
+        page.wait_for_selector("canvas:visible", timeout=15_000)
         state_before = _state(page, contract)
         if enabled["runtime_state"]:
             errors = state_errors(state_before, contract)
@@ -952,7 +974,7 @@ def _evaluate_viewport(
         if enabled["canvas_nonblank"]:
             from PIL import Image, ImageStat  # type: ignore[import-not-found]
 
-            canvas_shot = page.locator("canvas").first.screenshot()
+            canvas_shot = _primary_canvas(page).screenshot()
             image = Image.open(io.BytesIO(canvas_shot)).convert("RGB").resize((64, 64))
             variance = sum(ImageStat.Stat(image).var)
             checks.append(check(f"{label}.nonblank", variance > 30, round(variance, 2)))

@@ -27,6 +27,8 @@ class ContainerConfig:
     memory: str | None
     cpus: str | None
     command_timeout_seconds: int
+    candidate_total_timeout_seconds: int
+    pids_limit: int
 
     @property
     def proxy_url(self) -> str:
@@ -48,9 +50,15 @@ def load_container_config(root: Path) -> ContainerConfig:
         memory=raw.get("memory"),
         cpus=raw.get("cpus"),
         command_timeout_seconds=int(raw.get("command_timeout_seconds", 1200)),
+        candidate_total_timeout_seconds=int(raw.get("candidate_total_timeout_seconds", 7200)),
+        pids_limit=int(raw.get("pids_limit", 1024)),
     )
     if config.command_timeout_seconds <= 0:
         raise ContainerError("command_timeout_seconds must be positive")
+    if config.candidate_total_timeout_seconds <= 0:
+        raise ContainerError("candidate_total_timeout_seconds must be positive")
+    if config.pids_limit <= 0:
+        raise ContainerError("pids_limit must be positive")
     return config
 
 
@@ -178,6 +186,7 @@ def wrap_command(
     workspace: Path,
     profile: Profile,
     credential_dir: Path,
+    container_name: str | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     vendor = root / "vendor"
     if not (vendor / "manifest.json").is_file():
@@ -203,31 +212,64 @@ def wrap_command(
         if not value:
             raise ContainerError(f"missing {profile.credential_env}")
         environment[profile.runtime_env] = value
-        environment["PI_CODING_AGENT_DIR"] = "/tmp/pi-agent"
+        environment["PI_CODING_AGENT_DIR"] = "/runtime-home/pi-agent"
+        pi_agent_dir = credential_dir / "pi-agent"
+        pi_agent_dir.mkdir(parents=True, exist_ok=True)
+        (pi_agent_dir / "pi-goal.json").write_text(
+            json.dumps({"rpc": {"enabled": True}}) + "\n",
+            encoding="utf-8",
+        )
         environment["WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS"] = str(
             config.command_timeout_seconds
         )
     args = [
-        "docker", "run", "--rm", "-i", "--network", config.internal_network,
+        "docker", "run", "--rm", "-i",
+    ]
+    if container_name:
+        args.extend(["--name", container_name])
+    args.extend([
+        "--network", config.internal_network,
         "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--init",
+        "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g",
         "-v", f"{workspace}:/workspace", "-v", f"{vendor}:/vendor:ro",
         "-v", f"{credential_dir}:/runtime-home", "-w", "/workspace",
-    ]
+    ])
+    chromium_wrapper = root / "infra/candidate/chromium"
+    if not chromium_wrapper.is_file():
+        raise ContainerError(f"missing candidate Chromium wrapper: {chromium_wrapper}")
+    args.extend(["-v", f"{chromium_wrapper}:/usr/local/bin/chromium:ro"])
     if profile.harness == "pi":
         timeout_extension = root / "infra/candidate/pi_command_timeout.js"
+        goal_runner_extension = root / "infra/candidate/pi_goal_runner.ts"
         if not timeout_extension.is_file():
             raise ContainerError(f"missing Pi command timeout extension: {timeout_extension}")
+        if not goal_runner_extension.is_file():
+            raise ContainerError(f"missing Pi Goal runner extension: {goal_runner_extension}")
         extension_target = (
             "/usr/lib/node_modules/@earendil-works/pi-coding-agent/"
             "web3dgamebench-command-timeout.js"
         )
         args.extend(["-v", f"{timeout_extension}:{extension_target}:ro"])
+        args.extend(
+            [
+                "-v",
+                f"{goal_runner_extension}:/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts:ro",
+            ]
+        )
     if config.memory:
         args.extend(["--memory", config.memory])
     if config.cpus:
         args.extend(["--cpus", config.cpus])
+    args.extend(["--pids-limit", str(config.pids_limit)])
+    env_file = credential_dir / "docker.env"
+    lines: list[str] = []
     for key, value in sorted(environment.items()):
-        args.extend(["-e", f"{key}={value}"])
+        if "\n" in value or "\r" in value:
+            raise ContainerError(f"container environment value contains a newline: {key}")
+        lines.append(f"{key}={value}")
+    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env_file.chmod(0o600)
+    args.extend(["--env-file", str(env_file)])
     args.append(config.image)
     if profile.harness == "pi":
         command = list(argv)
@@ -235,6 +277,10 @@ def wrap_command(
         command[insertion:insertion] = [
             "--extension",
             "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
+            "--extension",
+            "/usr/lib/node_modules/@narumitw/pi-goal/dist/index.ts",
+            "--extension",
+            "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts",
         ]
         args.extend(command)
     else:

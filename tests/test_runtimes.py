@@ -1,6 +1,5 @@
 import hashlib
 import json
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -50,15 +49,22 @@ def test_pi_container_caps_each_command_without_limiting_the_task(
     assert argv.index("--extension") > argv.index("--no-extensions")
     assert "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS=<passed>" not in argv
     assert environment["WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS"] == "<passed>"
-    assert "-e" in argv
-    assert "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS=1200" in argv
+    assert "-e" not in argv
+    env_file = Path(argv[argv.index("--env-file") + 1])
+    assert env_file.stat().st_mode & 0o777 == 0o600
+    assert "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS=1200" in env_file.read_text()
+    assert "OPENCODE_API_KEY=test-only-token" in env_file.read_text()
+    assert all("test-only-token" not in argument for argument in argv)
+    assert "/tmp:rw,nosuid,nodev,size=1g" in argv
+    assert any("/usr/local/bin/chromium:ro" in argument for argument in argv)
+    assert any("web3dgamebench-goal-runner.ts:ro" in argument for argument in argv)
 
 
 def test_codex_effort_is_explicit() -> None:
     profile = load_profiles(ROOT)["codex-luna-max"]
     invocation = build_invocation(profile, Path("/tmp/workspace"), "task")
-    assert 'model_reasoning_effort="max"' in invocation.argv
-    assert "--skip-git-repo-check" in invocation.argv
+    assert invocation.argv[invocation.argv.index("--effort") + 1] == "max"
+    assert invocation.argv[1] == "/usr/local/bin/web3dgamebench-codex-goal"
 
 
 def test_container_codex_uses_external_boundary() -> None:
@@ -66,8 +72,7 @@ def test_container_codex_uses_external_boundary() -> None:
     invocation = build_invocation(
         profile, Path("/workspace"), "task", isolation="container"
     )
-    assert "danger-full-access" in invocation.argv
-    assert "sandbox_workspace_write.network_access=true" in invocation.argv
+    assert invocation.argv[invocation.argv.index("--cwd") + 1] == "/workspace"
 
 
 @pytest.mark.parametrize(
@@ -76,14 +81,14 @@ def test_container_codex_uses_external_boundary() -> None:
         (
             "codex-sol-medium",
             True,
-            "codex-native-goal-via-developer-instructions",
+            "codex-app-server-thread-goal-set",
         ),
         (
             "claude-sonnet-default",
-            False,
-            "claude-code-system-persistence-policy",
+            True,
+            "claude-code-native-slash-goal",
         ),
-        ("pi-deepseek-v4-flash", False, "pi-system-persistence-policy"),
+        ("pi-deepseek-v4-flash", True, "pi-goal-native-slash-command"),
     ],
 )
 def test_external_goal_is_separate_system_control_for_every_harness(
@@ -100,25 +105,23 @@ def test_external_goal_is_separate_system_control_for_every_harness(
     )
 
     if profile.harness == "codex":
-        configs = [
-            invocation.argv[index + 1]
-            for index, argument in enumerate(invocation.argv)
-            if argument == "-c"
-        ]
-        developer = next(item for item in configs if item.startswith("developer_instructions="))
-        control = tomllib.loads(developer)["developer_instructions"]
-        assert invocation.argv[invocation.argv.index("--enable") + 1] == "goals"
+        control = invocation.argv[invocation.argv.index("--developer-instructions") + 1]
+        assert invocation.argv[invocation.argv.index("--objective") + 1].startswith(
+            "Complete and verify"
+        )
         assert prompt not in invocation.argv
     else:
         control = invocation.argv[invocation.argv.index("--append-system-prompt") + 1]
-        assert invocation.argv[-1] == prompt
+        expected_command = "/goal" if profile.harness == "claude-code" else "/benchmark-goal"
+        assert invocation.argv[-1].startswith(f"{expected_command} Complete and verify")
+        assert prompt not in invocation.argv
 
     assert "external persistent-goal control" in control
     assert "unmodified TASK.md" in control
     assert prompt not in control
     assert invocation.goal_activation is not None
     assert invocation.goal_activation.native_goal is native_goal
-    assert invocation.goal_activation.lifecycle_observable is native_goal
+    assert invocation.goal_activation.lifecycle_observable is True
     assert invocation.goal_activation.activation_method == method
     assert invocation.goal_activation.candidate_prompt_sha256 == invocation.candidate_prompt_sha256
     assert len(invocation.goal_activation.control_prompt_sha256) == 64
@@ -211,3 +214,62 @@ def test_goal_lifecycle_prefers_nested_create_goal_arguments() -> None:
             "objective_sha256": hashlib.sha256(objective.encode()).hexdigest(),
         }
     ]
+
+
+def test_claude_native_goal_lifecycle_is_observed() -> None:
+    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    stdout = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "model": "<synthetic>",
+                        "content": [{"type": "text", "text": f"Goal set: {objective}"}],
+                    },
+                }
+            ),
+            json.dumps({"type": "result", "terminal_reason": "completed"}),
+        ]
+    )
+    activation = build_invocation(
+        load_profiles(ROOT)["claude-sonnet-default"],
+        Path("/workspace"),
+        "task",
+        goal_mode="external-goal",
+        goal_completion="contract-and-evidence",
+    ).goal_activation
+    assert activation is not None
+    assert goal_activation_status(activation, stdout) == "observed-complete"
+
+
+def test_pi_goal_state_lifecycle_is_observed_and_deduplicated() -> None:
+    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    active = {
+        "type": "entry_appended",
+        "entry": {
+            "customType": "goal-state",
+            "data": {"goal": {"text": objective, "status": "active"}},
+        },
+    }
+    complete = {
+        "type": "entry_appended",
+        "entry": {
+            "customType": "goal-state",
+            "data": {"goal": {"text": objective, "status": "complete"}},
+        },
+    }
+    stdout = "\n".join(map(json.dumps, [active, active, complete]))
+    activation = build_invocation(
+        load_profiles(ROOT)["pi-deepseek-v4-flash"],
+        Path("/workspace"),
+        "task",
+        goal_mode="external-goal",
+        goal_completion="contract-and-evidence",
+    ).goal_activation
+    assert activation is not None
+    assert parse_goal_lifecycle(stdout) == [
+        {"tool": "create_goal", "objective_sha256": activation.objective_sha256},
+        {"tool": "update_goal", "status": "complete"},
+    ]
+    assert goal_activation_status(activation, stdout) == "observed-complete"

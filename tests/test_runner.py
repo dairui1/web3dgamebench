@@ -7,6 +7,7 @@ import pytest
 
 from web3dgamebench.config import load_profiles, load_task
 from web3dgamebench.runner import RunInterrupted, _candidate_prompt, prepare, run_once
+from web3dgamebench.process import ProcessTimedOut
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -60,7 +61,7 @@ def test_run_manifest_records_goal_receipt_and_observed_codex_lifecycle(
     def completed_run(*args, **kwargs):
         return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
 
-    monkeypatch.setattr("web3dgamebench.runner.subprocess.run", completed_run)
+    monkeypatch.setattr("web3dgamebench.runner.run_captured", completed_run)
 
     run_root = run_once(
         ROOT,
@@ -72,9 +73,7 @@ def test_run_manifest_records_goal_receipt_and_observed_codex_lifecycle(
     canonical = load_task(ROOT, "first-night").brief.read_bytes()
 
     assert manifest["goal"]["mode"] == "external-goal"
-    assert manifest["goal"]["activation_method"] == (
-        "codex-native-goal-via-developer-instructions"
-    )
+    assert manifest["goal"]["activation_method"] == "codex-app-server-thread-goal-set"
     assert manifest["goal"]["native_goal"] is True
     assert manifest["goal"]["activation_status"] == "observed-complete"
     assert manifest["goal"]["lifecycle"] == [
@@ -98,7 +97,7 @@ def test_interrupted_run_preserves_a_resumable_manifest(
     def interrupted(*args, **kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("web3dgamebench.runner.subprocess.run", interrupted)
+    monkeypatch.setattr("web3dgamebench.runner.run_captured", interrupted)
 
     with pytest.raises(RunInterrupted) as raised:
         run_once(ROOT, "first-night", "codex-sol-medium", backend="native")
@@ -120,10 +119,49 @@ def test_nonzero_harness_exit_is_infrastructure_not_candidate_evidence(
     def failed_runtime(*args, **kwargs):
         return SimpleNamespace(returncode=17, stdout="", stderr="provider unavailable")
 
-    monkeypatch.setattr("web3dgamebench.runner.subprocess.run", failed_runtime)
+    monkeypatch.setattr("web3dgamebench.runner.run_captured", failed_runtime)
     run_root = run_once(ROOT, "first-night", "codex-sol-medium", backend="native")
     manifest = json.loads((run_root / "manifest.json").read_text())
 
     assert manifest["status"] == "infrastructure-error"
     assert manifest["failure_scope"] == "candidate-runtime"
     assert manifest["exit_code"] == 17
+
+
+def test_total_timeout_preserves_run_and_classifies_infrastructure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+
+    def timed_out(*args, **kwargs):
+        kwargs["stdout_path"].write_text('{"type":"partial"}\n')
+        kwargs["stderr_path"].write_text("still working\n")
+        raise ProcessTimedOut(7200)
+
+    monkeypatch.setattr("web3dgamebench.runner.run_captured", timed_out)
+    run_root = run_once(ROOT, "first-night", "codex-sol-medium", backend="native")
+    manifest = json.loads((run_root / "manifest.json").read_text())
+
+    assert manifest["status"] == "infrastructure-error"
+    assert manifest["failure_scope"] == "candidate-timeout"
+    assert manifest["timed_out"] is True
+    assert manifest["timeout_seconds"] == 7200
+    assert (run_root / "events.jsonl").read_text() == '{"type":"partial"}\n'
+
+
+def test_argv_prompt_runtime_never_inherits_operator_stdin(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("OPENCODE_GO_APIKEY", "test-key")
+    observed: dict[str, object] = {}
+
+    def completed_run(*args, **kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("web3dgamebench.runner.run_captured", completed_run)
+
+    run_once(ROOT, "first-night", "pi-qwen3-8-flash", backend="native")
+
+    assert observed["input_text"] is None

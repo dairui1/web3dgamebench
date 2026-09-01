@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import time
 import uuid
 from dataclasses import asdict
@@ -19,6 +20,7 @@ from .container import (
     prepare_dependencies,
     wrap_command,
 )
+from .process import ProcessTimedOut, run_captured
 from .runtimes import (
     build_invocation,
     goal_activation_status,
@@ -99,7 +101,13 @@ def run_native(root: Path, task_id: str, profile_id: str, attempt: int = 1) -> P
 
 
 def run_once(
-    root: Path, task_id: str, profile_id: str, attempt: int = 1, *, backend: str = "container"
+    root: Path,
+    task_id: str,
+    profile_id: str,
+    attempt: int = 1,
+    *,
+    backend: str = "container",
+    cancel_event: threading.Event | None = None,
 ) -> Path:
     profiles = load_profiles(root)
     if profile_id not in profiles:
@@ -143,11 +151,13 @@ def run_once(
     argv: tuple[str, ...] | list[str] = invocation.argv
     credential_dir = run_root / ".runtime-home"
     plane = None
+    container_name = None
     passed_environment: dict[str, str] = {}
+    container_config = load_container_config(root)
     if backend == "container":
-        container_config = load_container_config(root)
         plane = ensure_plane(root, container_config)
         prepare_dependencies(root, container_config, workspace)
+        container_name = f"web3dgamebench-run-{run_root.name[-28:]}".lower()
         argv, passed_environment = wrap_command(
             invocation.argv,
             root=root,
@@ -155,6 +165,7 @@ def run_once(
             workspace=workspace,
             profile=profile,
             credential_dir=credential_dir,
+            container_name=container_name,
         )
     elif profile.credential_env and profile.runtime_env:
         value = environment.get(profile.credential_env)
@@ -162,15 +173,30 @@ def run_once(
             raise RuntimeError(f"missing required environment variable {profile.credential_env}")
         environment[profile.runtime_env] = value
     started = time.monotonic()
+    events_path = run_root / "events.jsonl"
+    stderr_path = run_root / "stderr.log"
     try:
-        result = subprocess.run(
+        def cleanup_container() -> None:
+            if container_name is None:
+                return
+            subprocess.run(
+                ["docker", "rm", "-f", container_name],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+
+        result = run_captured(
             argv,
             cwd=workspace,
-            input=prompt if invocation.stdin_prompt else None,
-            text=True,
-            capture_output=True,
             env=environment,
-            check=False,
+            input_text=prompt if invocation.stdin_prompt else None,
+            cancel_event=cancel_event,
+            cleanup=cleanup_container if container_name else None,
+            timeout_seconds=container_config.candidate_total_timeout_seconds,
+            stdout_path=events_path,
+            stderr_path=stderr_path,
         )
     except KeyboardInterrupt as error:
         manifest = json.loads(manifest_path.read_text())
@@ -186,10 +212,37 @@ def run_once(
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         shutil.rmtree(credential_dir, ignore_errors=True)
         raise RunInterrupted(run_root) from error
+    except ProcessTimedOut as error:
+        stdout = events_path.read_text(encoding="utf-8") if events_path.is_file() else ""
+        manifest = json.loads(manifest_path.read_text())
+        if invocation.goal_activation:
+            manifest["goal"]["activation_status"] = goal_activation_status(
+                invocation.goal_activation, stdout
+            )
+            manifest["goal"]["lifecycle"] = parse_goal_lifecycle(stdout)
+        manifest.update(
+            {
+                "status": "infrastructure-error",
+                "failure_scope": "candidate-timeout",
+                "exit_code": None,
+                "timed_out": True,
+                "timeout_seconds": error.timeout_seconds,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "trace_format": invocation.trace_format,
+                "model_resolved": parse_resolved_model(invocation.trace_format, stdout),
+                "workspace_digest": candidate_workspace_sha256(workspace),
+                "backend": backend,
+                "container_plane": plane,
+                "environment_names": sorted(passed_environment),
+            }
+        )
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        shutil.rmtree(credential_dir, ignore_errors=True)
+        return run_root
     stdout = result.stdout if isinstance(result.stdout, str) else ""
     stderr = result.stderr if isinstance(result.stderr, str) else ""
-    (run_root / "events.jsonl").write_text(stdout, encoding="utf-8")
-    (run_root / "stderr.log").write_text(stderr, encoding="utf-8")
+    events_path.write_text(stdout, encoding="utf-8")
+    stderr_path.write_text(stderr, encoding="utf-8")
     final_path = workspace / ".web3dgamebench-final.txt"
     if final_path.exists():
         shutil.copy2(final_path, run_root / "final.txt")

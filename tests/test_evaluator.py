@@ -40,6 +40,31 @@ container_evaluator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(container_evaluator)
 
 
+def test_primary_canvas_chooses_largest_visible_canvas() -> None:
+    class Canvases:
+        def evaluate_all(self, script: str) -> int:
+            assert "rect.width * rect.height" in script
+            return 1
+
+        def nth(self, index: int) -> str:
+            return f"canvas-{index}"
+
+    page = SimpleNamespace(locator=lambda selector: Canvases())
+
+    assert container_evaluator._primary_canvas(page) == "canvas-1"
+
+
+def test_primary_canvas_rejects_page_without_visible_canvas() -> None:
+    class Canvases:
+        def evaluate_all(self, script: str) -> int:
+            return -1
+
+    page = SimpleNamespace(locator=lambda selector: Canvases())
+
+    with pytest.raises(ValueError, match="no visible canvas"):
+        container_evaluator._primary_canvas(page)
+
+
 def _contract(task_id: str) -> dict:
     task = load_task(ROOT, task_id)
     viewports = {

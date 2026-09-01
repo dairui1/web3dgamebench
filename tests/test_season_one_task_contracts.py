@@ -57,19 +57,19 @@ def test_season_one_has_ten_distinct_ready_tasks() -> None:
 def test_goal_contracts_are_bilingual_and_external_goal_safe() -> None:
     english_sections = (
         "## Objective",
-        "## Completion contract",
-        "## Required game systems",
+        "## Operational completion contract",
+        "## Target game systems",
         "## Execution checkpoints",
-        "## Quality gates",
+        "## Quality targets",
         "## Runtime inspection contract",
         "## Constraints and final evidence",
     )
     chinese_sections = (
         "## 目标",
-        "## 完成合同",
-        "## 必需游戏系统",
+        "## 运行完成合同",
+        "## 目标游戏系统",
         "## 执行检查点",
-        "## 质量门槛",
+        "## 质量目标",
         "## 运行时检查合同",
         "## 约束与最终证据",
     )
@@ -97,6 +97,56 @@ def test_goal_contracts_are_bilingual_and_external_goal_safe() -> None:
         assert "`console.error`" in chinese
         assert "`aria-label`" in chinese
         assert "npm run build" in english and "npm run build" in chinese
+        assert "Do not create an autopilot" in english
+        assert "Full win/loss or end-to-end playthrough evidence is neither required" in english
+        assert "不要为了证明完成而编写自动驾驶器" in chinese
+        assert "无需也不要求提供完整胜负或端到端通关证据" in chinese
+
+
+def test_season_one_operational_completion_contract_is_uniform() -> None:
+    english_contracts: set[str] = set()
+    chinese_contracts: set[str] = set()
+
+    for task_id in SEASON_ONE_TASKS:
+        task_root, raw = _raw_task(task_id)
+        english = (task_root / raw["brief"]).read_text(encoding="utf-8")
+        chinese = (task_root / raw["review_brief"]).read_text(encoding="utf-8")
+        english_contracts.add(
+            english.split("## Operational completion contract", 1)[1].split(
+                "## Target game systems", 1
+            )[0].strip()
+        )
+        chinese_contracts.add(
+            chinese.split("## 运行完成合同", 1)[1].split("## 目标游戏系统", 1)[0].strip()
+        )
+
+    assert len(english_contracts) == 1
+    assert len(chinese_contracts) == 1
+
+
+def test_season_one_goals_do_not_require_end_to_end_self_play() -> None:
+    forbidden_english = (
+        "complete loop has been played",
+        "played at both required viewports",
+        "Build and play complete",
+        "Build and solve the full",
+        "Build and finish full",
+        "verified winning run",
+    )
+    forbidden_chinese = (
+        "完整试玩了",
+        "分别试玩了完整",
+        "完整解谜结果",
+        "完整比赛试玩结果",
+        "经验证的获胜流程",
+    )
+
+    for task_id in SEASON_ONE_TASKS:
+        task_root, raw = _raw_task(task_id)
+        english = (task_root / raw["brief"]).read_text(encoding="utf-8")
+        chinese = (task_root / raw["review_brief"]).read_text(encoding="utf-8")
+        assert not any(phrase in english for phrase in forbidden_english)
+        assert not any(phrase in chinese for phrase in forbidden_chinese)
 
 
 def test_season_one_tasks_are_in_the_ready_runnable_season() -> None:

@@ -6,18 +6,17 @@ Build a complete, polished, browser-native 3D tactical first-person shooter call
 
 The player enters a compact industrial site as the responding operator. A device is already planted and defended by two enemy bots. Reach the site through either of two viable routes, survive the firefight, eliminate both defenders to secure the area, and hold the interact control long enough to defuse before the 90-second timer expires. Defuse progress must remain locked at zero until both defenders are defeated; killing them secures the site but does not replace the defuse step.
 
-## Completion contract
+## Operational completion contract
 
-Complete the goal only when all of the following are true:
+The feature lists below define the intended submission and its quality criteria. They do not require exhaustive self-proof. Complete the goal when all of the following operational checks pass:
 
-- Start, tactical play, win, loss, and immediate restart form one reliable loop.
-- First-person movement, aiming, firing, reload, damage, enemy behavior, planted-device timing, and hold-to-defuse interaction all work.
-- The map supports meaningful cover and two approaches rather than a flat shooting gallery.
-- The production build succeeds and the complete loop has been played at both required viewports.
+- `npm run build` succeeds and emits the static production bundle to `dist/`.
+- The production build loads at 1440 x 900 and 390 x 844 with a visible, nonblank, interactive 3D scene, no horizontal overflow beyond 2 CSS pixels, and no uncaught page exception or `console.error` during the checked flow.
+- One brief smoke check at each viewport confirms that the game can enter its active play state, one primary control changes observable game state, and restart returns to a valid initial state.
 
-Do not stop after producing a room with targets. Continue until the objective pressure, weapon feedback, bot readability, and responsive controls make it feel like a compact tactical round.
+Keep these checks bounded. Rerun a failed check only after a relevant fix, and stop once it passes. Do not create an autopilot or repeatedly run full victories, losses, missions, matches, races, services, nights, courses, quests, fights, or puzzle solutions solely to prove completion. Those paths, feature completeness, balance, polish, and game feel are evaluated after submission; shortcomings affect the result, not whether the agent must continue self-testing. Report only the checks actually run.
 
-## Required game systems
+## Target game systems
 
 - First-person camera, collision-aware movement, walk, sprint, crouch, jump, pointer-lock aiming, and touch-look support.
 - One readable rifle with hitscan fire, magazine and reserve ammunition, reload timing, recoil or spread, muzzle feedback, impact feedback, and no firing while reloading.
@@ -34,9 +33,9 @@ Do not stop after producing a room with targets. Continue until the objective pr
 2. Implement the rifle, damage, two bots, line-of-sight behavior, cover, and fair combat.
 3. Implement the planted-device timer, hold-to-defuse logic, complete state flow, HUD, and restart.
 4. Improve weapon feel, spatial audio or visual cues, lighting, materials, impacts, and tactical readability.
-5. Build and play complete winning and losing rounds at 1440 x 900 and 390 x 844; fix clipping, overlap, deadlocks, and input traps.
+5. Build once after the final relevant change, then run the bounded operational smoke checks at 1440 x 900 and 390 x 844. Fix only observed build, startup, blank-frame, input, restart, exception, or layout failures before completing.
 
-## Quality gates
+## Quality targets
 
 - The player can identify the site, timer pressure, enemies, cover, and interaction state without guessing.
 - Bots pose a threat without firing through solid geometry or using perfect unavoidable aim.
@@ -69,4 +68,4 @@ You may add fields. Do not expose evaluator-only shortcuts or callable functions
 
 ## Constraints and final evidence
 
-Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the build result and both a successful-defuse and a failure-path playtest honestly.
+Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the production build result and the two bounded viewport smoke checks honestly. Full win/loss or end-to-end playthrough evidence is neither required nor requested.

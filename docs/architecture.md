@@ -42,6 +42,18 @@ https://web3dgamebench.dairui1.com/playground/<task-id>/<submission-id>/
 
 The public catalog deliberately labels systems only after a vote is recorded or when the visitor opens the results view. Pair pages are blind.
 
+## Execution runtime
+
+The official Season 1 matrix is owned by the repository runner. It serializes tasks, runs the
+Codex, Claude Code, and Pi families concurrently within a task, and serializes models within each
+family. Candidate containers use Docker init, a 1024-PID ceiling, a supervised Chromium process
+group, streamed trace files, and a two-hour cell deadline. The task barrier stops on infrastructure
+failure so an operator can classify and resume the same immutable receipt.
+
+Harbor is not an official backend. `experiments/harbor_parity/` can reproduce one bounded,
+non-scoring Bombsite Retake plumbing comparison, but its artifacts are deliberately outside the
+matrix and publication trust chain.
+
 ## Ranking
 
 Votes compare two submissions for the same task. Choices are left, right, tie, left broken, and right broken. Preference votes feed a Bradley-Terry model. Broken votes are reported as reliability evidence but do not masquerade as aesthetic preference. A system becomes rank-eligible only after it has a terminal submission for every active task.

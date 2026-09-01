@@ -1,7 +1,8 @@
 # Web3DGameBench Season 1 Task Review
 
-Status: **ready for the private Season 1 matrix**. The task contracts and task-aware evaluation
-inputs are frozen before the first scored cell starts.
+Status: **task contracts revised; all pre-revision plans and runs are invalid**. Season 1 must begin
+again at Canyon Strike using a plan and smoke receipt generated after this revision. The official
+rerun uses the repository container matrix; Harbor parity artifacts are not Season 1 evidence.
 
 This review document does not define the execution matrix. `configs/seasons.toml` assigns all ten
 tasks to `season-1`; its profile list, resolved through `configs/profiles.toml`, is the authoritative
@@ -28,9 +29,11 @@ Signal Drift remains an immutable `Pilot 0` artifact. The official season contai
 Season 1 does not use ten variations of the same movement demo. Its critical paths span flight
 physics, tactical combat, editable voxel state, quest state machines, boss telegraphs, paired
 portal rendering and spatial transforms, precision platforming, racing AI, RTS economy and navigation, and concurrent
-kitchen workflows. Each task couples several systems and requires a causally valid win path,
-desktop and phone interaction, restart integrity, and task-specific playtest evidence. A polished
-scene or a fabricated runtime object therefore cannot earn a complete semantic judgment.
+kitchen workflows. Each task couples several systems and defines a causally valid win path as a
+quality target. Candidate completion requires a production build plus bounded desktop and phone
+runtime smoke evidence; deterministic evaluation, private playtest judging, and human preference
+then measure feature completeness and game effect. A polished scene or a fabricated runtime object
+therefore cannot earn a strong semantic judgment merely by passing admission.
 
 After the private matrix closes, retain per-task admission rate, rubric evidence coverage, score
 distribution, broken-vote rate, and pairwise preference entropy. Near-universal success, a
@@ -39,9 +42,10 @@ in the next season; they are not reasons to change a frozen Season 1 task after 
 
 ## Goal contract policy
 
-- The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex uses native goal tools; Claude Code and Pi receive the equivalent runner-owned system policy and are labeled as such rather than being reported as native goal runs.
-- No fixed wall-clock or token limit is embedded in a task. Completion is evidence-based.
-- A candidate must not stop at a visual prototype. It completes only after the full win/loss loop, required controls, production build, and desktop/phone playtests pass.
-- Milestones are execution checkpoints, not permission to omit later work.
+- The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex, Claude Code, and Pi must all expose observed native Goal creation and completion in their traces.
+- No wall-clock or token limit is embedded in a task contract. The runtime applies a two-hour cell ceiling, and candidate self-checks remain explicitly brief and bounded.
+- Candidate completion is operational: the production build must load as a visible, interactive 3D game at both viewports, a primary control and restart must work, and the checked flow must avoid runtime and layout failures.
+- Candidates are not asked to write autopilots or prove full win/loss and end-to-end paths. Missing systems, balance, polish, and game feel lower the evaluated result instead of forcing indefinite self-testing.
+- Milestones and target systems guide implementation and grading; they are not an exhaustive self-proof checklist.
 - Classic game names establish a shared interaction reference only. Every submission must use original names, geometry, maps, characters, audio, and other assets.
 - Chinese files are review mirrors and are not sent alongside English files during a scored run.

@@ -44,7 +44,7 @@ def test_pilot_judge_uses_one_medium_pi_rollout() -> None:
     assert judge.runs == 1
 
 
-def test_candidate_runs_have_no_fixed_time_limit() -> None:
+def test_candidate_tasks_and_profiles_do_not_override_runtime_limit() -> None:
     profiles = load_profiles(ROOT)
     task = load_task(ROOT, "signal-drift")
     assert all(not hasattr(profile, "timeout_seconds") for profile in profiles.values())
@@ -54,6 +54,8 @@ def test_candidate_runs_have_no_fixed_time_limit() -> None:
 def test_candidate_commands_have_a_bounded_runtime() -> None:
     config = load_container_config(ROOT)
     assert config.command_timeout_seconds == 1200
+    assert config.candidate_total_timeout_seconds == 7200
+    assert config.pids_limit == 1024
 
 
 def test_season_one_preflight_has_ten_tasks_and_eighty_cells() -> None:
