@@ -50,11 +50,12 @@ charged by subscription products such as Codex, Claude Code, or OpenCode Go.
 
 See `docs/architecture.md` and `docs/protocol.md` before running a paid matrix.
 
-The authoritative Season 1 execution path is `web3dgamebench matrix --backend container`, not
-Harbor. The Harbor adapter under `experiments/harbor_parity/` is a non-scoring compatibility lab;
-its artifacts cannot enter a matrix receipt or publication. Promoting Harbor would require all ten
-tasks, all eight profiles, immutable receipt conversion, and publisher parity to pass before a new
-plan and smoke receipt are frozen.
+The authoritative Season 1 control plane remains `web3dgamebench matrix`. Its default Harbor
+backend owns only isolated candidate execution. Web3DGameBench still owns the frozen plan, task
+barrier, retry classification, canonical receipt, trusted evaluator, closure, and publisher. Every
+Harbor trial is converted into the repository run schema and bound by `harbor.json` plus
+`harbor-task-lock.json`; raw Harbor job data remains private. The older adapter under
+`experiments/harbor_parity/` is retained only as historical comparison evidence.
 
 ## Operator quick start
 
@@ -65,8 +66,10 @@ docker build -t web3dgamebench-candidate:0.1.0 infra/candidate
 docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
 uv run web3dgamebench doctor
 uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
-uv run web3dgamebench smoke --plan /path/to/season-1-plan.json
-uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend container
+uv run web3dgamebench smoke --plan /path/to/season-1-plan.json --backend harbor
+uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor
+# Stop cleanly at a task barrier when operating the season in review windows:
+uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor --stop-after-task canyon-strike
 # After an interruption or infrastructure failure, resume the same receipt:
 uv run web3dgamebench matrix --resume /path/to/matrix-receipt.json
 # Optional, quota-aware Fable lane; repeat this command later to resume deferred cells:

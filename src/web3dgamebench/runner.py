@@ -109,6 +109,8 @@ def run_once(
     backend: str = "container",
     cancel_event: threading.Event | None = None,
 ) -> Path:
+    if backend not in {"native", "container", "harbor"}:
+        raise ValueError(f"unknown backend: {backend}")
     profiles = load_profiles(root)
     if profile_id not in profiles:
         raise ValueError(f"unknown profile: {profile_id}")
@@ -116,12 +118,14 @@ def run_once(
     task = load_task(root, task_id)
     run_root, workspace = prepare(root, task, profile, attempt)
     prompt = _candidate_prompt(task)
-    invocation_workspace = Path("/workspace") if backend == "container" else workspace
+    invocation_workspace = (
+        Path("/workspace") if backend in {"container", "harbor"} else workspace
+    )
     invocation = build_invocation(
         profile,
         invocation_workspace,
         prompt,
-        isolation="container" if backend == "container" else "runtime",
+        isolation="container" if backend in {"container", "harbor"} else "runtime",
         goal_mode=task.goal_mode,
         goal_completion=task.goal_completion,
     )
@@ -153,6 +157,7 @@ def run_once(
     plane = None
     container_name = None
     passed_environment: dict[str, str] = {}
+    failure_scope = None
     container_config = load_container_config(root)
     if backend == "container":
         plane = ensure_plane(root, container_config)
@@ -187,17 +192,34 @@ def run_once(
                 check=False,
             )
 
-        result = run_captured(
-            argv,
-            cwd=workspace,
-            env=environment,
-            input_text=prompt if invocation.stdin_prompt else None,
-            cancel_event=cancel_event,
-            cleanup=cleanup_container if container_name else None,
-            timeout_seconds=container_config.candidate_total_timeout_seconds,
-            stdout_path=events_path,
-            stderr_path=stderr_path,
-        )
+        if backend == "harbor":
+            from .harbor_backend import execute_harbor
+
+            result = execute_harbor(
+                root,
+                run_root,
+                workspace,
+                task_id=task.id,
+                profile=profile,
+                instruction=prompt,
+                invocation=invocation,
+                cancel_event=cancel_event,
+            )
+            plane = result.plane
+            passed_environment = result.environment_names
+            failure_scope = result.failure_scope
+        else:
+            result = run_captured(
+                argv,
+                cwd=workspace,
+                env=environment,
+                input_text=prompt if invocation.stdin_prompt else None,
+                cancel_event=cancel_event,
+                cleanup=cleanup_container if container_name else None,
+                timeout_seconds=container_config.candidate_total_timeout_seconds,
+                stdout_path=events_path,
+                stderr_path=stderr_path,
+            )
     except KeyboardInterrupt as error:
         manifest = json.loads(manifest_path.read_text())
         manifest.update(
@@ -239,6 +261,26 @@ def run_once(
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         shutil.rmtree(credential_dir, ignore_errors=True)
         return run_root
+    except (OSError, RuntimeError, ValueError) as error:
+        events_path.touch(exist_ok=True)
+        stderr_path.touch(exist_ok=True)
+        manifest = json.loads(manifest_path.read_text())
+        manifest.update(
+            {
+                "status": "infrastructure-error",
+                "failure_scope": failure_scope or f"{backend}-execution",
+                "infrastructure_error": str(error),
+                "exit_code": None,
+                "duration_seconds": round(time.monotonic() - started, 3),
+                "workspace_digest": candidate_workspace_sha256(workspace),
+                "backend": backend,
+                "container_plane": plane,
+                "environment_names": sorted(passed_environment),
+            }
+        )
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        shutil.rmtree(credential_dir, ignore_errors=True)
+        return run_root
     stdout = result.stdout if isinstance(result.stdout, str) else ""
     stderr = result.stderr if isinstance(result.stderr, str) else ""
     events_path.write_text(stdout, encoding="utf-8")
@@ -269,7 +311,9 @@ def run_once(
             "status": (
                 "candidate-complete" if result.returncode == 0 else "infrastructure-error"
             ),
-            "failure_scope": None if result.returncode == 0 else "candidate-runtime",
+            "failure_scope": (
+                None if result.returncode == 0 else failure_scope or "candidate-runtime"
+            ),
             "exit_code": result.returncode,
             "duration_seconds": round(time.monotonic() - started, 3),
             "trace_format": invocation.trace_format,

@@ -1,8 +1,9 @@
 # Harbor parity lab
 
-This directory contains a non-scoring compatibility experiment for Season 1 task 2,
-`bombsite-retake`. It does not replace the official `web3dgamebench matrix` runner, and Harbor
-outputs must not enter a canonical matrix receipt, publication catalog, or leaderboard.
+This directory preserves the original non-scoring compatibility experiment for Season 1 task 2,
+`bombsite-retake`. The formal all-task/all-profile implementation now lives in
+`src/web3dgamebench/harbor_backend.py` and `src/web3dgamebench/harbor_agents.py`. Outputs produced
+by this historical experiment still must not enter a canonical receipt or publication.
 
 The experiment answers a narrower question: can Harbor reproduce the same candidate-visible task,
 pinned model invocation, native Goal lifecycle, network boundary, collected workspace, and trusted
@@ -59,8 +60,6 @@ stopped, store it under a dedicated Harbor output directory, and pair it with an
 identified repository-runner result through `compare.py`. One pair can detect contract drift but
 cannot establish score parity.
 
-Harbor must not become an official Season 1 backend until an adapter covers all ten tasks and eight
-core profiles, materializes canonical run manifests, preserves raw traces on timeout and
-interruption, passes evaluator and publisher identity checks, and integrates with task barriers,
-optional Fable backfill, closure, and publication. That promotion would invalidate the current plan
-and require a new plan plus three-family smoke receipt.
+Formal Harbor execution requires a newly frozen plan and a Harbor-backed three-family smoke
+receipt. The Web3DGameBench control plane, not this experiment, materializes canonical manifests,
+preserves raw traces, and enforces evaluator, barrier, Fable, closure, and publisher contracts.

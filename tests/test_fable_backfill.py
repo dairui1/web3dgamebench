@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from web3dgamebench.config import load_profiles
 from web3dgamebench.fable_backfill import (
     _begin_attempt,
     _load_receipt,
@@ -10,7 +11,6 @@ from web3dgamebench.fable_backfill import (
     _write_receipt,
     quota_deferred,
 )
-from web3dgamebench.config import load_profiles
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,6 +62,17 @@ def test_quota_failure_is_deferred(tmp_path: Path) -> None:
             }
         )
         + "\n"
+    )
+
+    assert quota_deferred(run_root) is True
+
+
+def test_harbor_stderr_quota_failure_is_deferred(tmp_path: Path) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    (run_root / "events.jsonl").write_text("", encoding="utf-8")
+    (run_root / "stderr.log").write_text(
+        "Claude Code session limit reached\n", encoding="utf-8"
     )
 
     assert quota_deferred(run_root) is True

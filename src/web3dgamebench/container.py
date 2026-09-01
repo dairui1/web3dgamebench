@@ -178,6 +178,22 @@ def prepare_dependencies(root: Path, config: ContainerConfig, workspace: Path) -
         raise ContainerError(f"offline dependency preparation failed: {result.stderr.strip()}")
 
 
+def container_invocation_argv(profile: Profile, argv: tuple[str, ...]) -> list[str]:
+    command = list(argv)
+    if profile.harness != "pi":
+        return command
+    insertion = command.index("--no-extensions") + 1
+    command[insertion:insertion] = [
+        "--extension",
+        "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
+        "--extension",
+        "/usr/lib/node_modules/@narumitw/pi-goal/dist/index.ts",
+        "--extension",
+        "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts",
+    ]
+    return command
+
+
 def wrap_command(
     argv: tuple[str, ...],
     *,
@@ -271,19 +287,6 @@ def wrap_command(
     env_file.chmod(0o600)
     args.extend(["--env-file", str(env_file)])
     args.append(config.image)
-    if profile.harness == "pi":
-        command = list(argv)
-        insertion = command.index("--no-extensions") + 1
-        command[insertion:insertion] = [
-            "--extension",
-            "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
-            "--extension",
-            "/usr/lib/node_modules/@narumitw/pi-goal/dist/index.ts",
-            "--extension",
-            "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts",
-        ]
-        args.extend(command)
-    else:
-        args.extend(argv)
+    args.extend(container_invocation_argv(profile, argv))
     # Return redacted environment metadata separately; never persist values.
     return args, {key: "<passed>" for key in environment}

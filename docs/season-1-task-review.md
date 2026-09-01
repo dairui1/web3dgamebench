@@ -2,7 +2,7 @@
 
 Status: **task contracts revised; all pre-revision plans and runs are invalid**. Season 1 must begin
 again at Canyon Strike using a plan and smoke receipt generated after this revision. The official
-rerun uses the repository container matrix; Harbor parity artifacts are not Season 1 evidence.
+rerun uses the repository-controlled Harbor matrix; historical parity-lab artifacts are not Season 1 evidence.
 
 This review document does not define the execution matrix. `configs/seasons.toml` assigns all ten
 tasks to `season-1`; its profile list, resolved through `configs/profiles.toml`, is the authoritative

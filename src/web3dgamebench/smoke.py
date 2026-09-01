@@ -66,6 +66,7 @@ def _probe(
     probe_root: Path,
     profile_id: str,
     cancel_event: threading.Event,
+    backend: str,
 ) -> dict[str, Any]:
     profile = load_profiles(root)[profile_id]
     workspace = probe_root / profile.harness / "workspace"
@@ -85,15 +86,6 @@ def _probe(
     config = load_container_config(root)
     credential_dir = probe_root / profile.harness / "runtime-home"
     container_name = f"web3dgamebench-smoke-{profile.harness}-{uuid.uuid4().hex[:8]}"
-    argv, environment_names = wrap_command(
-        invocation.argv,
-        root=root,
-        config=config,
-        workspace=workspace,
-        profile=profile,
-        credential_dir=credential_dir,
-        container_name=container_name,
-    )
     environment = os.environ.copy()
     environment.update(invocation.env)
 
@@ -111,17 +103,41 @@ def _probe(
     events_path = output_dir / "events.jsonl"
     stderr_path = output_dir / "stderr.log"
     try:
-        result = run_captured(
-            argv,
-            cwd=workspace,
-            env=environment,
-            input_text=_TASK if invocation.stdin_prompt else None,
-            cancel_event=cancel_event,
-            cleanup=cleanup,
-            timeout_seconds=config.command_timeout_seconds,
-            stdout_path=events_path,
-            stderr_path=stderr_path,
-        )
+        if backend == "harbor":
+            from .harbor_backend import execute_harbor
+
+            result = execute_harbor(
+                root,
+                output_dir,
+                workspace,
+                task_id="harness-smoke",
+                profile=profile,
+                instruction=_TASK,
+                invocation=invocation,
+                cancel_event=cancel_event,
+            )
+            environment_names = result.environment_names
+        else:
+            argv, environment_names = wrap_command(
+                invocation.argv,
+                root=root,
+                config=config,
+                workspace=workspace,
+                profile=profile,
+                credential_dir=credential_dir,
+                container_name=container_name,
+            )
+            result = run_captured(
+                argv,
+                cwd=workspace,
+                env=environment,
+                input_text=_TASK if invocation.stdin_prompt else None,
+                cancel_event=cancel_event,
+                cleanup=cleanup,
+                timeout_seconds=config.command_timeout_seconds,
+                stdout_path=events_path,
+                stderr_path=stderr_path,
+            )
     finally:
         shutil.rmtree(credential_dir, ignore_errors=True)
     events_path.write_text(result.stdout, encoding="utf-8")
@@ -155,11 +171,15 @@ def _probe(
     }
 
 
-def run_smoke(root: Path, plan_path: Path) -> Path:
+def run_smoke(root: Path, plan_path: Path, *, backend: str = "container") -> Path:
+    if backend not in {"container", "harbor"}:
+        raise MatrixError(f"unsupported smoke backend: {backend}")
     plan_path = plan_path.expanduser().resolve()
     plan = load_preflight_plan(plan_path)
     config = load_container_config(root)
-    plane = ensure_plane(root, config)
+    plane = ensure_plane(root, config) if backend == "container" else {
+        "image_digest": plan["runtime_environment"]["container_images"]["candidate"]["id"]
+    }
     smoke_id = f"{plan['plan_id']}-{uuid.uuid4().hex[:8]}"
     probe_root = runs_dir() / "smoke" / smoke_id
     probe_root.mkdir(parents=True)
@@ -168,7 +188,7 @@ def run_smoke(root: Path, plan_path: Path) -> Path:
     try:
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix="harness-smoke") as executor:
             futures = [
-                executor.submit(_probe, root, probe_root, profile_id, cancel_event)
+                executor.submit(_probe, root, probe_root, profile_id, cancel_event, backend)
                 for profile_id in _PROFILES
             ]
             for future in futures:
@@ -180,6 +200,7 @@ def run_smoke(root: Path, plan_path: Path) -> Path:
         "schema_version": 1,
         "smoke_id": smoke_id,
         "status": "passed" if all(item["status"] == "passed" for item in probes) else "failed",
+        "backend": backend,
         "created_at": _now(),
         "plan": {
             "path": str(plan_path),
@@ -197,7 +218,13 @@ def run_smoke(root: Path, plan_path: Path) -> Path:
     return receipt_path
 
 
-def verify_smoke_receipt(plan_path: Path, plan: dict[str, Any], receipt_path: Path) -> dict[str, Any]:
+def verify_smoke_receipt(
+    plan_path: Path,
+    plan: dict[str, Any],
+    receipt_path: Path,
+    *,
+    backend: str = "container",
+) -> dict[str, Any]:
     receipt_path = receipt_path.expanduser().resolve()
     try:
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -209,6 +236,8 @@ def verify_smoke_receipt(plan_path: Path, plan: dict[str, Any], receipt_path: Pa
     receipt["receipt_digest_sha256"] = expected_digest
     if receipt.get("status") != "passed":
         raise MatrixError("harness smoke did not pass")
+    if receipt.get("backend", "container") != backend:
+        raise MatrixError("harness smoke backend does not match the matrix backend")
     reference = receipt.get("plan")
     if not isinstance(reference, dict) or (
         reference.get("digest_sha256") != plan.get("plan_digest_sha256")

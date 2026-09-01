@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import shutil
 import threading
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 import web3dgamebench.matrix as matrix_module
+from web3dgamebench.artifacts import file_tree_sha256
 from web3dgamebench.cli import build_parser, command_doctor
 from web3dgamebench.config import load_profiles
 from web3dgamebench.matrix import (
@@ -438,6 +440,78 @@ def test_trusted_gate_rejects_missing_task_goal_and_model_evidence(
     assert "codex goal lifecycle did not complete" in failures
 
 
+def test_trusted_gate_accepts_harbor_only_with_bound_adapter_provenance(
+    tmp_path: Path, season_plan: dict
+) -> None:
+    run_root = tmp_path / "harbor-run"
+    cell, manifest, report = _trusted_evidence(
+        season_plan, "codex-sol-medium", run_root
+    )
+    task = season_plan["tasks"][cell["task"]]
+    planned_harbor = season_plan["runtime_environment"]["harbor"]
+    generated_task = run_root / "harbor/task" / cell["task"]
+    generated_task.mkdir(parents=True)
+    (generated_task / "task.toml").write_text("frozen", encoding="utf-8")
+    job_root = run_root / "harbor/jobs/job"
+    trial_root = job_root / "trial"
+    trial_root.mkdir(parents=True)
+    (job_root / "result.json").write_text("{}", encoding="utf-8")
+    (trial_root / "result.json").write_text("{}", encoding="utf-8")
+    adapter_lock = {
+        "schema_version": 1,
+        "task": cell["task"],
+        "profile": cell["profile"],
+        "brief_sha256": task["brief_sha256"],
+        "harbor_version": planned_harbor["version"],
+        "harbor_commit": planned_harbor["commit"],
+        "generated_task_sha256": file_tree_sha256(generated_task),
+    }
+    adapter_path = run_root / "harbor-task-lock.json"
+    adapter_path.write_text(json.dumps(adapter_lock), encoding="utf-8")
+    (run_root / "harbor.json").write_text(
+        json.dumps(
+            {
+                "version": planned_harbor["version"],
+                "commit": planned_harbor["commit"],
+                "exception": None,
+                "task_checksum": "checksum",
+                "job": str(job_root),
+                "trial": str(trial_root),
+                "trial_result_sha256": hashlib.sha256(
+                    (trial_root / "result.json").read_bytes()
+                ).hexdigest(),
+                "job_result_sha256": hashlib.sha256(
+                    (job_root / "result.json").read_bytes()
+                ).hexdigest(),
+                "adapter_lock_sha256": hashlib.sha256(
+                    adapter_path.read_bytes()
+                ).hexdigest(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest["backend"] = "harbor"
+    manifest["container_plane"].update(
+        execution_backend="harbor-docker",
+        harbor_version=planned_harbor["version"],
+        harbor_commit=planned_harbor["commit"],
+    )
+
+    assert trusted_cell_gate(season_plan, cell, manifest, report, run_root) == (
+        True,
+        [],
+    )
+
+    harbor = json.loads((run_root / "harbor.json").read_text(encoding="utf-8"))
+    harbor["exception"] = {"type": "AgentTimeoutError"}
+    (run_root / "harbor.json").write_text(json.dumps(harbor), encoding="utf-8")
+    trusted, failures = trusted_cell_gate(
+        season_plan, cell, manifest, report, run_root
+    )
+    assert trusted is False
+    assert "Harbor execution provenance is missing or inconsistent" in failures
+
+
 def _terminalize(receipt: dict) -> None:
     artifacts = {
         "schema_version": 1,
@@ -579,6 +653,49 @@ def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
     assert receipt["status"] == "complete"
 
 
+def test_matrix_can_stop_at_a_requested_task_barrier(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    receipt_path = tmp_path / "receipt.json"
+    receipt = _new_receipt(plan_path, season_plan, "harbor")
+    _terminalize(receipt)
+    for cell in receipt["cells"][:16]:
+        cell.update(status="pending", run=None, passed=False, trusted=False)
+    receipt["execution_window"] = {"stop_after_task": "canyon-strike"}
+    called: list[str] = []
+
+    def execute(_root, _plan, _receipt_path, _receipt, cell, _cancel_event=None):
+        called.append(cell["cell_id"])
+        cell.update(
+            status="completed",
+            run=f"/runs/{cell['cell_id']}",
+            passed=True,
+            trusted=True,
+            artifacts=copy.deepcopy(receipt["cells"][16]["artifacts"]),
+        )
+
+    monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
+    monkeypatch.setattr(matrix_module, "verify_frozen_inputs", lambda *_args: None)
+    monkeypatch.setattr(matrix_module, "_execute_cell", execute)
+
+    matrix_module._drive_matrix(
+        ROOT,
+        plan_path,
+        season_plan,
+        receipt_path,
+        receipt,
+        stop_after_task="canyon-strike",
+    )
+
+    assert len(called) == 8
+    assert all(cell["status"] == "pending" for cell in receipt["cells"][8:16])
+    assert receipt["status"] == "incomplete"
+    assert receipt["execution_window"]["stopped_at_task_barrier"] == "canyon-strike"
+
+
 def test_resume_recovers_complete_canonical_receipt_missing_closure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -707,11 +824,13 @@ def test_evaluator_retry_reuses_completed_candidate_run(
     assert (archived / "evaluation/partial.log").read_text(encoding="utf-8") == "kept"
 
 
-def test_formal_season_rejects_native_matrix(
+def test_formal_season_rejects_native_but_accepts_harbor_backend_name(
     tmp_path: Path, plan_path: Path
 ) -> None:
-    with pytest.raises(MatrixError, match="require the container backend"):
+    with pytest.raises(MatrixError, match="trusted isolated backend"):
         start_matrix(ROOT, plan_path, backend="native")
+    with pytest.raises(MatrixError, match="fresh --smoke-receipt"):
+        start_matrix(ROOT, plan_path, backend="harbor")
 
 
 def test_matrix_cli_requires_exactly_one_frozen_source() -> None:
@@ -719,6 +838,8 @@ def test_matrix_cli_requires_exactly_one_frozen_source() -> None:
     assert parser.parse_args(["matrix", "--season", "season-1"]).season == "season-1"
     assert parser.parse_args(["matrix", "--plan", "/tmp/plan.json"]).plan
     assert parser.parse_args(["matrix", "--resume", "/tmp/receipt.json"]).resume
+    assert parser.parse_args(["run", "--task", "x", "--profile", "y"]).backend == "harbor"
+    assert parser.parse_args(["smoke", "--plan", "/tmp/plan.json"]).backend == "harbor"
     with pytest.raises(SystemExit):
         parser.parse_args(["matrix"])
     with pytest.raises(SystemExit):

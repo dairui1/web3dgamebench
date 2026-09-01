@@ -121,26 +121,28 @@ def _new_receipt(
 
 
 def quota_deferred(run_root: Path) -> bool:
-    events = run_root / "events.jsonl"
-    if not events.is_file():
-        return False
-    for line in events.read_text(errors="replace").splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
+    for path in (run_root / "events.jsonl", run_root / "stderr.log"):
+        if not path.is_file():
             continue
-        text = " ".join(
-            str(event.get(key, "")) for key in ("type", "subtype", "error", "result")
-        ).lower()
-        if any(marker in text for marker in _QUOTA_MARKERS):
-            return True
+        for line in path.read_text(errors="replace").splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                text = line.lower()
+            else:
+                text = " ".join(
+                    str(event.get(key, ""))
+                    for key in ("type", "subtype", "error", "result")
+                ).lower()
+            if any(marker in text for marker in _QUOTA_MARKERS):
+                return True
     return False
 
 
-def _run_fable(root: Path, profile: Profile, task_id: str, attempt: int) -> Path:
-    return runner.run_once(
-        root, task_id, profile.id, attempt, backend="container"
-    )
+def _run_fable(
+    root: Path, profile: Profile, task_id: str, attempt: int, backend: str
+) -> Path:
+    return runner.run_once(root, task_id, profile.id, attempt, backend=backend)
 
 
 def _evaluation_plan(core_plan: dict[str, Any], profile: Profile) -> dict[str, Any]:
@@ -162,7 +164,11 @@ def run_backfill(
     core_plan_path: Path,
     receipt_path: Path,
     selected_tasks: set[str] | None,
+    *,
+    backend: str = "harbor",
 ) -> Path:
+    if backend not in {"container", "harbor"}:
+        raise FableBackfillError(f"unsupported Fable backend: {backend}")
     core_plan_path = core_plan_path.expanduser().resolve()
     core_plan = load_preflight_plan(core_plan_path)
     verify_frozen_inputs(root, core_plan)
@@ -176,8 +182,11 @@ def run_backfill(
             raise FableBackfillError("Fable receipt belongs to another core plan")
         if receipt.get("profile") != asdict(profile):
             raise FableBackfillError("Fable receipt profile differs from the frozen configuration")
+        if receipt.get("backend", "container") != backend:
+            raise FableBackfillError("Fable receipt backend differs from the requested backend")
     else:
         receipt = _new_receipt(core_plan_path, core_plan, profile)
+        receipt["backend"] = backend
         _write_receipt(receipt_path, receipt)
 
     known_tasks = {cell["task"] for cell in receipt["cells"]}
@@ -196,7 +205,7 @@ def run_backfill(
         _begin_attempt(cell)
         _write_receipt(receipt_path, receipt)
 
-        run_root = _run_fable(root, profile, cell["task"], cell["attempt"])
+        run_root = _run_fable(root, profile, cell["task"], cell["attempt"], backend)
         cell["run"] = str(run_root)
         manifest = json.loads((run_root / "manifest.json").read_text())
         if manifest.get("status") != "candidate-complete":

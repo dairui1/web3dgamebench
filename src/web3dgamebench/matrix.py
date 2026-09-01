@@ -15,9 +15,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Self
 
+from .artifacts import file_tree_sha256
 from .config import Profile, Season, Task, load_task, validate_matrix
 from .container import load_container_config
 from .evaluator import evaluate_run, render_dist_sha256, render_source_sha256
+from .harbor_backend import HARBOR_COMMIT, harbor_version
 from .runner import RunInterrupted, run_once, runs_dir
 
 
@@ -247,6 +249,10 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
         "goals": " ".join(goal_feature[:3]),
     }
     fingerprint: dict[str, Any] = {
+        "harbor": {
+            "version": harbor_version(),
+            "commit": HARBOR_COMMIT,
+        },
         "container_images": {
             "candidate": {"reference": config.image, "id": candidate_id},
             "evaluator": {"reference": config.evaluator_image, "id": evaluator_id},
@@ -277,6 +283,13 @@ def close_run_artifacts(run_root: Path) -> dict[str, Any]:
         if not path.is_file():
             raise MatrixError(f"run closure artifact is missing: {path}")
         files[relative] = _file_sha256(path)
+    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("backend") == "harbor":
+        for relative in ("harbor.json", "harbor-task-lock.json"):
+            path = run_root / relative
+            if not path.is_file():
+                raise MatrixError(f"Harbor provenance is missing: {path}")
+            files[relative] = _file_sha256(path)
     for relative in ("final.txt", "evaluation/report.json"):
         path = run_root / relative
         if path.is_file():
@@ -396,6 +409,8 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "src/web3dgamebench/container.py", "matrix-runtime"),
         (root / "src/web3dgamebench/evaluator.py", "evaluator-host"),
         (root / "src/web3dgamebench/fable_backfill.py", "optional-backfill-runtime"),
+        (root / "src/web3dgamebench/harbor_agents.py", "harbor-agent-runtime"),
+        (root / "src/web3dgamebench/harbor_backend.py", "harbor-execution-runtime"),
         (root / "src/web3dgamebench/judge.py", "judge-host"),
         (root / "src/web3dgamebench/matrix.py", "matrix-runtime"),
         (root / "src/web3dgamebench/process.py", "candidate-process-runtime"),
@@ -1072,8 +1087,11 @@ def validate_publication_receipt(
     """Verify that a closed receipt still points at its frozen runnable inputs."""
 
     validated = validate_closed_receipt(receipt)
-    if validated["season"] == "season-1" and validated.get("backend") != "container":
-        raise MatrixError("season-1 publication requires a container matrix")
+    if validated["season"] == "season-1" and validated.get("backend") not in {
+        "container",
+        "harbor",
+    }:
+        raise MatrixError("season-1 publication requires a trusted isolated matrix")
     _verify_canonical_publication_receipt(validated)
     plan_reference = validated.get("plan")
     if not isinstance(plan_reference, dict) or not isinstance(
@@ -1210,8 +1228,9 @@ def trusted_cell_gate(
     if manifest.get("attempt") != cell["attempt"]:
         failures.append("run attempt mismatch")
     if plan["season"]["id"] == "season-1":
-        if manifest.get("backend") != "container":
-            failures.append("season-1 candidate did not run in the container backend")
+        backend = manifest.get("backend")
+        if backend not in {"container", "harbor"}:
+            failures.append("season-1 candidate did not run in a trusted isolated backend")
         plane = manifest.get("container_plane")
         candidate_image_id = plan["runtime_environment"]["container_images"][
             "candidate"
@@ -1221,6 +1240,62 @@ def trusted_cell_gate(
             or plane.get("image_digest") != candidate_image_id
         ):
             failures.append("candidate container image digest mismatch")
+        if backend == "harbor":
+            harbor_path = run_root / "harbor.json"
+            adapter_lock_path = run_root / "harbor-task-lock.json"
+            try:
+                harbor = json.loads(harbor_path.read_text(encoding="utf-8"))
+                adapter_lock = json.loads(adapter_lock_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                harbor = None
+                adapter_lock = None
+            planned_harbor = plan["runtime_environment"].get("harbor")
+            raw_results_valid = False
+            generated_task_valid = False
+            if isinstance(harbor, dict):
+                try:
+                    private_harbor_root = (run_root / "harbor").resolve()
+                    job_root = Path(str(harbor["job"])).resolve()
+                    trial_root = Path(str(harbor["trial"])).resolve()
+                    job_root.relative_to(private_harbor_root)
+                    trial_root.relative_to(private_harbor_root)
+                    raw_results_valid = (
+                        _file_sha256(job_root / "result.json")
+                        == harbor.get("job_result_sha256")
+                        and _file_sha256(trial_root / "result.json")
+                        == harbor.get("trial_result_sha256")
+                    )
+                    generated_task_valid = (
+                        isinstance(adapter_lock, dict)
+                        and file_tree_sha256(run_root / "harbor/task" / task_id)
+                        == adapter_lock.get("generated_task_sha256")
+                    )
+                except (KeyError, OSError, ValueError):
+                    pass
+            if (
+                not isinstance(harbor, dict)
+                or not isinstance(planned_harbor, dict)
+                or harbor.get("version") != planned_harbor.get("version")
+                or harbor.get("commit") != planned_harbor.get("commit")
+                or harbor.get("exception") is not None
+                or not isinstance(harbor.get("task_checksum"), str)
+                or not isinstance(harbor.get("trial_result_sha256"), str)
+                or not isinstance(harbor.get("job_result_sha256"), str)
+                or not raw_results_valid
+                or not generated_task_valid
+                or not isinstance(adapter_lock, dict)
+                or harbor.get("adapter_lock_sha256") != _file_sha256(adapter_lock_path)
+                or adapter_lock.get("task") != task_id
+                or adapter_lock.get("profile") != profile_id
+                or adapter_lock.get("brief_sha256") != task["brief_sha256"]
+                or adapter_lock.get("harbor_version") != planned_harbor.get("version")
+                or adapter_lock.get("harbor_commit") != planned_harbor.get("commit")
+                or not isinstance(plane, dict)
+                or plane.get("execution_backend") != "harbor-docker"
+                or plane.get("harbor_version") != planned_harbor.get("version")
+                or plane.get("harbor_commit") != planned_harbor.get("commit")
+            ):
+                failures.append("Harbor execution provenance is missing or inconsistent")
 
     prompt = manifest.get("prompt")
     prompt_data = prompt if isinstance(prompt, dict) else {}
@@ -1437,9 +1512,11 @@ def _drive_matrix(
     plan: dict[str, Any],
     receipt_path: Path,
     receipt: dict[str, Any],
+    *,
+    stop_after_task: str | None = None,
 ) -> None:
     task_order = list(dict.fromkeys(cell["task"] for cell in receipt["cells"]))
-    stop_after_task = False
+    halt_after_task = False
     for task_id in task_order:
         task_cells = [cell for cell in receipt["cells"] if cell["task"] == task_id]
         active_cells = [
@@ -1571,7 +1648,7 @@ def _drive_matrix(
                         elif isinstance(failure, PlanDriftError):
                             plan_drift = plan_drift or failure
                         else:
-                            stop_after_task = True
+                            halt_after_task = True
         except KeyboardInterrupt as error:
             interrupted = interrupted or error
             cancel_event.set()
@@ -1588,7 +1665,7 @@ def _drive_matrix(
                     elif isinstance(failure, PlanDriftError):
                         plan_drift = plan_drift or failure
                     else:
-                        stop_after_task = True
+                        halt_after_task = True
 
         _write_receipt(receipt_path, receipt)
         if plan_drift is not None:
@@ -1599,7 +1676,11 @@ def _drive_matrix(
             receipt["status"] = "interrupted"
             _write_receipt(receipt_path, receipt)
             raise MatrixInterrupted(receipt_path) from interrupted
-        if stop_after_task:
+        if halt_after_task or task_id == stop_after_task:
+            if task_id == stop_after_task:
+                receipt["execution_window"]["stopped_at_task_barrier"] = task_id
+                receipt["execution_window"]["stopped_at"] = _now()
+                _write_receipt(receipt_path, receipt)
             break
 
     unfinished = any(
@@ -1628,21 +1709,24 @@ def start_matrix(
     root: Path,
     plan_path: Path,
     *,
-    backend: str = "container",
+    backend: str = "harbor",
     smoke_receipt: Path | None = None,
+    stop_after_task: str | None = None,
 ) -> Path:
     plan_path = plan_path.expanduser().resolve()
     plan = load_preflight_plan(plan_path)
     season_id = plan["season"]["id"]
-    if season_id == "season-1" and backend != "container":
-        raise MatrixError("season-1 matrices require the container backend")
+    if season_id == "season-1" and backend not in {"container", "harbor"}:
+        raise MatrixError("season-1 matrices require a trusted isolated backend")
+    if stop_after_task is not None and stop_after_task not in plan["season"]["tasks"]:
+        raise MatrixError(f"unknown stop-after task: {stop_after_task}")
     smoke = None
     if season_id == "season-1":
         if smoke_receipt is None:
             raise MatrixError("season-1 matrices require a fresh --smoke-receipt")
         from .smoke import verify_smoke_receipt
 
-        smoke = verify_smoke_receipt(plan_path, plan, smoke_receipt)
+        smoke = verify_smoke_receipt(plan_path, plan, smoke_receipt, backend=backend)
     verify_frozen_inputs(root, plan)
     with SeasonLock(season_id):
         receipt_path = runs_dir() / f"matrix-{plan['plan_id']}-{uuid.uuid4().hex[:8]}.json"
@@ -1653,10 +1737,19 @@ def start_matrix(
                 "receipt_digest_sha256": smoke["receipt_digest_sha256"],
                 "smoke_id": smoke["smoke_id"],
             }
+        if stop_after_task is not None:
+            receipt["execution_window"] = {"stop_after_task": stop_after_task}
         receipt["receipt_path"] = str(receipt_path.resolve())
         _write_receipt(receipt_path, receipt)
         _claim_canonical_matrix(season_id, receipt_path, receipt)
-        _drive_matrix(root, plan_path, plan, receipt_path, receipt)
+        _drive_matrix(
+            root,
+            plan_path,
+            plan,
+            receipt_path,
+            receipt,
+            stop_after_task=stop_after_task,
+        )
         if receipt.get("status") == "complete":
             _seal_canonical_matrix(season_id, receipt_path, receipt)
     return receipt_path
@@ -1672,8 +1765,8 @@ def resume_matrix(root: Path, receipt_path: Path, *, backend: str | None = None)
     season_id = receipt.get("season")
     if not isinstance(season_id, str):
         raise MatrixError("matrix receipt has no season")
-    if season_id == "season-1" and receipt.get("backend") != "container":
-        raise MatrixError("season-1 matrices require the container backend")
+    if season_id == "season-1" and receipt.get("backend") not in {"container", "harbor"}:
+        raise MatrixError("season-1 matrices require a trusted isolated backend")
     plan_reference = receipt.get("plan")
     if not isinstance(plan_reference, dict) or not isinstance(plan_reference.get("path"), str):
         raise MatrixError("matrix receipt has no plan path")

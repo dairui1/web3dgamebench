@@ -158,7 +158,7 @@ def command_run(args: argparse.Namespace) -> int:
 def command_smoke(args: argparse.Namespace) -> int:
     from .smoke import run_smoke
 
-    receipt = run_smoke(project_root(), Path(args.plan))
+    receipt = run_smoke(project_root(), Path(args.plan), backend=args.backend)
     print(receipt)
     value = json.loads(receipt.read_text(encoding="utf-8"))
     return 0 if value.get("status") == "passed" else 1
@@ -261,8 +261,9 @@ def command_matrix(args: argparse.Namespace) -> int:
             receipt_path = start_matrix(
                 root,
                 plan_path,
-                backend=args.backend or "container",
+                backend=args.backend or "harbor",
                 smoke_receipt=(Path(args.smoke_receipt) if args.smoke_receipt else None),
+                stop_after_task=args.stop_after_task,
             )
     except MatrixInterrupted as error:
         print(error.receipt_path)
@@ -328,7 +329,11 @@ def command_fable(args: argparse.Namespace) -> int:
         else runs_dir() / f"fable-backfill-{core_plan.stem}.json"
     )
     result = run_backfill(
-        project_root(), core_plan, receipt, set(args.task) or None
+        project_root(),
+        core_plan,
+        receipt,
+        set(args.task) or None,
+        backend=args.backend,
     )
     print(result)
     return 0
@@ -348,10 +353,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--task", required=True)
     run.add_argument("--profile", required=True)
     run.add_argument("--attempt", type=int, default=1)
-    run.add_argument("--backend", choices=("native", "container"), default="container")
+    run.add_argument(
+        "--backend", choices=("native", "container", "harbor"), default="harbor"
+    )
     run.set_defaults(func=command_run)
     smoke = commands.add_parser("smoke")
     smoke.add_argument("--plan", required=True)
+    smoke.add_argument("--backend", choices=("container", "harbor"), default="harbor")
     smoke.set_defaults(func=command_smoke)
     vendor = commands.add_parser("vendor")
     vendor.set_defaults(func=command_vendor)
@@ -381,8 +389,9 @@ def build_parser() -> argparse.ArgumentParser:
     matrix_source.add_argument("--season")
     matrix_source.add_argument("--plan")
     matrix_source.add_argument("--resume")
-    matrix.add_argument("--backend", choices=("native", "container"))
+    matrix.add_argument("--backend", choices=("native", "container", "harbor"))
     matrix.add_argument("--smoke-receipt")
+    matrix.add_argument("--stop-after-task")
     matrix.set_defaults(func=command_matrix)
     publish = commands.add_parser("publish")
     publish_source = publish.add_mutually_exclusive_group(required=True)
@@ -405,6 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
     fable.add_argument("--core-plan", required=True)
     fable.add_argument("--receipt")
     fable.add_argument("--task", action="append", default=[])
+    fable.add_argument("--backend", choices=("container", "harbor"), default="harbor")
     fable.set_defaults(func=command_fable)
     return parser
 

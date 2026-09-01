@@ -44,15 +44,17 @@ The public catalog deliberately labels systems only after a vote is recorded or 
 
 ## Execution runtime
 
-The official Season 1 matrix is owned by the repository runner. It serializes tasks, runs the
+The official Season 1 matrix is owned by the repository runner. Harbor executes each candidate
+cell, while the repository serializes tasks, runs the
 Codex, Claude Code, and Pi families concurrently within a task, and serializes models within each
 family. Candidate containers use Docker init, a 1024-PID ceiling, a supervised Chromium process
 group, streamed trace files, and a two-hour cell deadline. The task barrier stops on infrastructure
 failure so an operator can classify and resume the same immutable receipt.
 
-Harbor is not an official backend. `experiments/harbor_parity/` can reproduce one bounded,
-non-scoring Bombsite Retake plumbing comparison, but its artifacts are deliberately outside the
-matrix and publication trust chain.
+Harbor job and trial artifacts are converted into the canonical run layout. `harbor.json` binds the
+raw job and trial results, while `harbor-task-lock.json` binds the generated task to the frozen
+task/profile inputs. The repository evaluator independently rebuilds and checks the collected
+workspace; the publisher continues to accept only a closed canonical matrix receipt.
 
 ## Ranking
 
