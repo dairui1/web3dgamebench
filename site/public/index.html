@@ -138,11 +138,17 @@
           </section>
           <div class="trace-workspace">
             <aside class="trace-rail">
-              <div class="trace-filters" role="group" aria-label="Trace event filters" data-i18n-aria="traceFilters">
-                <button type="button" data-trace-filter="all" aria-pressed="true">All</button>
-                <button type="button" data-trace-filter="agent" aria-pressed="false">Agent</button>
-                <button type="button" data-trace-filter="tools" aria-pressed="false">Tools</button>
-                <button type="button" data-trace-filter="errors" aria-pressed="false">Errors</button>
+              <div class="trace-rail-toolbar">
+                <div class="trace-filters" role="group" aria-label="Trace event filters" data-i18n-aria="traceFilters">
+                  <button type="button" data-trace-filter="all" aria-pressed="true">All</button>
+                  <button type="button" data-trace-filter="agent" aria-pressed="false">Agent</button>
+                  <button type="button" data-trace-filter="tools" aria-pressed="false">Tools</button>
+                  <button type="button" data-trace-filter="errors" aria-pressed="false">Errors</button>
+                </div>
+                <label class="trace-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="trace-search" type="search" autocomplete="off" placeholder="Search events and tool calls" aria-label="Search events and tool calls" data-i18n-placeholder="traceSearch" data-i18n-aria="traceSearch" />
+                </label>
               </div>
               <div id="trace-event-list" class="trace-event-list"></div>
             </aside>

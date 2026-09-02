@@ -25,6 +25,49 @@ const escapeHtml = (value) => String(value ?? '').replace(
   (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character],
 );
 
+function parseJson(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
+function unwrapContentBlocks(value) {
+  if (!Array.isArray(value) || !value.length) return value;
+  if (value.every((item) => item && typeof item === 'object' && typeof item.text === 'string')) {
+    return value.map((item) => item.text).join('\n');
+  }
+  return value;
+}
+
+export function formatTraceValue(value, tool = '') {
+  let parsed = unwrapContentBlocks(parseJson(value));
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const keys = Object.keys(parsed);
+    if (keys.length === 1 && typeof parsed.command === 'string') {
+      return { text: parsed.command, format: 'command' };
+    }
+  }
+  parsed = unwrapContentBlocks(parsed);
+  if (typeof parsed === 'string') {
+    const format = ['shell', 'bash', 'exec_command'].includes(tool) ? 'command' : 'text';
+    return { text: parsed, format };
+  }
+  if (parsed === null || parsed === undefined || parsed === '') return { text: '', format: 'text' };
+  return { text: JSON.stringify(parsed, null, 2), format: 'json' };
+}
+
+export function eventMatchesQuery(event, query) {
+  const needle = String(query || '').trim().toLocaleLowerCase();
+  if (!needle) return true;
+  return [event.title, event.tool, event.detail, event.output, event.kind, event.chapter]
+    .some((value) => String(value || '').toLocaleLowerCase().includes(needle));
+}
+
 const FILTERS = {
   all: () => true,
   agent: (event) => ['message', 'thought', 'plan'].includes(event.kind),
@@ -41,6 +84,7 @@ export function createReplayViewer({ translate, onTitle }) {
   let data = null;
   let traceId = null;
   let filter = 'all';
+  let query = '';
   let currentIndex = -1;
   let position = 0;
   let speed = 60;
@@ -54,7 +98,7 @@ export function createReplayViewer({ translate, onTitle }) {
     if (!data) return [];
     return data.events
       .map((event, index) => ({ event, index }))
-      .filter(({ event }) => FILTERS[filter](event))
+      .filter(({ event }) => FILTERS[filter](event) && eventMatchesQuery(event, query))
       .map(({ index }) => index);
   }
 
@@ -98,21 +142,75 @@ export function createReplayViewer({ translate, onTitle }) {
     frameId = requestAnimationFrame(tick);
   }
 
+  function valuePanel(label, value, tool, emptyKey, part) {
+    const formatted = formatTraceValue(value, part === 'input' ? tool : '');
+    const lines = formatted.text ? formatted.text.split('\n').length : 0;
+    const sizeLabel = lines > 1
+      ? t('traceLines', { count: lines })
+      : t('traceCharacters', { count: formatted.text.length });
+    return `
+      <section class="trace-io-panel" data-trace-panel="${part}">
+        <header>
+          <div><h3>${escapeHtml(label)}</h3><span>${escapeHtml(formatted.format.toUpperCase())}${formatted.text ? ` · ${escapeHtml(sizeLabel)}` : ''}</span></div>
+          ${formatted.text ? `<div class="trace-panel-actions"><button type="button" data-trace-expand="${part}">${escapeHtml(t('traceExpand'))}</button><button type="button" data-trace-copy="${part}">${escapeHtml(t('traceCopy'))}</button></div>` : ''}
+        </header>
+        ${formatted.text
+    ? `<pre class="trace-code trace-code-${formatted.format}"><code>${escapeHtml(formatted.text)}</code></pre>`
+    : `<p class="trace-io-empty">${escapeHtml(t(emptyKey))}</p>`}
+      </section>
+    `;
+  }
+
+  function bindDetailActions(event) {
+    detail.querySelectorAll('[data-trace-expand]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const panel = detail.querySelector(`[data-trace-panel="${button.dataset.traceExpand}"]`);
+        const expanded = panel.classList.toggle('expanded');
+        button.textContent = t(expanded ? 'traceCollapse' : 'traceExpand');
+      });
+    });
+    detail.querySelectorAll('[data-trace-copy]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const value = button.dataset.traceCopy === 'input' ? event.detail : event.output;
+        const text = formatTraceValue(value, button.dataset.traceCopy === 'input' ? event.tool : '').text;
+        try {
+          await navigator.clipboard.writeText(text);
+          button.textContent = t('traceCopied');
+          setTimeout(() => { button.textContent = t('traceCopy'); }, 1200);
+        } catch {
+          button.textContent = t('traceCopy');
+        }
+      });
+    });
+  }
+
   function renderDetail(index) {
     const event = data?.events[index];
     if (!event) return;
-    const output = event.output
-      ? `<section><h3>${t('traceOutput')}</h3><pre>${escapeHtml(event.output)}</pre></section>`
-      : '';
+    const isTool = ['tool', 'change'].includes(event.kind);
+    const kindLabel = escapeHtml(t(`traceKind_${event.kind}`));
     detail.innerHTML = `
       <header class="trace-detail-head">
-        <div><span class="trace-kind trace-kind-${escapeHtml(event.kind)}">${escapeHtml(t(`traceKind_${event.kind}`))}</span><span class="trace-phase">${escapeHtml(t(`tracePhase_${event.chapter}`))}</span></div>
+        <div><span class="trace-kind trace-kind-${escapeHtml(event.kind)}">${kindLabel}</span><span class="trace-phase">${escapeHtml(t(`tracePhase_${event.chapter}`))}</span>${isTool ? `<span class="trace-tool-status ${event.status === 'error' ? 'error' : 'ok'}">${escapeHtml(event.status || 'ok')}</span>` : ''}</div>
         <time>${formatTraceTime(event.atSeconds)}</time>
       </header>
       <h2>${escapeHtml(event.title)}</h2>
-      ${event.detail ? `<section><h3>${t('traceDetails')}</h3><pre>${escapeHtml(event.detail)}</pre></section>` : ''}
-      ${output}
+      ${isTool ? `
+        <div class="trace-tool-identity"><span>${kindLabel}</span><strong>${escapeHtml(event.tool || event.kind)}</strong><small>${escapeHtml(event.id || `#${index + 1}`)}</small></div>
+        <div class="trace-io-grid">
+          ${valuePanel(t('traceInput'), event.detail, event.tool, 'traceNoInput', 'input')}
+          ${valuePanel(t('traceOutput'), event.output, event.tool, 'traceNoOutput', 'output')}
+        </div>
+        <dl class="trace-metadata">
+          <div><dt>${escapeHtml(t('traceKind_tool'))}</dt><dd>${escapeHtml(event.tool || '—')}</dd></div>
+          <div><dt>${escapeHtml(t('traceMetadata'))}</dt><dd>${escapeHtml(t(`tracePhase_${event.chapter}`))} · ${formatTraceTime(event.atSeconds)}</dd></div>
+        </dl>
+      ` : `
+        ${event.detail ? valuePanel(t('traceDetails'), event.detail, '', 'traceNoInput', 'input') : ''}
+        ${event.output ? valuePanel(t('traceOutput'), event.output, '', 'traceNoOutput', 'output') : ''}
+      `}
     `;
+    bindDetailActions(event);
   }
 
   function activateRow(index, scroll) {
@@ -160,13 +258,19 @@ export function createReplayViewer({ translate, onTitle }) {
   function renderList() {
     if (!data) return;
     const indexes = filteredIndexes();
+    let previousChapter = null;
     list.innerHTML = indexes.length
       ? indexes.map((index) => {
         const event = data.events[index];
+        const chapter = event.chapter !== previousChapter
+          ? `<div class="trace-chapter-label"><span>${escapeHtml(t(`tracePhase_${event.chapter}`))}</span></div>`
+          : '';
+        previousChapter = event.chapter;
+        const isTool = ['tool', 'change'].includes(event.kind);
         return `
-          <button type="button" class="trace-event-row${index === currentIndex ? ' active' : ''}" data-event-index="${index}">
+          ${chapter}<button type="button" class="trace-event-row trace-event-${escapeHtml(event.kind)}${index === currentIndex ? ' active' : ''}" data-event-index="${index}">
             <span class="trace-event-time">${formatTraceTime(event.atSeconds)}</span>
-            <span class="trace-event-copy"><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(t(`traceKind_${event.kind}`))} · ${escapeHtml(t(`tracePhase_${event.chapter}`))}</small></span>
+            <span class="trace-event-copy"><strong>${escapeHtml(event.title)}</strong><small>${isTool ? `${escapeHtml(event.tool || t(`traceKind_${event.kind}`))} · ` : ''}${escapeHtml(t(`traceKind_${event.kind}`))}</small></span>
             <i class="trace-event-status ${event.status === 'error' ? 'error' : ''}" aria-hidden="true"></i>
           </button>
         `;
@@ -174,6 +278,15 @@ export function createReplayViewer({ translate, onTitle }) {
       : `<div class="trace-filter-empty">${t('traceNoEvents')}</div>`;
     list.querySelectorAll('[data-event-index]').forEach((button) => {
       button.addEventListener('click', () => seekEvent(Number(button.dataset.eventIndex)));
+    });
+  }
+
+  function renderFilterButtons() {
+    if (!data) return;
+    document.querySelectorAll('[data-trace-filter]').forEach((button) => {
+      const key = button.dataset.traceFilter;
+      const count = data.events.filter(FILTERS[key]).length;
+      button.innerHTML = `<span>${escapeHtml(t(`traceFilter_${key}`))}</span><b>${count}</b>`;
     });
   }
 
@@ -212,11 +325,12 @@ export function createReplayViewer({ translate, onTitle }) {
     if (!data) return;
     renderSummary();
     renderChapters();
+    renderFilterButtons();
     renderList();
     renderDetail(Math.max(0, currentIndex));
-    document.querySelectorAll('[data-trace-filter]').forEach((button) => {
-      button.textContent = t(`traceFilter_${button.dataset.traceFilter}`);
-    });
+    const search = document.querySelector('#trace-search');
+    search.placeholder = t('traceSearch');
+    search.setAttribute('aria-label', t('traceSearch'));
     document.querySelector('#trace-play').title = t(playing ? 'tracePause' : 'tracePlay');
   }
 
@@ -265,6 +379,10 @@ export function createReplayViewer({ translate, onTitle }) {
       document.querySelectorAll('[data-trace-filter]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
       renderList();
     });
+  });
+  document.querySelector('#trace-search').addEventListener('input', (event) => {
+    query = event.target.value;
+    renderList();
   });
 
   function keyboard(event) {
