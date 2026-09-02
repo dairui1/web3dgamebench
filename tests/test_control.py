@@ -11,6 +11,8 @@ import web3dgamebench.control as control_module
 from web3dgamebench.control import (
     InvalidateRequest,
     MatrixSupervisor,
+    RetryRequest,
+    _requeue_matrix_cells,
     StartRequest,
     create_control_app,
 )
@@ -58,6 +60,7 @@ def test_control_app_is_local_token_guarded_and_lists_frozen_options(
     assert 'id="sel-smoke"' not in html
     assert "技术详情" in html
     assert 'id="btn-invalidate"' in html
+    assert 'id="btn-retry"' in html
     assert 'id="dlg-invalidate-reason"' in html
     state = supervisor.snapshot()
     assert state["controls"]["can_prepare"] is True
@@ -116,6 +119,102 @@ def test_prepare_action_generates_a_fresh_season_one_plan_and_smoke(
     )
     with pytest.raises(RuntimeError, match="already exists"):
         supervisor.prepare()
+
+
+def test_retry_action_requeues_failed_cells_and_resumes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    supervisor = MatrixSupervisor(ROOT, tmp_path)
+    receipt = _write_json(tmp_path / "matrix.json", {"status": "incomplete"})
+    monkeypatch.setattr(
+        supervisor,
+        "_canonical",
+        lambda: {"season": "season-1", "receipt": str(receipt)},
+    )
+    monkeypatch.setattr(supervisor, "_refresh_runner", lambda: {"status": "exited"})
+    monkeypatch.setattr(
+        control_module,
+        "_requeue_matrix_cells",
+        lambda path, cell_ids, requested_by: ["task::profile::a1"],
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        supervisor,
+        "_spawn",
+        lambda operation, argv, receipt=None: captured.update(
+            operation=operation, argv=argv, receipt=receipt
+        ),
+    )
+
+    assert supervisor.retry_failed() == ["task::profile::a1"]
+    assert captured["operation"] == "matrix-retry"
+    assert captured["receipt"] == receipt.resolve()
+    assert "web3dgamebench.control_worker" in captured["argv"]
+    assert captured["argv"][-2:] == ["--receipt", str(receipt.resolve())]
+
+
+def test_retry_preserves_failed_attempt_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+    receipt = {
+        "season": "season-1",
+        "status": "incomplete",
+        "summary": {"candidate_failures": 1},
+        "cells": [
+            {
+                "cell_id": "task::profile::a1",
+                "status": "evidence-failure",
+                "run": "/runs/recovery",
+                "evaluation": "/runs/recovery/evaluation/report.json",
+                "playable": False,
+                "passed": False,
+                "trusted": True,
+                "evidence_failures": ["no canvas"],
+                "recovery_attempts": [{"source_run": "/runs/original"}],
+                "repair": {"assisted": True, "penalty_points": 100},
+            }
+        ],
+    }
+    written: dict[str, object] = {}
+    monkeypatch.setattr(control_module, "load_matrix_receipt", lambda _path: receipt)
+    monkeypatch.setattr(control_module, "_assert_canonical_matrix", lambda *_args: None)
+    monkeypatch.setattr(
+        control_module,
+        "_write_receipt",
+        lambda _path, value: written.update(value=value),
+    )
+
+    assert _requeue_matrix_cells(tmp_path / "matrix.json") == ["task::profile::a1"]
+    cell = receipt["cells"][0]
+    assert cell["status"] == "pending"
+    assert cell["playable"] is None
+    assert cell["previous_runs"] == ["/runs/original", "/runs/recovery"]
+    assert cell["retry_history"][0]["repair"]["penalty_points"] == 100
+    assert "run" not in cell
+    assert "recovery_attempts" not in cell
+    assert written["value"] is receipt
+
+
+def test_retry_endpoint_is_token_guarded(monkeypatch, tmp_path: Path) -> None:
+    app = create_control_app(ROOT, tmp_path)
+    supervisor = app.state.supervisor
+    monkeypatch.setattr(
+        supervisor, "retry_failed", lambda _cell_ids: ["task::profile::a1"]
+    )
+    endpoint = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/api/actions/retry"
+    )
+
+    with pytest.raises(HTTPException, match="403"):
+        endpoint(RetryRequest(), None)
+    assert endpoint(RetryRequest(), supervisor.token) == {
+        "status": "accepted",
+        "cell_ids": ["task::profile::a1"],
+        "count": 1,
+    }
 
 
 def test_managed_operations_restore_standard_tool_paths(

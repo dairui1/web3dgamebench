@@ -85,6 +85,10 @@
                 title="继续：从正式回执恢复未完成的单元格" aria-label="继续 Matrix">
           <svg class="icon" aria-hidden="true"><use href="#i-rotate-cw"/></svg><span>继续</span>
         </button>
+        <button type="button" class="btn" id="btn-retry" data-action="retry" disabled
+                title="重跑失败项：保留历史记录，将失败单元格重新排队并继续 Matrix" aria-label="重跑失败单元格">
+          <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>重跑失败项</span>
+        </button>
         <button type="button" class="btn btn-danger" id="btn-invalidate" data-action="invalidate" disabled
                 title="作废：保留审计记录并释放本季正式 Matrix，需要填写原因并确认" aria-label="作废正式 Matrix">
           <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span>作废</span>

@@ -19,6 +19,9 @@ from pydantic import BaseModel
 
 from .matrix import (
     MatrixError,
+    SeasonLock,
+    _assert_canonical_matrix,
+    _write_receipt,
     invalidate_canonical_matrix,
     load_matrix_receipt,
     request_matrix_pause,
@@ -53,6 +56,97 @@ class StartRequest(BaseModel):
 
 class InvalidateRequest(BaseModel):
     reason: str
+
+
+class RetryRequest(BaseModel):
+    cell_ids: list[str] | None = None
+
+
+def _requeue_matrix_cells(
+    receipt_path: Path,
+    cell_ids: list[str] | None = None,
+    *,
+    requested_by: str = "operator",
+) -> list[str]:
+    """Requeue failed cells without changing their frozen plan."""
+
+    receipt_path = receipt_path.expanduser().resolve()
+    receipt = load_matrix_receipt(receipt_path)
+    season_id = receipt.get("season")
+    if not isinstance(season_id, str):
+        raise MatrixError("matrix receipt has no season")
+    requested = set(cell_ids or [])
+    retryable = {"candidate-failure", "evidence-failure", "infrastructure-error"}
+    selected = [
+        cell
+        for cell in receipt.get("cells", [])
+        if isinstance(cell, dict)
+        and cell.get("status") in retryable
+        and (not requested or cell.get("cell_id") in requested)
+    ]
+    missing = requested - {cell.get("cell_id") for cell in selected}
+    if missing:
+        raise MatrixError(
+            "requested cells are not currently retryable: " + ", ".join(sorted(missing))
+        )
+    if not selected:
+        raise MatrixError("matrix has no failed cells to retry")
+
+    with SeasonLock(season_id):
+        _assert_canonical_matrix(season_id, receipt_path, receipt)
+        retried_at = _now()
+        for cell in selected:
+            cell.setdefault("retry_history", []).append(
+                {
+                    "retry": len(cell.get("retry_history") or []) + 1,
+                    "requested_at": retried_at,
+                    "requested_by": requested_by,
+                    "status": cell.get("status"),
+                    "run": cell.get("run"),
+                    "evaluation": cell.get("evaluation"),
+                    "playable": cell.get("playable"),
+                    "infrastructure_error": cell.get("infrastructure_error"),
+                    "evidence_failures": cell.get("evidence_failures"),
+                    "recovery_attempts": cell.get("recovery_attempts"),
+                    "repair": cell.get("repair"),
+                }
+            )
+            previous_runs = cell.setdefault("previous_runs", [])
+            prior_attempts = cell.get("recovery_attempts") or []
+            for run in [
+                *(item.get("source_run") for item in prior_attempts),
+                cell.get("run"),
+            ]:
+                if isinstance(run, str) and run not in previous_runs:
+                    previous_runs.append(run)
+            for key in (
+                "run",
+                "evaluation",
+                "phase",
+                "started_at",
+                "completed_at",
+                "infrastructure_error",
+                "evidence_failures",
+                "admission_warnings",
+                "artifacts",
+                "recovery_attempts",
+                "repair",
+            ):
+                cell.pop(key, None)
+            cell.update(
+                status="pending", passed=False, trusted=False, playable=None
+            )
+        retried = [cell["cell_id"] for cell in selected]
+        receipt.update(status="incomplete", completed_at=None, summary=None)
+        receipt.setdefault("manual_retries", []).append(
+            {
+                "requested_at": retried_at,
+                "requested_by": requested_by,
+                "cell_ids": retried,
+            }
+        )
+        _write_receipt(receipt_path, receipt)
+    return retried
 
 
 class MatrixSupervisor:
@@ -251,6 +345,9 @@ class MatrixSupervisor:
                         "evaluation",
                         "infrastructure_error",
                         "evidence_failures",
+                        "retry_history",
+                        "previous_runs",
+                        "recovery_attempts",
                     )
                 }
             )
@@ -301,6 +398,13 @@ class MatrixSupervisor:
         plans, smokes = self._options()
         active = runner.get("status") == "running" and self._pid_alive(runner.get("pid"))
         receipt_status = receipt.get("status") if receipt else None
+        failed_cells = [
+            cell
+            for cell in (receipt.get("cells", []) if receipt else [])
+            if isinstance(cell, dict)
+            and cell.get("status")
+            in {"candidate-failure", "evidence-failure", "infrastructure-error"}
+        ]
         has_canonical = canonical is not None
         return {
             "server_time": _now(),
@@ -316,6 +420,11 @@ class MatrixSupervisor:
                 and receipt_status in {"incomplete", "interrupted", "running"},
                 "can_pause": active and has_canonical and receipt_status == "running",
                 "can_interrupt": active,
+                "can_retry": not active
+                and has_canonical
+                and receipt_status in {"incomplete", "interrupted"}
+                and bool(failed_cells),
+                "retryable_cells": len(failed_cells),
                 "can_invalidate": not active
                 and has_canonical
                 and receipt_status in {"incomplete", "interrupted", "running"},
@@ -430,15 +539,41 @@ class MatrixSupervisor:
             [
                 sys.executable,
                 "-m",
-                "web3dgamebench.cli",
-                "matrix",
-                "--resume",
+                "web3dgamebench.control_worker",
+                "--root",
+                str(self.root),
+                "--receipt",
                 str(receipt),
-                "--backend",
-                "harbor",
             ],
             receipt=receipt,
         )
+
+    def retry_failed(self, cell_ids: list[str] | None = None) -> list[str]:
+        runner = self._refresh_runner()
+        if runner.get("status") == "running" and self._pid_alive(runner.get("pid")):
+            raise RuntimeError("an active matrix cannot be changed")
+        canonical = self._canonical()
+        if canonical is None or not isinstance(canonical.get("receipt"), str):
+            raise RuntimeError("there is no canonical matrix to retry")
+        receipt = self._safe_option(canonical["receipt"], self.runs)
+        retried = _requeue_matrix_cells(
+            receipt, cell_ids, requested_by="local-webui"
+        )
+        self._spawn(
+            "matrix-retry",
+            [
+                sys.executable,
+                "-m",
+                "web3dgamebench.control_worker",
+                "--root",
+                str(self.root),
+                "--receipt",
+                str(receipt),
+            ],
+            receipt=receipt,
+        )
+        self._event("failed-cells-requeued", cell_ids=retried)
+        return retried
 
     def pause(self) -> Path:
         canonical = self._canonical()
@@ -585,6 +720,18 @@ def create_control_app(root: Path, state_root: Path | None = None) -> FastAPI:
         except (RuntimeError, ValueError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {"status": "accepted"}
+
+    @app.post("/api/actions/retry", status_code=202)
+    def retry(
+        body: RetryRequest,
+        x_web3d_control_token: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        authorize(x_web3d_control_token)
+        try:
+            retried = supervisor.retry_failed(body.cell_ids)
+        except (MatrixError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": "accepted", "cell_ids": retried, "count": len(retried)}
 
     @app.post("/api/actions/pause", status_code=202)
     def pause(x_web3d_control_token: str | None = Header(default=None)) -> dict[str, str]:

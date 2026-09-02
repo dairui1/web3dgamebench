@@ -38,6 +38,7 @@
     'matrix-prepare': '准备运行配置',
     'matrix-start': '启动 Matrix',
     'matrix-resume': '继续 Matrix',
+    'matrix-retry': '重跑失败项',
   };
 
   const ACTION_LABEL = {
@@ -46,6 +47,7 @@
     pause: '暂停',
     interrupt: '中断',
     resume: '继续',
+    retry: '重跑失败项',
     invalidate: '作废',
   };
 
@@ -496,6 +498,7 @@
       pause: $('btn-pause'),
       interrupt: $('btn-interrupt'),
       resume: $('btn-resume'),
+      retry: $('btn-retry'),
       invalidate: $('btn-invalidate'),
     };
     const hasCombo = app.combos.length > 0;
@@ -504,6 +507,7 @@
     buttons.pause.disabled = app.busy || controls.can_pause !== true;
     buttons.interrupt.disabled = app.busy || controls.can_interrupt !== true;
     buttons.resume.disabled = app.busy || controls.can_resume !== true;
+    buttons.retry.disabled = app.busy || controls.can_retry !== true;
     buttons.invalidate.disabled = app.busy || controls.can_invalidate !== true;
 
     const runnerMeta = RUNNER_STATUS[d.runner.status] || { label: d.runner.status || '--', chip: 'chip-neutral' };
@@ -528,7 +532,10 @@
       else if (app.combos.length === 1) hint = '运行配置已自动选定并就绪，点击「启动」创建本季的正式 Matrix。';
       else hint = '在「启动前配置」中选择一套运行配置，然后点击「启动」创建本季的正式 Matrix。';
     } else if (controls.can_resume) {
-      hint = `正式 Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」恢复，或保留审计记录后「作废」。`;
+      const retryHint = controls.can_retry
+        ? `当前有 ${controls.retryable_cells || 0} 个失败单元格；额度恢复后可点「重跑失败项」重新排队。`
+        : '';
+      hint = `正式 Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」恢复。${retryHint}`;
     } else if (receiptStatus === 'complete') {
       hint = '正式 Matrix 已完成并封存，没有可执行的操作。';
     } else if (receiptStatus === 'invalidated') {
@@ -1183,7 +1190,7 @@
 
     const statusLine = $('drawer-status');
     const noteText = meta.terminal
-      ? '终态：候选失败或证据失败由 Matrix 记录为最终结果，不会重试。'
+      ? '本轮失败已记录；可在执行进程停止后通过「重跑失败项」重新排队。'
       : meta.resumable
         ? '可恢复：点击「继续」后会重新执行此单元格。'
         : cell.status === 'running'
@@ -1419,6 +1426,7 @@
     $('btn-pause').addEventListener('click', () => runAction('pause', null, '已请求暂停：执行进程将在下一个任务边界停止。'));
     $('btn-interrupt').addEventListener('click', openInterruptDialog);
     $('btn-resume').addEventListener('click', () => runAction('resume', null, '已请求继续：执行进程正在从正式回执恢复。'));
+    $('btn-retry').addEventListener('click', () => runAction('retry', {}, '失败单元格已保留历史记录、重新排队，并开始继续执行 Matrix。'));
     $('btn-invalidate').addEventListener('click', openInvalidateDialog);
     $('btn-refresh').addEventListener('click', () => {
       const btn = $('btn-refresh');
