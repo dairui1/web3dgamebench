@@ -55,6 +55,8 @@ def test_candidate_commands_have_a_bounded_runtime() -> None:
     config = load_container_config(ROOT)
     assert config.command_timeout_seconds == 1200
     assert config.candidate_total_timeout_seconds == 7200
+    assert config.pi_adapter.runtime_evidence_schema_version == 3
+    assert config.pi_adapter.calibration_total_timeout_seconds == 2700
     assert config.pids_limit == 1024
 
 

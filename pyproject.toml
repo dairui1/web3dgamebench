@@ -9,7 +9,10 @@ description = "Reproducible Three.js game benchmark and blind preference arena"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = []
+dependencies = [
+    "fastapi>=0.116,<1",
+    "uvicorn>=0.35,<1",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "ruff>=0.9"]

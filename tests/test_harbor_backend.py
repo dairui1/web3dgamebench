@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from web3dgamebench.config import load_profiles
-from web3dgamebench.container import ContainerConfig
+from web3dgamebench.container import ContainerConfig, PiAdapterConfig
 from web3dgamebench.harbor_backend import (
     HARBOR_COMMIT,
     HarborBackendError,
@@ -31,6 +31,15 @@ def container_config() -> ContainerConfig:
         command_timeout_seconds=1200,
         candidate_total_timeout_seconds=7200,
         pids_limit=1024,
+        pi_adapter=PiAdapterConfig(
+            version="web3dgamebench-pi-adapter-v3",
+            upstream_pi_goal_version="0.54.4",
+            runtime_evidence_schema_version=3,
+            verification_window_seconds=1200,
+            repeat_verification_warning=2,
+            repeat_verification_terminate=3,
+            calibration_total_timeout_seconds=2700,
+        ),
     )
 
 
@@ -42,11 +51,13 @@ def minimal_root(tmp_path: Path) -> Path:
         "infra/candidate/codex_goal_runner.py",
         "infra/candidate/egress_proxy.py",
         "infra/candidate/pi_command_timeout.js",
-        "infra/candidate/pi_goal_runner.ts",
     ):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("frozen", encoding="utf-8")
+    fork = root / "infra/candidate/pi-goal-benchmark"
+    fork.mkdir(parents=True)
+    (fork / "benchmark.ts").write_text("frozen", encoding="utf-8")
     return root
 
 
@@ -68,6 +79,7 @@ def test_harbor_task_materialization_is_profile_generic_and_preserves_boundaries
         profile,
         "instruction",
         container_config(),
+        7200,
     )
 
     task_toml = (task / "task.toml").read_text(encoding="utf-8")

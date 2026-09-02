@@ -23,7 +23,7 @@ model = "claude-opus-5"
 
 [profiles.claude-fable-default]
 harness = "claude-code"
-model = "claude-fable-5"
+model = "claude-fable-5-1"
 
 [profiles.pi-deepseek-v4-flash]
 harness = "pi"

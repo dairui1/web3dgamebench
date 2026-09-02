@@ -67,12 +67,15 @@ def _copy_runtime_assets(root: Path, environment: Path) -> None:
         "infra/candidate/codex_goal_runner.py",
         "infra/candidate/egress_proxy.py",
         "infra/candidate/pi_command_timeout.js",
-        "infra/candidate/pi_goal_runner.ts",
     ):
         source = root / relative
         if not source.is_file():
             raise HarborBackendError(f"required frozen runtime asset is missing: {source}")
         shutil.copy2(source, environment / source.name)
+    goal_fork = root / "infra/candidate/pi-goal-benchmark"
+    if not goal_fork.is_dir():
+        raise HarborBackendError(f"required frozen runtime asset is missing: {goal_fork}")
+    shutil.copytree(goal_fork, environment / goal_fork.name)
 
 
 def _write_task(
@@ -83,6 +86,7 @@ def _write_task(
     profile: Profile,
     instruction: str,
     config: ContainerConfig,
+    candidate_timeout_seconds: int,
 ) -> Path:
     environment = task_root / "environment"
     tests = task_root / "tests"
@@ -103,7 +107,7 @@ COPY npm-cache/ /vendor/npm-cache/
 COPY codex_goal_runner.py /usr/local/bin/web3dgamebench-codex-goal
 COPY chromium /usr/local/bin/chromium
 COPY pi_command_timeout.js /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js
-COPY pi_goal_runner.ts /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts
+COPY pi-goal-benchmark/ /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal/
 RUN chmod 0555 /usr/local/bin/web3dgamebench-codex-goal /usr/local/bin/chromium \\
     && mkdir -p /workspace \\
     && chown candidate:candidate /workspace
@@ -191,7 +195,7 @@ source_goal_sha256 = "{brief_sha}"
 harbor_commit = "{HARBOR_COMMIT}"
 
 [agent]
-timeout_sec = {float(config.candidate_total_timeout_seconds)}
+timeout_sec = {float(candidate_timeout_seconds)}
 user = "candidate"
 
 [verifier]
@@ -248,9 +252,15 @@ def execute_harbor(
     instruction: str,
     invocation: Invocation,
     cancel_event: threading.Event | None = None,
+    candidate_timeout_seconds: int | None = None,
 ) -> HarborResult:
     version = harbor_version()
     config = load_container_config(root)
+    effective_timeout_seconds = (
+        candidate_timeout_seconds
+        if candidate_timeout_seconds is not None
+        else config.candidate_total_timeout_seconds
+    )
     harbor_root = run_root / "harbor"
     task_root = _write_task(
         root,
@@ -260,6 +270,7 @@ def execute_harbor(
         profile,
         instruction,
         config,
+        effective_timeout_seconds,
     )
     adapter_lock = {
         "schema_version": 1,
@@ -270,6 +281,17 @@ def execute_harbor(
         "generated_task_sha256": file_tree_sha256(task_root),
         "harbor_version": version,
         "harbor_commit": HARBOR_COMMIT,
+        "pi_adapter": (
+            {
+                "version": config.pi_adapter.version,
+                "upstream_pi_goal_version": config.pi_adapter.upstream_pi_goal_version,
+                "runtime_evidence_schema_version": (
+                    config.pi_adapter.runtime_evidence_schema_version
+                ),
+            }
+            if profile.harness == "pi"
+            else None
+        ),
     }
     adapter_lock_path = run_root / "harbor-task-lock.json"
     adapter_lock_path.write_text(json.dumps(adapter_lock, indent=2) + "\n")
@@ -290,6 +312,9 @@ def execute_harbor(
     environment["WEB3DGAMEBENCH_INVOCATION_JSON"] = json.dumps(payload, separators=(",", ":"))
     environment["WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS"] = str(
         config.command_timeout_seconds
+    )
+    environment["WEB3DGAMEBENCH_PI_ADAPTER_ENV_JSON"] = json.dumps(
+        config.pi_adapter.environment(), separators=(",", ":")
     )
     environment.setdefault("CODEX_AUTH_JSON_PATH", str(Path.home() / ".codex/auth.json"))
     argv = [
@@ -319,7 +344,7 @@ def execute_harbor(
         env=environment,
         input_text=None,
         cancel_event=cancel_event,
-        timeout_seconds=config.candidate_total_timeout_seconds + 900,
+        timeout_seconds=effective_timeout_seconds + 900,
         stdout_path=cli_stdout,
         stderr_path=cli_stderr,
     )
@@ -393,5 +418,13 @@ def execute_harbor(
             "WEB3DGAMEBENCH_INVOCATION_JSON": "<passed>",
             **({"OPENCODE_GO_APIKEY": "<passed>"} if profile.harness == "pi" else {}),
         },
-        failure_scope=None if successful else "harbor-trial",
+        failure_scope=(
+            None
+            if successful
+            else "candidate-non-termination"
+            if exception_summary
+            and "agent" in str(exception_summary.get("type", "")).casefold()
+            and "timeout" in str(exception_summary.get("type", "")).casefold()
+            else "harbor-trial"
+        ),
     )

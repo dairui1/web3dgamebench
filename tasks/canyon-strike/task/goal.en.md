@@ -8,13 +8,9 @@ The player must fly through a mountain canyon, destroy three ground emplacements
 
 ## Operational completion contract
 
-The feature lists below define the intended submission and its quality criteria. They do not require exhaustive self-proof. Complete the goal when all of the following operational checks pass:
+Implement the game described below. The Goal is complete when `npm run build` succeeds and emits `dist/`.
 
-- `npm run build` succeeds and emits the static production bundle to `dist/`.
-- The production build loads at 1440 x 900 and 390 x 844 with a visible, nonblank, interactive 3D scene, no horizontal overflow beyond 2 CSS pixels, and no uncaught page exception or `console.error` during the checked flow.
-- One brief smoke check at each viewport confirms that the game can enter its active play state, one primary control changes observable game state, and restart returns to a valid initial state.
-
-Keep these checks bounded. Rerun a failed check only after a relevant fix, and stop once it passes. Do not create an autopilot or repeatedly run full victories, losses, missions, matches, races, services, nights, courses, quests, fights, or puzzle solutions solely to prove completion. Those paths, feature completeness, balance, polish, and game feel are evaluated after submission; shortcomings affect the result, not whether the agent must continue self-testing. Report only the checks actually run.
+Do not write or run browser automation, automated runtime checks, autopilots, or full playthroughs. Runtime behavior, responsiveness, feature completeness, balance, polish, and game feel are evaluated after submission. Report only the build you actually ran.
 
 ## Target game systems
 
@@ -34,7 +30,7 @@ Keep these checks bounded. Rerun a failed check only after a relevant fix, and s
 2. Implement both weapons, lock-on behavior, all enemy types, health, and mission state transitions.
 3. Build the complete target sequence, extraction requirement, HUD, feedback, and restart flow.
 4. Improve spatial composition, lighting, effects, enemy readability, and sense of speed.
-5. Build once after the final relevant change, then run the bounded operational smoke checks at 1440 x 900 and 390 x 844. Fix only observed build, startup, blank-frame, input, restart, exception, or layout failures before completing.
+5. After the final relevant change, run `npm run build` once. If it succeeds and emits `dist/`, stop; post-submission evaluation handles runtime behavior.
 
 ## Quality targets
 
@@ -44,7 +40,7 @@ Keep these checks bounded. Rerun a failed check only after a relevant fix, and s
 - Victory requires the specified actions in order; it cannot occur through waiting or a debug shortcut.
 - The page resizes without resetting the mission or breaking input.
 
-- At both evaluated viewports, horizontal page overflow stays within 2 CSS pixels and the tested flow emits no uncaught page exception or `console.error` output.
+- At 1440 x 900 and 390 x 844, horizontal page overflow stays within 2 CSS pixels and the runtime emits no uncaught page exception or `console.error` output.
 
 ## Runtime inspection contract
 
@@ -68,4 +64,4 @@ You may add fields. Do not expose evaluator-only shortcuts or callable functions
 
 ## Constraints and final evidence
 
-Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report the production build result and the two bounded viewport smoke checks honestly. Full win/loss or end-to-end playthrough evidence is neither required nor requested.
+Use the supplied Three.js dependency and starter toolchain. Make no runtime network requests and fetch no packages or external assets. Keep all code and generated assets in the workspace. The static production build must be emitted to `dist/` by `npm run build`. Before completion, report only the production build result; do not create additional automated verification.

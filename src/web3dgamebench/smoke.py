@@ -32,9 +32,27 @@ _PROFILES = (
 _MAX_AGE = timedelta(hours=6)
 _TASK = """# Harness smoke contract
 
-Run `npm --version` and `chromium --version`. Then create `smoke.txt` containing
-exactly `SMOKE_OK` followed by one newline. Read it back, and complete the active
-goal only after all three checks succeed. Do not create any other project files.
+First create `smoke.txt` containing exactly `SMOKE_OK` followed by one newline.
+Then run `npm --version` and `chromium --version`, and read `smoke.txt` back.
+Finally run `npm run build` and complete the active goal immediately when it
+succeeds. Do not run browser automation or create any other project files. The
+supplied fixture is intentionally minimal; do not modify it.
+"""
+
+_FIXTURE = """<!doctype html>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;overflow:hidden}canvas{width:100vw;height:100vh}.control{position:fixed;z-index:2;top:8px;padding:16px}.restart{right:8px}</style>
+<canvas></canvas><button class="start control">Start</button><button class="restart control" aria-label="Restart">Restart</button>
+<script src="app.js"></script>
+"""
+
+_FIXTURE_SCRIPT = """
+const state=window.__WEB3DGAMEBENCH__={phase:'ready',restartCount:0,moves:0};
+const canvas=document.querySelector('canvas'),context=canvas.getContext('2d');canvas.width=390;canvas.height=844;
+const gradient=context.createLinearGradient(0,0,390,844);gradient.addColorStop(0,'#e63946');gradient.addColorStop(.5,'#2a9d8f');gradient.addColorStop(1,'#264653');context.fillStyle=gradient;context.fillRect(0,0,390,844);
+document.querySelector('.start').onclick=()=>state.phase='playing';
+document.querySelector('.restart').onclick=()=>{state.phase='playing';state.restartCount+=1};
+addEventListener('touchmove',()=>state.moves+=1);addEventListener('keydown',event=>{if(event.key==='r'){state.phase='playing';state.restartCount+=1}else state.moves+=1});
 """
 
 
@@ -73,8 +91,22 @@ def _probe(
     workspace.mkdir(parents=True)
     (workspace / "TASK.md").write_text(_TASK, encoding="utf-8")
     (workspace / "package.json").write_text(
-        '{"name":"web3dgamebench-smoke","private":true}\n', encoding="utf-8"
+        json.dumps(
+            {
+                "name": "web3dgamebench-smoke",
+                "private": True,
+                "scripts": {
+                    "build": "rm -rf dist && mkdir dist && cp -R src/. dist/"
+                },
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
     )
+    (workspace / "src").mkdir()
+    (workspace / "src/index.html").write_text(_FIXTURE, encoding="utf-8")
+    (workspace / "src/app.js").write_text(_FIXTURE_SCRIPT, encoding="utf-8")
     invocation = build_invocation(
         profile,
         Path("/workspace"),
@@ -82,6 +114,7 @@ def _probe(
         isolation="container",
         goal_mode="external-goal",
         goal_completion="contract-and-evidence",
+        task_sha256=hashlib.sha256(_TASK.encode()).hexdigest(),
     )
     config = load_container_config(root)
     credential_dir = probe_root / profile.harness / "runtime-home"
@@ -115,6 +148,7 @@ def _probe(
                 instruction=_TASK,
                 invocation=invocation,
                 cancel_event=cancel_event,
+                candidate_timeout_seconds=config.command_timeout_seconds,
             )
             environment_names = result.environment_names
         else:

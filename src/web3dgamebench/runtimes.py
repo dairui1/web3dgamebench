@@ -35,8 +35,9 @@ class Invocation:
     goal_activation: GoalActivation | None
 
 
-_GOAL_CONTROL_VERSION = "web3dgamebench-native-goal-v2"
-_GOAL_OBJECTIVE = "Complete and verify the benchmark contract in the unmodified TASK.md."
+_GOAL_CONTROL_VERSION = "web3dgamebench-operational-completion-v4"
+_RUNTIME_EVIDENCE_SCHEMA_VERSION = 3
+_GOAL_OBJECTIVE = "Implement TASK.md and stop after a successful npm run build."
 
 
 def _sha256_text(value: str) -> str:
@@ -47,10 +48,10 @@ def _control_prompt() -> str:
     common = f"""Web3DGameBench external persistent-goal control ({_GOAL_CONTROL_VERSION}).
 This control is supplied by the benchmark runner and is separate from TASK.md.
 Persistent objective: {_GOAL_OBJECTIVE}
-Keep working autonomously across context compaction until the complete task contract is implemented.
-Before finishing, build the production bundle and inspect the game at every required viewport.
-Finish only after the implementation and truthful verification evidence satisfy the task contract.
-Do not weaken, rewrite, or add this control to TASK.md, and do not claim checks you did not run."""
+Keep working autonomously across context compaction until the game is implemented and npm run build succeeds.
+Stop immediately after that successful build. Do not write or run browser automation, automated runtime checks, autopilots, or full playthroughs.
+Runtime behavior, responsiveness, feature completeness, balance, polish, and game feel are evaluated after submission.
+Keep TASK.md unmodified. Do not add this control to it or claim a build you did not run."""
     return common
 
 
@@ -80,13 +81,13 @@ def _goal_activation(
         activation_method = "claude-code-native-slash-goal"
         evidence = "trace:goal-status"
     elif profile.harness == "pi":
-        activation_method = "pi-goal-native-slash-command"
-        evidence = "trace:goal-state"
+        activation_method = "web3dgamebench-pi-adapter-managed-run"
+        evidence = "trace:web3dgamebench-lifecycle"
     else:
         raise ValueError(f"unsupported harness: {profile.harness}")
 
     receipt = {
-        "schema_version": 1,
+        "schema_version": _RUNTIME_EVIDENCE_SCHEMA_VERSION,
         "control_version": _GOAL_CONTROL_VERSION,
         "mode": goal_mode,
         "completion": goal_completion,
@@ -122,7 +123,8 @@ def goal_activation_status(activation: GoalActivation, stdout: str) -> str:
             event.get("status")
             for event in reversed(lifecycle)
             if event["tool"] == "update_goal"
-            and event.get("status") in {"complete", "blocked"}
+            and event.get("status")
+            in {"complete", "blocked", "interrupted", "timed_out"}
         ),
         None,
     )
@@ -175,6 +177,14 @@ def _native_goal_events(event: dict) -> list[dict[str, str]]:
         found.append({"tool": "update_goal", "status": status})
     if event.get("type") == "entry_appended":
         entry = event.get("entry")
+        if (
+            isinstance(entry, dict)
+            and entry.get("customType") == "web3dgamebench-lifecycle"
+        ):
+            data = entry.get("data")
+            status = data.get("status") if isinstance(data, dict) else None
+            if status in {"complete", "blocked", "interrupted", "timed_out"}:
+                found.append({"tool": "update_goal", "status": status})
         if isinstance(entry, dict) and entry.get("customType") == "goal-state":
             data = entry.get("data")
             goal = data.get("goal") if isinstance(data, dict) else None
@@ -199,8 +209,18 @@ def _named_goal_tools(value: object) -> list[dict[str, str]]:
             ),
             None,
         )
-        if name in {"create_goal", "get_goal", "update_goal"}:
-            item = {"tool": name}
+        if name in {
+            "create_goal",
+            "get_goal",
+            "update_goal",
+            "benchmark_complete",
+            "benchmark_blocked",
+        }:
+            normalized_name = {
+                "benchmark_complete": "update_goal",
+                "benchmark_blocked": "update_goal",
+            }.get(name, name)
+            item = {"tool": normalized_name}
             arguments = value.get("arguments", value.get("args", value.get("input")))
             if isinstance(arguments, str):
                 try:
@@ -211,7 +231,11 @@ def _named_goal_tools(value: object) -> list[dict[str, str]]:
                 objective = arguments.get("objective")
                 if isinstance(objective, str):
                     item["objective_sha256"] = _sha256_text(objective)
-            if name == "update_goal" and isinstance(arguments, dict):
+            if name in {"benchmark_complete", "benchmark_blocked"}:
+                item["status"] = (
+                    "complete" if name == "benchmark_complete" else "blocked"
+                )
+            elif name == "update_goal" and isinstance(arguments, dict):
                 status = arguments.get("status")
                 if isinstance(status, str):
                     item["status"] = status
@@ -232,6 +256,7 @@ def build_invocation(
     isolation: str = "runtime",
     goal_mode: str | None = None,
     goal_completion: str | None = None,
+    task_sha256: str | None = None,
 ) -> Invocation:
     final_path = workspace / ".web3dgamebench-final.txt"
     control_prompt, goal_activation = _goal_activation(
@@ -316,7 +341,7 @@ def build_invocation(
             "--no-prompt-templates",
             "--no-themes",
             "--tools",
-            "read,bash,edit,write,grep,find,ls,goal_complete,goal_blocked,goal_wait",
+            "read,bash,edit,write,grep,find,ls,benchmark_complete,benchmark_blocked",
             "--no-approve",
         ]
         if control_prompt:
@@ -325,7 +350,11 @@ def build_invocation(
         return Invocation(
             argv=tuple(argv),
             stdin_prompt=False,
-            env={},
+            env=(
+                {"WEB3DGAMEBENCH_TASK_SHA256": task_sha256}
+                if task_sha256 is not None
+                else {}
+            ),
             trace_format="pi-jsonl-v1",
             candidate_prompt_sha256=candidate_prompt_sha256,
             goal_activation=goal_activation,

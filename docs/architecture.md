@@ -51,6 +51,20 @@ family. Candidate containers use Docker init, a 1024-PID ceiling, a supervised C
 group, streamed trace files, and a two-hour cell deadline. The task barrier stops on infrastructure
 failure so an operator can classify and resume the same immutable receipt.
 
+Pi loads the repository-frozen `web3dgamebench-pi-adapter-v3`, a narrow fork of
+`@narumitw/pi-goal@0.54.4`. It preserves managed-run lifecycle, session persistence, and automatic
+continuation across compaction. It replaces the generic completion tools with
+`benchmark_complete` and `benchmark_blocked`. Completion accepts only a recorded successful build
+for unchanged TASK/source/dist digests. Browser automation, viewport checks, and full playthroughs
+are explicitly excluded from candidate completion; the private evaluator owns runtime admission.
+
+The adapter does not impose a global model-turn or tool-call budget on implementation. Completion
+convergence is revision-scoped: a successful build records the source and bundle, prompts immediate
+completion, and blocks further shell verification against that unchanged revision. Attempts to add
+browser automation before completion are rejected or converged as candidate verification overruns.
+runner remains the external wall-clock watchdog: formal cells use 7200 seconds, Pi calibration runs
+use 2700 seconds, and Pi shell commands use 1200 seconds.
+
 Harbor job and trial artifacts are converted into the canonical run layout. `harbor.json` binds the
 raw job and trial results, while `harbor-task-lock.json` binds the generated task to the frozen
 task/profile inputs. The repository evaluator independently rebuilds and checks the collected

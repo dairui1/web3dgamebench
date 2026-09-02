@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from web3dgamebench.config import load_profiles, load_task
-from web3dgamebench.runner import RunInterrupted, _candidate_prompt, prepare, run_once
 from web3dgamebench.process import ProcessTimedOut
+from web3dgamebench.runner import RunInterrupted, _candidate_prompt, prepare, run_once
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,7 +34,7 @@ def test_run_manifest_records_goal_receipt_and_observed_codex_lifecycle(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
-    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    objective = "Implement TASK.md and stop after a successful npm run build."
     stdout = "\n".join(
         [
             json.dumps(
@@ -107,7 +107,10 @@ def test_interrupted_run_preserves_a_resumable_manifest(
     )
     assert manifest["status"] == "interrupted"
     assert manifest["backend"] == "native"
-    assert manifest["goal"]["activation_status"] == "awaiting-trace"
+    assert manifest["goal"]["activation_status"] == "not-observed"
+    assert manifest["goal"]["lifecycle"] == [
+        {"tool": "update_goal", "status": "interrupted"}
+    ]
     assert (raised.value.run_root / "workspace/TASK.md").is_file()
 
 
@@ -128,7 +131,7 @@ def test_nonzero_harness_exit_is_infrastructure_not_candidate_evidence(
     assert manifest["exit_code"] == 17
 
 
-def test_total_timeout_preserves_run_and_classifies_infrastructure(
+def test_total_timeout_preserves_run_and_classifies_candidate_nontermination(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
@@ -142,11 +145,73 @@ def test_total_timeout_preserves_run_and_classifies_infrastructure(
     run_root = run_once(ROOT, "first-night", "codex-sol-medium", backend="native")
     manifest = json.loads((run_root / "manifest.json").read_text())
 
-    assert manifest["status"] == "infrastructure-error"
-    assert manifest["failure_scope"] == "candidate-timeout"
+    assert manifest["status"] == "candidate-failure"
+    assert manifest["failure_scope"] == "candidate-non-termination"
     assert manifest["timed_out"] is True
     assert manifest["timeout_seconds"] == 7200
-    assert (run_root / "events.jsonl").read_text() == '{"type":"partial"}\n'
+    events = (run_root / "events.jsonl").read_text().splitlines()
+    assert json.loads(events[0]) == {"type": "partial"}
+    assert json.loads(events[-1])["entry"]["data"]["status"] == "timed_out"
+
+
+def test_adapter_verification_overrun_is_candidate_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("OPENCODE_GO_APIKEY", "test-key")
+    objective = "Implement TASK.md and stop after a successful npm run build."
+    stdout = "\n".join(
+        [
+            json.dumps(
+                {
+                    "type": "entry_appended",
+                    "entry": {
+                        "customType": "goal-state",
+                        "data": {"goal": {"status": "active", "text": objective}},
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "entry_appended",
+                    "entry": {
+                        "customType": "web3dgamebench-lifecycle",
+                        "data": {"schema_version": 2, "status": "timed_out"},
+                    },
+                }
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        "web3dgamebench.runner.run_captured",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=1, stdout=stdout, stderr="verification overrun"
+        ),
+    )
+    run_root = run_once(ROOT, "first-night", "pi-qwen3-8-flash", backend="native")
+    manifest = json.loads((run_root / "manifest.json").read_text())
+
+    assert manifest["status"] == "candidate-failure"
+    assert manifest["failure_scope"] == "candidate-verification-overrun"
+    assert manifest["goal"]["activation_status"] == "observed-timed_out"
+
+
+def test_harbor_outer_watchdog_remains_infrastructure_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+
+    def timed_out(*args, **kwargs):
+        raise ProcessTimedOut(8100)
+
+    monkeypatch.setattr("web3dgamebench.harbor_backend.execute_harbor", timed_out)
+    run_root = run_once(ROOT, "first-night", "codex-sol-medium", backend="harbor")
+    manifest = json.loads((run_root / "manifest.json").read_text())
+
+    assert manifest["status"] == "infrastructure-error"
+    assert manifest["failure_scope"] == "harbor-watchdog"
+    assert manifest["goal"]["lifecycle"] == []
 
 
 def test_argv_prompt_runtime_never_inherits_operator_stdin(
@@ -165,3 +230,29 @@ def test_argv_prompt_runtime_never_inherits_operator_stdin(
     run_once(ROOT, "first-night", "pi-qwen3-8-flash", backend="native")
 
     assert observed["input_text"] is None
+
+
+def test_pi_calibration_uses_external_short_timeout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("OPENCODE_GO_APIKEY", "test-key")
+    observed: dict[str, object] = {}
+
+    def completed_run(*args, **kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("web3dgamebench.runner.run_captured", completed_run)
+    run_root = run_once(
+        ROOT,
+        "first-night",
+        "pi-qwen3-8-flash",
+        backend="native",
+        calibration=True,
+    )
+    manifest = json.loads((run_root / "manifest.json").read_text())
+
+    assert observed["timeout_seconds"] == 2700
+    assert manifest["execution_mode"] == "calibration"
+    assert manifest["candidate_timeout_seconds"] == 2700

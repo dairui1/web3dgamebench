@@ -50,12 +50,47 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _append_lifecycle_terminal(path: Path, status: str, reason: str) -> str:
+    event = {
+        "type": "entry_appended",
+        "entry": {
+            "customType": "web3dgamebench-lifecycle",
+            "data": {
+                "schema_version": 2,
+                "status": status,
+                "source": "runner",
+                "reason": reason,
+            },
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+    return path.read_text(encoding="utf-8")
+
+
+def _terminal_lifecycle_status(stdout: str) -> str | None:
+    return next(
+        (
+            event.get("status")
+            for event in reversed(parse_goal_lifecycle(stdout))
+            if event.get("tool") == "update_goal"
+            and event.get("status")
+            in {"complete", "blocked", "interrupted", "timed_out"}
+        ),
+        None,
+    )
+
+
 def _candidate_prompt(task: Task) -> str:
     return (
-        "Implement the complete benchmark task in TASK.md. Work only inside this workspace. "
+        "Implement the benchmark game in TASK.md. Work only inside this workspace. "
         "Do not use the network or external assets. You have the supplied dependency set. "
-        "Build and inspect the game at both required viewports before finishing. Preserve any "
-        "failures honestly; do not claim checks you did not run.\n\n" + task.brief.read_text(encoding="utf-8")
+        "After the final relevant change, run npm run build once and stop when it succeeds. "
+        "Do not write or run browser automation, automated runtime checks, autopilots, or full "
+        "playthroughs; the post-run evaluator handles runtime verification. Preserve build "
+        "failures honestly; do not claim a build you did not run.\n\n"
+        + task.brief.read_text(encoding="utf-8")
     )
 
 
@@ -108,6 +143,7 @@ def run_once(
     *,
     backend: str = "container",
     cancel_event: threading.Event | None = None,
+    calibration: bool = False,
 ) -> Path:
     if backend not in {"native", "container", "harbor"}:
         raise ValueError(f"unknown backend: {backend}")
@@ -115,6 +151,8 @@ def run_once(
     if profile_id not in profiles:
         raise ValueError(f"unknown profile: {profile_id}")
     profile = profiles[profile_id]
+    if calibration and profile.harness != "pi":
+        raise ValueError("calibration timeout is reserved for Pi adapter diagnostics")
     task = load_task(root, task_id)
     run_root, workspace = prepare(root, task, profile, attempt)
     prompt = _candidate_prompt(task)
@@ -128,9 +166,18 @@ def run_once(
         isolation="container" if backend in {"container", "harbor"} else "runtime",
         goal_mode=task.goal_mode,
         goal_completion=task.goal_completion,
+        task_sha256=_sha256(task.brief),
     )
     manifest_path = run_root / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
+    container_config = load_container_config(root)
+    effective_timeout_seconds = (
+        container_config.pi_adapter.calibration_total_timeout_seconds
+        if calibration
+        else container_config.candidate_total_timeout_seconds
+    )
+    manifest["execution_mode"] = "calibration" if calibration else "benchmark"
+    manifest["candidate_timeout_seconds"] = effective_timeout_seconds
     manifest["prompt"] = {
         "candidate_sha256": invocation.candidate_prompt_sha256,
         "task_brief_sha256": _sha256(task.brief),
@@ -158,7 +205,6 @@ def run_once(
     container_name = None
     passed_environment: dict[str, str] = {}
     failure_scope = None
-    container_config = load_container_config(root)
     if backend == "container":
         plane = ensure_plane(root, container_config)
         prepare_dependencies(root, container_config, workspace)
@@ -204,6 +250,7 @@ def run_once(
                 instruction=prompt,
                 invocation=invocation,
                 cancel_event=cancel_event,
+                candidate_timeout_seconds=effective_timeout_seconds,
             )
             plane = result.plane
             passed_environment = result.environment_names
@@ -216,12 +263,20 @@ def run_once(
                 input_text=prompt if invocation.stdin_prompt else None,
                 cancel_event=cancel_event,
                 cleanup=cleanup_container if container_name else None,
-                timeout_seconds=container_config.candidate_total_timeout_seconds,
+                timeout_seconds=effective_timeout_seconds,
                 stdout_path=events_path,
                 stderr_path=stderr_path,
             )
     except KeyboardInterrupt as error:
+        stdout = _append_lifecycle_terminal(
+            events_path, "interrupted", "runner received an operator interrupt"
+        )
         manifest = json.loads(manifest_path.read_text())
+        if invocation.goal_activation:
+            manifest["goal"]["activation_status"] = goal_activation_status(
+                invocation.goal_activation, stdout
+            )
+            manifest["goal"]["lifecycle"] = parse_goal_lifecycle(stdout)
         manifest.update(
             {
                 "status": "interrupted",
@@ -235,7 +290,16 @@ def run_once(
         shutil.rmtree(credential_dir, ignore_errors=True)
         raise RunInterrupted(run_root) from error
     except ProcessTimedOut as error:
-        stdout = events_path.read_text(encoding="utf-8") if events_path.is_file() else ""
+        harbor_watchdog = backend == "harbor"
+        if harbor_watchdog:
+            events_path.touch(exist_ok=True)
+            stdout = events_path.read_text(encoding="utf-8")
+        else:
+            stdout = _append_lifecycle_terminal(
+                events_path,
+                "timed_out",
+                f"candidate cell exceeded {error.timeout_seconds}s",
+            )
         manifest = json.loads(manifest_path.read_text())
         if invocation.goal_activation:
             manifest["goal"]["activation_status"] = goal_activation_status(
@@ -244,8 +308,12 @@ def run_once(
             manifest["goal"]["lifecycle"] = parse_goal_lifecycle(stdout)
         manifest.update(
             {
-                "status": "infrastructure-error",
-                "failure_scope": "candidate-timeout",
+                "status": (
+                    "infrastructure-error" if harbor_watchdog else "candidate-failure"
+                ),
+                "failure_scope": (
+                    "harbor-watchdog" if harbor_watchdog else "candidate-non-termination"
+                ),
                 "exit_code": None,
                 "timed_out": True,
                 "timeout_seconds": error.timeout_seconds,
@@ -290,6 +358,7 @@ def run_once(
         shutil.copy2(final_path, run_root / "final.txt")
         final_path.unlink()
     manifest = json.loads(manifest_path.read_text())
+    terminal_status = _terminal_lifecycle_status(stdout)
     if invocation.goal_activation:
         manifest["goal"]["activation_status"] = goal_activation_status(
             invocation.goal_activation, stdout
@@ -309,10 +378,23 @@ def run_once(
             # represent authentication, quota, provider, CLI, or container failure and
             # must stop the matrix for operator classification instead of scoring the cell.
             "status": (
-                "candidate-complete" if result.returncode == 0 else "infrastructure-error"
+                "candidate-failure"
+                if terminal_status in {"blocked", "timed_out"}
+                or failure_scope == "candidate-non-termination"
+                else "candidate-complete"
+                if result.returncode == 0
+                else "infrastructure-error"
             ),
             "failure_scope": (
-                None if result.returncode == 0 else failure_scope or "candidate-runtime"
+                "candidate-verification-overrun"
+                if terminal_status == "timed_out"
+                else "candidate-blocked"
+                if terminal_status == "blocked"
+                else "candidate-non-termination"
+                if failure_scope == "candidate-non-termination"
+                else None
+                if result.returncode == 0
+                else failure_scope or "candidate-runtime"
             ),
             "exit_code": result.returncode,
             "duration_seconds": round(time.monotonic() - started, 3),

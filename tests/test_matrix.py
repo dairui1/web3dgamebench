@@ -19,6 +19,7 @@ from web3dgamebench.matrix import (
     MatrixLockedError,
     PlanDriftError,
     SeasonLock,
+    _barrier_pause_requested,
     _load_vendor_locks,
     _new_receipt,
     _write_receipt,
@@ -26,6 +27,8 @@ from web3dgamebench.matrix import (
     create_preflight_plan,
     load_matrix_receipt,
     load_preflight_plan,
+    matrix_control_path,
+    request_matrix_pause,
     resume_matrix,
     start_matrix,
     trusted_cell_gate,
@@ -68,17 +71,30 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
         "id"
     ].startswith("sha256:")
     versions = season_plan["runtime_environment"]["candidate_toolchain"]["versions"]
-    assert set(versions) == {"codex", "claude", "pi", "pi_goal", "node", "npm"}
-    assert versions["pi_goal"] == "0.54.4"
+    assert set(versions) == {
+        "codex",
+        "claude",
+        "pi",
+        "pi_goal_upstream",
+        "pi_adapter",
+        "node",
+        "npm",
+    }
+    assert versions["pi_goal_upstream"] == "0.54.4"
+    assert versions["pi_adapter"] == "web3dgamebench-pi-adapter-v3"
+    assert (
+        season_plan["runtime_control"]["pi_adapter"]["verification_window_seconds"] == 1200
+    )
     assert all(versions.values())
-    capabilities = season_plan["runtime_environment"]["candidate_toolchain"][
-        "capabilities"
-    ]
+    capabilities = season_plan["runtime_environment"]["candidate_toolchain"]["capabilities"]
     assert capabilities["codex_features"]["goals"] == "goals stable true"
     assert len(capabilities["codex_features"]["output_sha256"]) == 64
     assert len(season_plan["plan_digest_sha256"]) == 64
 
     frozen = season_plan["frozen_inputs"]["files"]
+    assert frozen["uv.lock"]["roles"] == ["host-dependency-lock"]
+    assert frozen["src/web3dgamebench/control.py"]["roles"] == ["matrix-operator-runtime"]
+    assert frozen["src/web3dgamebench/control_ui/app.js"]["roles"] == ["matrix-operator-ui"]
     assert frozen["src/web3dgamebench/fable_backfill.py"]["roles"] == [
         "optional-backfill-runtime"
     ]
@@ -158,12 +174,31 @@ def test_runtime_fingerprint_drift_stops_execution(
 
 
 def test_season_lock_rejects_concurrent_matrix(tmp_path: Path) -> None:
-    with SeasonLock("season-1", tmp_path), pytest.raises(
-        MatrixLockedError, match="already running"
-    ), SeasonLock("season-1", tmp_path):
+    with (
+        SeasonLock("season-1", tmp_path),
+        pytest.raises(MatrixLockedError, match="already running"),
+        SeasonLock("season-1", tmp_path),
+    ):
         pass
     with SeasonLock("season-1", tmp_path):
         pass
+
+
+def test_dynamic_pause_is_acknowledged_once_at_task_barrier(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path))
+    receipt = {"matrix_id": "season-1-test", "execution_window": {}}
+
+    command = request_matrix_pause("season-1-test", requested_by="test")
+
+    assert command == matrix_control_path("season-1-test")
+    assert _barrier_pause_requested(receipt, "canyon-strike") is True
+    assert _barrier_pause_requested(receipt, "bombsite-retake") is False
+    acknowledged = json.loads(command.read_text(encoding="utf-8"))
+    assert acknowledged["stopped_at_task_barrier"] == "canyon-strike"
+    assert acknowledged["acknowledged_at"]
+    assert receipt["execution_window"]["stopped_at_task_barrier"] == "canyon-strike"
 
 
 def test_season_one_canonical_matrix_cannot_be_replaced(
@@ -399,9 +434,9 @@ def _trusted_evidence(
         "evaluator": {
             "runtime_contract_sha256": task["runtime_contract_sha256"],
             "script_sha256": frozen["infra/evaluator/evaluate.py"]["sha256"],
-            "runtime_schema_sha256": frozen[
-                "src/web3dgamebench/runtime_schema.py"
-            ]["sha256"],
+            "runtime_schema_sha256": frozen["src/web3dgamebench/runtime_schema.py"][
+                "sha256"
+            ],
         },
     }
     return cell, manifest, report
@@ -423,16 +458,12 @@ def test_trusted_gate_rejects_missing_task_goal_and_model_evidence(
     tmp_path: Path, season_plan: dict
 ) -> None:
     run_root = tmp_path / "run"
-    cell, manifest, report = _trusted_evidence(
-        season_plan, "codex-sol-medium", run_root
-    )
+    cell, manifest, report = _trusted_evidence(season_plan, "codex-sol-medium", run_root)
     manifest["model_resolved"] = "gpt-5.6"
     manifest["prompt"]["task_brief_preserved"] = False
     manifest["goal"]["activation_status"] = "configured"
 
-    trusted, failures = trusted_cell_gate(
-        season_plan, cell, manifest, report, run_root
-    )
+    trusted, failures = trusted_cell_gate(season_plan, cell, manifest, report, run_root)
 
     assert trusted is False
     assert "resolved model is incompatible with the profile" in failures
@@ -444,9 +475,7 @@ def test_trusted_gate_accepts_harbor_only_with_bound_adapter_provenance(
     tmp_path: Path, season_plan: dict
 ) -> None:
     run_root = tmp_path / "harbor-run"
-    cell, manifest, report = _trusted_evidence(
-        season_plan, "codex-sol-medium", run_root
-    )
+    cell, manifest, report = _trusted_evidence(season_plan, "codex-sol-medium", run_root)
     task = season_plan["tasks"][cell["task"]]
     planned_harbor = season_plan["runtime_environment"]["harbor"]
     generated_task = run_root / "harbor/task" / cell["task"]
@@ -505,9 +534,7 @@ def test_trusted_gate_accepts_harbor_only_with_bound_adapter_provenance(
     harbor = json.loads((run_root / "harbor.json").read_text(encoding="utf-8"))
     harbor["exception"] = {"type": "AgentTimeoutError"}
     (run_root / "harbor.json").write_text(json.dumps(harbor), encoding="utf-8")
-    trusted, failures = trusted_cell_gate(
-        season_plan, cell, manifest, report, run_root
-    )
+    trusted, failures = trusted_cell_gate(season_plan, cell, manifest, report, run_root)
     assert trusted is False
     assert "Harbor execution provenance is missing or inconsistent" in failures
 
@@ -546,9 +573,7 @@ def test_resume_only_runs_resumable_cells(
     receipt_path = tmp_path / "receipt.json"
     receipt = _new_receipt(plan_path, season_plan, "container")
     _terminalize(receipt)
-    receipt["cells"][1].update(
-        status="candidate-failure", passed=False, trusted=False
-    )
+    receipt["cells"][1].update(status="candidate-failure", passed=False, trusted=False)
     receipt["cells"][2].update(status="evidence-failure", passed=False, trusted=False)
     for index, status in ((3, "pending"), (4, "infrastructure-error"), (5, "interrupted")):
         receipt["cells"][index].update(status=status, passed=False, trusted=False)
@@ -575,9 +600,7 @@ def test_resume_only_runs_resumable_cells(
 
     assert resume_matrix(ROOT, receipt_path) == receipt_path
     closed = load_matrix_receipt(receipt_path)
-    assert set(called) == {
-        receipt["cells"][index]["cell_id"] for index in (3, 4, 5)
-    }
+    assert set(called) == {receipt["cells"][index]["cell_id"] for index in (3, 4, 5)}
     assert closed["status"] == "complete"
     assert validate_closed_receipt(closed) is closed
 
@@ -634,9 +657,7 @@ def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
     monkeypatch.setattr(matrix_module, "verify_frozen_inputs", lambda *_args: None)
     monkeypatch.setattr(matrix_module, "_execute_cell", execute)
 
-    matrix_module._drive_matrix(
-        ROOT, plan_path, season_plan, receipt_path, receipt
-    )
+    matrix_module._drive_matrix(ROOT, plan_path, season_plan, receipt_path, receipt)
 
     assert first_started == 8
     assert maximum_by_harness == {"codex": 1, "claude-code": 1, "pi": 1}
@@ -696,6 +717,45 @@ def test_matrix_can_stop_at_a_requested_task_barrier(
     assert receipt["execution_window"]["stopped_at_task_barrier"] == "canyon-strike"
 
 
+def test_matrix_honors_dynamic_pause_only_after_active_task_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+    receipt_path = tmp_path / "receipt.json"
+    receipt = _new_receipt(plan_path, season_plan, "harbor")
+    _terminalize(receipt)
+    for cell in receipt["cells"][:16]:
+        cell.update(status="pending", run=None, passed=False, trusted=False)
+    called: list[str] = []
+
+    def execute(_root, _plan, _receipt_path, _receipt, cell, _cancel_event=None):
+        called.append(cell["cell_id"])
+        if len(called) == 1:
+            request_matrix_pause(receipt["matrix_id"], requested_by="test-webui")
+        cell.update(
+            status="completed",
+            run=f"/runs/{cell['cell_id']}",
+            passed=True,
+            trusted=True,
+            artifacts=copy.deepcopy(receipt["cells"][16]["artifacts"]),
+        )
+
+    monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
+    monkeypatch.setattr(matrix_module, "verify_frozen_inputs", lambda *_args: None)
+    monkeypatch.setattr(matrix_module, "_execute_cell", execute)
+
+    matrix_module._drive_matrix(ROOT, plan_path, season_plan, receipt_path, receipt)
+
+    assert len(called) == 8
+    assert all(cell["status"] == "completed" for cell in receipt["cells"][:8])
+    assert all(cell["status"] == "pending" for cell in receipt["cells"][8:16])
+    assert receipt["status"] == "incomplete"
+    assert receipt["execution_window"]["stopped_at_task_barrier"] == "canyon-strike"
+
+
 def test_resume_recovers_complete_canonical_receipt_missing_closure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -723,9 +783,7 @@ def test_resume_recovers_complete_canonical_receipt_missing_closure(
     assert resume_matrix(ROOT, receipt_path) == receipt_path
     closure_path = matrix_module._canonical_closure_path("season-1")
     assert closure_path.is_file()
-    matrix_module._verify_canonical_publication_receipt(
-        load_matrix_receipt(receipt_path)
-    )
+    matrix_module._verify_canonical_publication_receipt(load_matrix_receipt(receipt_path))
     assert resume_matrix(ROOT, receipt_path) == receipt_path
 
 
@@ -796,9 +854,7 @@ def test_evaluator_retry_reuses_completed_candidate_run(
         output = reused / "evaluation"
         output.mkdir()
         report = output / "report.json"
-        report.write_text(
-            json.dumps({"passed": True, "trusted": True}), encoding="utf-8"
-        )
+        report.write_text(json.dumps({"passed": True, "trusted": True}), encoding="utf-8")
         return report
 
     monkeypatch.setattr(matrix_module, "run_once", do_not_rerun)
@@ -814,9 +870,7 @@ def test_evaluator_retry_reuses_completed_candidate_run(
         lambda *_args: {"schema_version": 1, "files": {}},
     )
 
-    matrix_module._execute_cell(
-        ROOT, season_plan, receipt_path, receipt, cell
-    )
+    matrix_module._execute_cell(ROOT, season_plan, receipt_path, receipt, cell)
 
     assert cell["status"] == "completed"
     assert len(cell["infrastructure_attempts"]) == 1
@@ -843,9 +897,7 @@ def test_matrix_cli_requires_exactly_one_frozen_source() -> None:
     with pytest.raises(SystemExit):
         parser.parse_args(["matrix"])
     with pytest.raises(SystemExit):
-        parser.parse_args(
-            ["matrix", "--season", "season-1", "--plan", "/tmp/plan.json"]
-        )
+        parser.parse_args(["matrix", "--season", "season-1", "--plan", "/tmp/plan.json"])
 
 
 def test_doctor_probes_flags_without_starting_a_model(
@@ -863,8 +915,7 @@ def test_doctor_probes_flags_without_starting_a_model(
             output = "goals stable true\n"
         elif command == "codex":
             output = (
-                "--config --enable --strict-config --ignore-user-config "
-                "--ephemeral --json"
+                "--config --enable --strict-config --ignore-user-config --ephemeral --json"
             )
         elif command == "claude":
             output = (
@@ -873,8 +924,7 @@ def test_doctor_probes_flags_without_starting_a_model(
             )
         elif command == "pi":
             output = (
-                "--append-system-prompt --no-session --no-context-files "
-                "--mode --no-approve"
+                "--append-system-prompt --no-session --no-context-files --mode --no-approve"
             )
         else:
             output = "ok"

@@ -69,9 +69,9 @@ commands = {
     "node_version": ["node", "--version"],
     "npm_version": ["npm", "--version"],
     "pi_help": ["pi", "--help"],
-    "pi_goal_version": [
+    "pi_adapter": [
         "python3", "-c",
-        "import json; print(json.load(open('/usr/lib/node_modules/@narumitw/pi-goal/package.json'))['version'])",
+        "import json; print(json.dumps(json.load(open('/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal/fork.json')), sort_keys=True))",
     ],
     "pi_version": ["pi", "--version"],
 }
@@ -195,7 +195,7 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
         "codex_version",
         "claude_version",
         "pi_version",
-        "pi_goal_version",
+        "pi_adapter",
         "node_version",
         "npm_version",
         *_REQUIRED_CLI_FLAGS,
@@ -234,9 +234,23 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
             "npm_version",
         )
     }
-    if probe["pi_goal_version"]["stdout"] != "0.54.4":
-        raise MatrixError("candidate image does not contain pi-goal 0.54.4")
-    versions["pi_goal"] = probe["pi_goal_version"]["stdout"]
+    try:
+        adapter = json.loads(probe["pi_adapter"]["stdout"])
+    except json.JSONDecodeError as error:
+        raise MatrixError("candidate image returned invalid Pi adapter identity") from error
+    if adapter != {
+        "adapter_version": config.pi_adapter.version,
+        "entrypoint": "benchmark.ts",
+        "license": "MIT",
+        "runtime_evidence_schema_version": (
+            config.pi_adapter.runtime_evidence_schema_version
+        ),
+        "upstream_package": "@narumitw/pi-goal",
+        "upstream_version": config.pi_adapter.upstream_pi_goal_version,
+    }:
+        raise MatrixError("candidate image Pi adapter identity does not match config")
+    versions["pi_goal_upstream"] = adapter["upstream_version"]
+    versions["pi_adapter"] = adapter["adapter_version"]
     capabilities = {
         name: {
             "output_sha256": _text_sha256(probe[name]["stdout"]),
@@ -387,23 +401,29 @@ def _add_file(
 
 
 def _global_inputs(root: Path) -> list[tuple[Path, str]]:
-    return [
+    inputs = [
         (root / "pyproject.toml", "package-config"),
+        (root / "uv.lock", "host-dependency-lock"),
         (root / "configs/seasons.toml", "season-config"),
         (root / "configs/profiles.toml", "profile-config"),
         (root / "configs/judges.toml", "judge-config"),
         (root / "configs/container.toml", "container-config"),
+        (root / "configs/calibration.toml", "calibration-gate-config"),
         (root / "vendor/manifest.json", "vendor-manifest"),
         (root / "infra/candidate/Dockerfile", "candidate-image"),
         (root / "infra/candidate/chromium", "candidate-browser-runtime"),
         (root / "infra/candidate/codex_goal_runner.py", "candidate-goal-runtime"),
         (root / "infra/candidate/egress_proxy.py", "candidate-egress"),
         (root / "infra/candidate/pi_command_timeout.js", "candidate-command-limit"),
-        (root / "infra/candidate/pi_goal_runner.ts", "candidate-goal-runtime"),
         (root / "infra/evaluator/Dockerfile", "evaluator-image"),
         (root / "infra/evaluator/evaluate.py", "evaluator"),
         (root / "infra/judge/pi/playtest-judge.ts", "judge-runtime"),
         (root / "src/web3dgamebench/cli.py", "matrix-runtime"),
+        (root / "src/web3dgamebench/calibration.py", "calibration-gate-runtime"),
+        (root / "src/web3dgamebench/control.py", "matrix-operator-runtime"),
+        (root / "src/web3dgamebench/control_ui/index.html", "matrix-operator-ui"),
+        (root / "src/web3dgamebench/control_ui/styles.css", "matrix-operator-ui"),
+        (root / "src/web3dgamebench/control_ui/app.js", "matrix-operator-ui"),
         (root / "src/web3dgamebench/artifacts.py", "playable-normalization"),
         (root / "src/web3dgamebench/config.py", "matrix-runtime"),
         (root / "src/web3dgamebench/container.py", "matrix-runtime"),
@@ -420,6 +440,12 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "src/web3dgamebench/runtime_contracts.py", "runtime-contract-loader"),
         (root / "src/web3dgamebench/runtime_schema.py", "runtime-schema"),
     ]
+    fork = root / "infra/candidate/pi-goal-benchmark"
+    inputs.extend(
+        (path, "candidate-goal-runtime")
+        for path in sorted(item for item in fork.iterdir() if item.is_file())
+    )
+    return inputs
 
 
 def _load_vendor_locks(root: Path) -> dict[str, str]:
@@ -569,6 +595,7 @@ def create_preflight_plan(root: Path, season_id: str) -> dict[str, Any]:
             "models_within_harness": "serial",
             "interruptible": True,
             "resume_supported": True,
+            "pi_adapter": asdict(container_config.pi_adapter),
         },
         "runtime_environment": runtime_environment,
         "frozen_inputs": {
@@ -733,9 +760,7 @@ def verify_frozen_inputs(root: Path, plan: dict[str, Any]) -> None:
         if any(planned.get(key) != value for key, value in snapshot.items()):
             raise PlanDriftError(f"task configuration changed: {task_id}")
 
-    required_files = {
-        _relative(root, path) for path, _role in _global_inputs(root)
-    }
+    required_files = {_relative(root, path) for path, _role in _global_inputs(root)}
     if season.id == "season-1":
         required_files.add(f"configs/catalogs/{season.id}.json")
     for task_id in season.tasks:
@@ -811,6 +836,66 @@ def _canonical_invalidation_path(season_id: str, matrix_id: str) -> Path:
     return runs_dir() / "matrices" / f"invalidated-{safe_season}-{safe_matrix}.json"
 
 
+def matrix_control_path(matrix_id: str, directory: Path | None = None) -> Path:
+    safe_matrix = matrix_id.replace("/", "_").replace(os.sep, "_")
+    return (directory or runs_dir()) / "control" / "commands" / f"{safe_matrix}.json"
+
+
+def request_matrix_pause(
+    matrix_id: str,
+    *,
+    requested_by: str = "operator",
+    directory: Path | None = None,
+) -> Path:
+    """Request a graceful stop at the next completed task barrier."""
+
+    if not matrix_id.strip():
+        raise MatrixError("matrix pause requires a matrix id")
+    path = matrix_control_path(matrix_id, directory)
+    command = {
+        "schema_version": 1,
+        "matrix_id": matrix_id,
+        "action": "pause-after-current-task",
+        "requested_by": requested_by,
+        "requested_at": _now(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_json_replace(path, command)
+    return path
+
+
+def _barrier_pause_requested(receipt: dict[str, Any], task_id: str) -> bool:
+    matrix_id = receipt.get("matrix_id")
+    if not isinstance(matrix_id, str):
+        return False
+    path = matrix_control_path(matrix_id)
+    if not path.is_file():
+        return False
+    try:
+        command = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    if (
+        not isinstance(command, dict)
+        or command.get("schema_version") != 1
+        or command.get("matrix_id") != matrix_id
+        or command.get("action") != "pause-after-current-task"
+        or command.get("acknowledged_at") is not None
+    ):
+        return False
+    command.update({"acknowledged_at": _now(), "stopped_at_task_barrier": task_id})
+    _atomic_json_replace(path, command)
+    execution_window = receipt.setdefault("execution_window", {})
+    execution_window.update(
+        {
+            "pause_requested_at": command.get("requested_at"),
+            "stopped_at_task_barrier": task_id,
+            "stopped_at": command["acknowledged_at"],
+        }
+    )
+    return True
+
+
 def _claim_canonical_matrix(
     season_id: str, receipt_path: Path, receipt: dict[str, Any]
 ) -> Path | None:
@@ -848,7 +933,9 @@ def invalidate_canonical_matrix(season_id: str, *, reason: str) -> Path:
         try:
             canonical = json.loads(canonical_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as error:
-            raise MatrixError(f"canonical matrix record is missing or invalid: {canonical_path}") from error
+            raise MatrixError(
+                f"canonical matrix record is missing or invalid: {canonical_path}"
+            ) from error
         if not isinstance(canonical, dict):
             raise MatrixError(f"canonical matrix record is invalid: {canonical_path}")
         matrix_id = canonical.get("matrix_id")
@@ -877,9 +964,13 @@ def invalidate_canonical_matrix(season_id: str, *, reason: str) -> Path:
             "reason": reason,
             "invalidated_at": _now(),
         }
-        _write_immutable_json_once(marker_path, marker, label="canonical matrix invalidation")
+        _write_immutable_json_once(
+            marker_path, marker, label="canonical matrix invalidation"
+        )
         if preserved_claim.exists():
-            raise MatrixError(f"preserved canonical claim already exists: {preserved_claim}")
+            raise MatrixError(
+                f"preserved canonical claim already exists: {preserved_claim}"
+            )
         os.replace(canonical_path, preserved_claim)
         receipt["status"] = "invalidated"
         receipt["invalidation"] = {
@@ -900,7 +991,9 @@ def _assert_canonical_matrix(
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as error:
-        raise MatrixError(f"season-1 canonical matrix record is missing or invalid: {path}") from error
+        raise MatrixError(
+            f"season-1 canonical matrix record is missing or invalid: {path}"
+        ) from error
     expected = {
         "season": season_id,
         "matrix_id": receipt.get("matrix_id"),
@@ -925,7 +1018,9 @@ def _verify_canonical_publication_receipt(receipt: dict[str, Any]) -> None:
     _assert_canonical_matrix("season-1", receipt_path, receipt)
     stored = _load_receipt(receipt_path)
     if stored.get("receipt_digest_sha256") != receipt.get("receipt_digest_sha256"):
-        raise MatrixError("publication receipt does not match the canonical season-1 receipt")
+        raise MatrixError(
+            "publication receipt does not match the canonical season-1 receipt"
+        )
     closure_path = _canonical_closure_path("season-1")
     try:
         closure = json.loads(closure_path.read_text(encoding="utf-8"))
@@ -1057,12 +1152,11 @@ def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
         if cell["passed"] is not cell["trusted"]:
             raise MatrixError(f"matrix receipt cell pass and trust disagree: {cell_id}")
         if (cell["status"] == "completed") is not cell["trusted"]:
-            raise MatrixError(f"matrix receipt cell terminal result is inconsistent: {cell_id}")
+            raise MatrixError(
+                f"matrix receipt cell terminal result is inconsistent: {cell_id}"
+            )
         judge = cell.get("judge")
-        if (
-            not isinstance(judge, dict)
-            or judge.get("status") not in _JUDGE_CELL_STATUSES
-        ):
+        if not isinstance(judge, dict) or judge.get("status") not in _JUDGE_CELL_STATUSES:
             raise MatrixError(f"matrix receipt cell has invalid judge state: {cell_id}")
         artifacts = cell.get("artifacts")
         if not isinstance(artifacts, dict) or artifacts.get("schema_version") != 1:
@@ -1164,10 +1258,19 @@ def _verify_plan_file(plan_path: Path, receipt: dict[str, Any]) -> dict[str, Any
         (cell["cell_id"], cell["task"], cell["profile"], cell["attempt"])
         for cell in plan["cells"]
     ]
-    actual = [
-        (cell.get("cell_id"), cell.get("task"), cell.get("profile"), cell.get("attempt"))
-        for cell in cells
-    ] if isinstance(cells, list) else []
+    actual = (
+        [
+            (
+                cell.get("cell_id"),
+                cell.get("task"),
+                cell.get("profile"),
+                cell.get("attempt"),
+            )
+            for cell in cells
+        ]
+        if isinstance(cells, list)
+        else []
+    )
     if actual != expected:
         raise PlanDriftError("matrix receipt cells do not match the frozen plan")
     return plan
@@ -1232,13 +1335,10 @@ def trusted_cell_gate(
         if backend not in {"container", "harbor"}:
             failures.append("season-1 candidate did not run in a trusted isolated backend")
         plane = manifest.get("container_plane")
-        candidate_image_id = plan["runtime_environment"]["container_images"][
-            "candidate"
-        ]["id"]
-        if (
-            not isinstance(plane, dict)
-            or plane.get("image_digest") != candidate_image_id
-        ):
+        candidate_image_id = plan["runtime_environment"]["container_images"]["candidate"][
+            "id"
+        ]
+        if not isinstance(plane, dict) or plane.get("image_digest") != candidate_image_id:
             failures.append("candidate container image digest mismatch")
         if backend == "harbor":
             harbor_path = run_root / "harbor.json"
@@ -1250,6 +1350,16 @@ def trusted_cell_gate(
                 harbor = None
                 adapter_lock = None
             planned_harbor = plan["runtime_environment"].get("harbor")
+            expected_pi_adapter = (
+                {
+                    "version": plan["runtime_control"]["pi_adapter"]["version"],
+                    "upstream_pi_goal_version": plan["runtime_control"]["pi_adapter"][
+                        "upstream_pi_goal_version"
+                    ],
+                }
+                if profile.get("harness") == "pi"
+                else None
+            )
             raw_results_valid = False
             generated_task_valid = False
             if isinstance(harbor, dict):
@@ -1259,17 +1369,16 @@ def trusted_cell_gate(
                     trial_root = Path(str(harbor["trial"])).resolve()
                     job_root.relative_to(private_harbor_root)
                     trial_root.relative_to(private_harbor_root)
-                    raw_results_valid = (
-                        _file_sha256(job_root / "result.json")
-                        == harbor.get("job_result_sha256")
-                        and _file_sha256(trial_root / "result.json")
-                        == harbor.get("trial_result_sha256")
-                    )
-                    generated_task_valid = (
-                        isinstance(adapter_lock, dict)
-                        and file_tree_sha256(run_root / "harbor/task" / task_id)
-                        == adapter_lock.get("generated_task_sha256")
-                    )
+                    raw_results_valid = _file_sha256(
+                        job_root / "result.json"
+                    ) == harbor.get("job_result_sha256") and _file_sha256(
+                        trial_root / "result.json"
+                    ) == harbor.get("trial_result_sha256")
+                    generated_task_valid = isinstance(
+                        adapter_lock, dict
+                    ) and file_tree_sha256(
+                        run_root / "harbor/task" / task_id
+                    ) == adapter_lock.get("generated_task_sha256")
                 except (KeyError, OSError, ValueError):
                     pass
             if (
@@ -1290,6 +1399,7 @@ def trusted_cell_gate(
                 or adapter_lock.get("brief_sha256") != task["brief_sha256"]
                 or adapter_lock.get("harbor_version") != planned_harbor.get("version")
                 or adapter_lock.get("harbor_commit") != planned_harbor.get("commit")
+                or adapter_lock.get("pi_adapter") != expected_pi_adapter
                 or not isinstance(plane, dict)
                 or plane.get("execution_backend") != "harbor-docker"
                 or plane.get("harbor_version") != planned_harbor.get("version")
@@ -1320,14 +1430,12 @@ def trusted_cell_gate(
                 failures.append("goal mode mismatch")
             if goal.get("completion") != task["goal_completion"]:
                 failures.append("goal completion policy mismatch")
-            if goal.get("candidate_prompt_sha256") != prompt_data.get(
-                "candidate_sha256"
-            ):
+            if goal.get("candidate_prompt_sha256") != prompt_data.get("candidate_sha256"):
                 failures.append("goal prompt digest mismatch")
             expected_methods = {
                 "codex": "codex-app-server-thread-goal-set",
                 "claude-code": "claude-code-native-slash-goal",
-                "pi": "pi-goal-native-slash-command",
+                "pi": "web3dgamebench-pi-adapter-managed-run",
             }
             harness = profile["harness"]
             if goal.get("native_goal") is not True:
@@ -1488,7 +1596,11 @@ def _execute_cell(
     report = _evaluation_report(report_path)
     if report.get("trusted") is not True:
         errors = report.get("infrastructure_errors")
-        detail = "; ".join(str(item) for item in errors) if isinstance(errors, list) else "untrusted evaluator report"
+        detail = (
+            "; ".join(str(item) for item in errors)
+            if isinstance(errors, list)
+            else "untrusted evaluator report"
+        )
         raise MatrixError(f"evaluator infrastructure failure for {run_root}: {detail}")
     trusted, failures = trusted_cell_gate(plan, cell, manifest, report, run_root)
     cell.update(
@@ -1520,9 +1632,7 @@ def _drive_matrix(
     for task_id in task_order:
         task_cells = [cell for cell in receipt["cells"] if cell["task"] == task_id]
         active_cells = [
-            cell
-            for cell in task_cells
-            if cell.get("status") in _RESUMABLE_CELL_STATUSES
+            cell for cell in task_cells if cell.get("status") in _RESUMABLE_CELL_STATUSES
         ]
         if not active_cells:
             continue
@@ -1594,9 +1704,7 @@ def _drive_matrix(
                     break
                 except KeyboardInterrupt as error:
                     stop.set()
-                    cell.update(
-                        {"status": "interrupted", "interrupted_at": _now()}
-                    )
+                    cell.update({"status": "interrupted", "interrupted_at": _now()})
                     failures.append((cell, error))
                     _write_receipt(receipt_path, receipt)
                     break
@@ -1676,10 +1784,13 @@ def _drive_matrix(
             receipt["status"] = "interrupted"
             _write_receipt(receipt_path, receipt)
             raise MatrixInterrupted(receipt_path) from interrupted
-        if halt_after_task or task_id == stop_after_task:
+        requested_pause = _barrier_pause_requested(receipt, task_id)
+        if halt_after_task or task_id == stop_after_task or requested_pause:
             if task_id == stop_after_task:
                 receipt["execution_window"]["stopped_at_task_barrier"] = task_id
                 receipt["execution_window"]["stopped_at"] = _now()
+                _write_receipt(receipt_path, receipt)
+            elif requested_pause:
                 _write_receipt(receipt_path, receipt)
             break
 
@@ -1727,6 +1838,12 @@ def start_matrix(
         from .smoke import verify_smoke_receipt
 
         smoke = verify_smoke_receipt(plan_path, plan, smoke_receipt, backend=backend)
+        from .calibration import CalibrationError, require_calibration_gate
+
+        try:
+            require_calibration_gate(plan_path)
+        except CalibrationError as error:
+            raise MatrixError(str(error)) from error
     verify_frozen_inputs(root, plan)
     with SeasonLock(season_id):
         receipt_path = runs_dir() / f"matrix-{plan['plan_id']}-{uuid.uuid4().hex[:8]}.json"
@@ -1768,7 +1885,9 @@ def resume_matrix(root: Path, receipt_path: Path, *, backend: str | None = None)
     if season_id == "season-1" and receipt.get("backend") not in {"container", "harbor"}:
         raise MatrixError("season-1 matrices require a trusted isolated backend")
     plan_reference = receipt.get("plan")
-    if not isinstance(plan_reference, dict) or not isinstance(plan_reference.get("path"), str):
+    if not isinstance(plan_reference, dict) or not isinstance(
+        plan_reference.get("path"), str
+    ):
         raise MatrixError("matrix receipt has no plan path")
     plan_path = Path(plan_reference["path"])
     with SeasonLock(season_id):

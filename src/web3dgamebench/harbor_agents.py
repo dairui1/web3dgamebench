@@ -110,7 +110,7 @@ class Web3DCodex(_Web3DHarborAgent):
 
 class Web3DClaude(_Web3DHarborAgent):
     harness = "claude-code"
-    expected_versions: ClassVar[dict[str, str]] = {"claude": "2.1.243"}
+    expected_versions: ClassVar[dict[str, str]] = {"claude": "2.1.258"}
 
     @staticmethod
     def name() -> str:
@@ -167,16 +167,21 @@ class Web3DPi(_Web3DHarborAgent):
         command_timeout = self._get_env("WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS")
         if not command_timeout or not command_timeout.isdigit():
             raise RuntimeError("WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS is required")
-        await self.exec_as_agent(
-            environment,
-            command=(
-                "mkdir -p /runtime-home/pi-agent && "
-                "printf '%s\\n' '{\"rpc\":{\"enabled\":true}}' "
-                "> /runtime-home/pi-agent/pi-goal.json"
-            ),
-        )
+        raw_adapter = self._get_env("WEB3DGAMEBENCH_PI_ADAPTER_ENV_JSON")
+        if not raw_adapter:
+            raise RuntimeError("WEB3DGAMEBENCH_PI_ADAPTER_ENV_JSON is required")
+        try:
+            adapter = json.loads(raw_adapter)
+        except json.JSONDecodeError as error:
+            raise RuntimeError("invalid Pi adapter environment") from error
+        if not isinstance(adapter, dict) or not all(
+            isinstance(name, str) and isinstance(value, str)
+            for name, value in adapter.items()
+        ):
+            raise RuntimeError("invalid Pi adapter environment")
         return {
             "OPENCODE_API_KEY": key,
             "PI_CODING_AGENT_DIR": "/runtime-home/pi-agent",
             "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS": command_timeout,
+            **adapter,
         }

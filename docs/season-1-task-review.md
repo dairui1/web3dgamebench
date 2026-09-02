@@ -30,8 +30,8 @@ Season 1 does not use ten variations of the same movement demo. Its critical pat
 physics, tactical combat, editable voxel state, quest state machines, boss telegraphs, paired
 portal rendering and spatial transforms, precision platforming, racing AI, RTS economy and navigation, and concurrent
 kitchen workflows. Each task couples several systems and defines a causally valid win path as a
-quality target. Candidate completion requires a production build plus bounded desktop and phone
-runtime smoke evidence; deterministic evaluation, private playtest judging, and human preference
+quality target. Candidate completion requires only a successful production build; desktop and phone
+runtime admission, deterministic evaluation, private playtest judging, and human preference
 then measure feature completeness and game effect. A polished scene or a fabricated runtime object
 therefore cannot earn a strong semantic judgment merely by passing admission.
 
@@ -42,8 +42,8 @@ in the next season; they are not reasons to change a frozen Season 1 task after 
 
 ## Goal contract policy
 
-- The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex, Claude Code, and Pi must all expose observed native Goal creation and completion in their traces.
-- No wall-clock or token limit is embedded in a task contract. The runtime applies a two-hour cell ceiling, and candidate self-checks remain explicitly brief and bounded.
+- The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex, Claude Code, and Pi must all expose observed Goal creation and completion in their traces; Pi uses the frozen benchmark adapter's structured lifecycle rather than the generic interactive completion policy.
+- No wall-clock or token limit is embedded in a task contract. The runtime applies a two-hour formal-cell ceiling, a 2700-second non-canonical calibration ceiling, and revision-scoped bounded verification without a global implementation turn/tool cap.
 - Candidate completion is operational: the production build must load as a visible, interactive 3D game at both viewports, a primary control and restart must work, and the checked flow must avoid runtime and layout failures.
 - Candidates are not asked to write autopilots or prove full win/loss and end-to-end paths. Missing systems, balance, polish, and game feel lower the evaluated result instead of forcing indefinite self-testing.
 - Milestones and target systems guide implementation and grading; they are not an exhaustive self-proof checklist.

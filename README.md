@@ -1,6 +1,6 @@
 # Web3DGameBench
 
-Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Each candidate cell has a two-hour wall-clock ceiling; individual Pi shell commands are capped at 20 minutes so a completed but unclosed browser probe returns control to the agent before the cell ceiling. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
+Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Each candidate cell has a two-hour wall-clock ceiling; individual Pi shell commands are capped at 20 minutes. Pi keeps persistent Goal continuation for implementation, but its benchmark adapter starts a separate 20-minute verification window only after a successful build and blocks repeated browser checks against an unchanged source/build revision. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
 
 The public result is intentionally two-part:
 
@@ -16,7 +16,7 @@ The public result is intentionally two-part:
 | `codex-luna-max` | Codex | `gpt-5.6-luna` | `max` |
 | `claude-sonnet-default` | Claude Code | `claude-sonnet-5` | official default |
 | `claude-opus-default` | Claude Code | `claude-opus-5` | official default |
-| `claude-fable-default` | Claude Code | `claude-fable-5` | optional backfill |
+| `claude-fable-default` | Claude Code | `claude-fable-5-1` | optional backfill |
 | `pi-deepseek-v4-flash` | pi | `opencode-go/deepseek-v4-flash` | provider default |
 | `pi-qwen3-8-flash` | pi | `opencode-go/qwen3.8-flash` | provider default |
 | `pi-glm-5-3-flash` | pi | `opencode-go/glm-5.3-flash` | provider default |
@@ -61,12 +61,15 @@ Harbor trial is converted into the repository run schema and bound by `harbor.js
 
 ```bash
 uv sync
+uv run web3dgamebench control
 uv run web3dgamebench vendor
-docker build -t web3dgamebench-candidate:0.1.0 infra/candidate
+docker build -t web3dgamebench-candidate:0.2.0 infra/candidate
 docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
 uv run web3dgamebench doctor
 uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
 uv run web3dgamebench smoke --plan /path/to/season-1-plan.json --backend harbor
+# Run the frozen, non-canonical three-task Pi adapter gate against a reviewed plan:
+uv run web3dgamebench calibrate --plan /path/to/season-1-plan.json --backend harbor
 uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor
 # Stop cleanly at a task barrier when operating the season in review windows:
 uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor --stop-after-task canyon-strike
@@ -79,6 +82,14 @@ uv run web3dgamebench fable --core-plan /path/to/season-1-plan.json --task canyo
 # After all 80 cells are terminal:
 uv run web3dgamebench publish --matrix /path/to/closed-matrix.json --games-repo ../web3dgamebench-games
 ```
+
+`web3dgamebench control` starts the private operator UI at `http://127.0.0.1:8765`.
+Its Calibration Gate runs the three frozen Pi diagnostics serially and keeps canonical Matrix
+start locked until their digest-bound receipt passes.
+It can start a reviewed plan, request a graceful pause at the next task barrier, interrupt
+the managed process group, and resume the same canonical receipt. The control plane listens
+only on loopback, keeps its write token outside the repository, and never exposes model
+credentials to the browser. See `docs/control-plane.md` for its operating and recovery contract.
 
 The first started `season-1` matrix becomes the season's canonical matrix. A later start is rejected;
 operators must resume its receipt instead. Candidate and evidence failures remain terminal benchmark

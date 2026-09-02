@@ -5,9 +5,20 @@ from pathlib import Path
 import pytest
 
 from web3dgamebench.matrix import MatrixError, create_preflight_plan, write_preflight_plan
-from web3dgamebench.smoke import _write_receipt, verify_smoke_receipt
+from web3dgamebench.smoke import (
+    _FIXTURE,
+    _FIXTURE_SCRIPT,
+    _write_receipt,
+    verify_smoke_receipt,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_smoke_fixture_respects_the_bounded_server_csp() -> None:
+    assert '<script src="app.js"></script>' in _FIXTURE
+    assert "<script>" not in _FIXTURE
+    assert "window.__WEB3DGAMEBENCH__" in _FIXTURE_SCRIPT
 
 
 def _receipt(plan_path: Path, plan: dict) -> dict:

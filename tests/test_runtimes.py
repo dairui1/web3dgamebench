@@ -57,7 +57,9 @@ def test_pi_container_caps_each_command_without_limiting_the_task(
     assert all("test-only-token" not in argument for argument in argv)
     assert "/tmp:rw,nosuid,nodev,size=1g" in argv
     assert any("/usr/local/bin/chromium:ro" in argument for argument in argv)
-    assert any("web3dgamebench-goal-runner.ts:ro" in argument for argument in argv)
+    assert any("web3dgamebench-goal:ro" in argument for argument in argv)
+    assert all("web3dgamebench-smoke" not in argument for argument in argv)
+    assert "WEB3DGAMEBENCH_PI_GOAL_UPSTREAM_VERSION=0.54.4" in env_file.read_text()
 
 
 def test_codex_effort_is_explicit() -> None:
@@ -88,7 +90,11 @@ def test_container_codex_uses_external_boundary() -> None:
             True,
             "claude-code-native-slash-goal",
         ),
-        ("pi-deepseek-v4-flash", True, "pi-goal-native-slash-command"),
+        (
+            "pi-deepseek-v4-flash",
+            True,
+            "web3dgamebench-pi-adapter-managed-run",
+        ),
     ],
 )
 def test_external_goal_is_separate_system_control_for_every_harness(
@@ -107,17 +113,19 @@ def test_external_goal_is_separate_system_control_for_every_harness(
     if profile.harness == "codex":
         control = invocation.argv[invocation.argv.index("--developer-instructions") + 1]
         assert invocation.argv[invocation.argv.index("--objective") + 1].startswith(
-            "Complete and verify"
+            "Implement TASK.md and stop after a successful npm run build."
         )
         assert prompt not in invocation.argv
     else:
         control = invocation.argv[invocation.argv.index("--append-system-prompt") + 1]
         expected_command = "/goal" if profile.harness == "claude-code" else "/benchmark-goal"
-        assert invocation.argv[-1].startswith(f"{expected_command} Complete and verify")
+        assert invocation.argv[-1].startswith(
+            f"{expected_command} Implement TASK.md and stop after a successful npm run build."
+        )
         assert prompt not in invocation.argv
 
     assert "external persistent-goal control" in control
-    assert "unmodified TASK.md" in control
+    assert "Keep TASK.md unmodified" in control
     assert prompt not in control
     assert invocation.goal_activation is not None
     assert invocation.goal_activation.native_goal is native_goal
@@ -150,7 +158,7 @@ def test_external_goal_receipt_is_stable_across_workspaces() -> None:
 
 
 def test_goal_lifecycle_only_records_named_goal_tools() -> None:
-    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    objective = "Implement TASK.md and stop after a successful npm run build."
     stdout = "\n".join(
         [
             json.dumps(
@@ -197,7 +205,7 @@ def test_goal_lifecycle_only_records_named_goal_tools() -> None:
 
 
 def test_goal_lifecycle_prefers_nested_create_goal_arguments() -> None:
-    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    objective = "Implement TASK.md and stop after a successful npm run build."
     stdout = json.dumps(
         {
             "name": "create_goal",
@@ -217,7 +225,7 @@ def test_goal_lifecycle_prefers_nested_create_goal_arguments() -> None:
 
 
 def test_claude_native_goal_lifecycle_is_observed() -> None:
-    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    objective = "Implement TASK.md and stop after a successful npm run build."
     stdout = "\n".join(
         [
             json.dumps(
@@ -244,7 +252,7 @@ def test_claude_native_goal_lifecycle_is_observed() -> None:
 
 
 def test_pi_goal_state_lifecycle_is_observed_and_deduplicated() -> None:
-    objective = "Complete and verify the benchmark contract in the unmodified TASK.md."
+    objective = "Implement TASK.md and stop after a successful npm run build."
     active = {
         "type": "entry_appended",
         "entry": {

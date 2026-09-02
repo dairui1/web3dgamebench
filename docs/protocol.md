@@ -8,13 +8,19 @@
 6. Classify runtime infrastructure failures separately from candidate failures.
 7. Verify the terminal candidate-workspace digest before snapshotting it, normalize the playable bundle, then run the task-aware deterministic build and browser admission checks without modifying candidate source. Serve the game beneath a production-shaped nested `/playground/<task>/<profile>/` route so root-relative assets fail before publication. The bytes admitted by the evaluator are the bytes eligible for publication.
 8. Run task-specific blinded playtest judges directly against the private immutable render when semantic diagnostic evidence is required; never publish a game merely to judge it.
-9. Bound each candidate cell to two hours and each Pi shell command to 20 minutes. A command timeout returns control to the agent and remains visible in the raw trace; a cell timeout stops and classifies the run as infrastructure evidence.
+9. Bound each formal candidate cell to two hours and each Pi shell command to 20 minutes. Non-canonical Pi adapter calibration uses a 2700-second external deadline. A command timeout returns control to the agent and remains visible in the raw trace; a cell deadline with a live candidate is `candidate-non-termination`, while provider, Harbor, CLI, and container faults remain infrastructure failures.
 10. Run candidate containers with Docker init, a 1024-PID ceiling, and the supervised Chromium launcher. Stream stdout and stderr into the run directory so interruption or timeout preserves the trace accumulated before cleanup.
 11. Close the complete matrix before publishing any prompt or source. The first validly started Season 1 matrix is canonical; interruptions and infrastructure failures resume that receipt rather than creating another attempt. A matrix whose frozen inputs are intentionally revised must be explicitly invalidated before a replacement plan is started.
 12. Bind each terminal cell's manifest, Harbor task lock and trial receipt, raw event stream, stderr, evaluator report, evaluated source tree, and playable bundle into the closed receipt.
 13. Publish every trusted cell from that receipt in one operation. Revalidate the frozen plan and run bindings, then copy source and build only from the evaluator's immutable `render/` snapshot, never from the mutable candidate workspace.
 14. Deploy the frozen season catalog, games, Arena API, and D1 migration.
 15. Verify desktop, 390 px phone, keyboard, pointer/touch, restart, cross-task pair sampling, voting, and leaderboard behavior on the live domain.
+
+Pi's persistent implementation loop is intentionally not capped by a generic model-turn or tool-call
+counter. After a successful build, the benchmark adapter records source and dist digests and ends
+candidate verification for that exact revision. `benchmark_complete` validates the recorded build
+and TASK hash, but does not claim runtime admission, feature completeness, game feel, balance, or a
+full victory path; those remain evaluator, judge, and human-playtest concerns.
 
 Claude Fable runs as a separate optional backfill lane bound to the frozen core plan. It is excluded
 from the task barrier and publication closure gate. Quota exhaustion records `quota-deferred`, stops

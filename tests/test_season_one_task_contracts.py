@@ -93,14 +93,16 @@ def test_goal_contracts_are_bilingual_and_external_goal_safe() -> None:
         assert "horizontal page overflow stays within 2 CSS pixels" in english
         assert "`console.error`" in english
         assert "whose text, `aria-label`, or title identifies it as Restart" in english
-        assert "横向溢出都不得超过 2 个 CSS 像素" in chinese
+        assert "页面横向溢出不得超过 2 个 CSS 像素" in chinese
         assert "`console.error`" in chinese
         assert "`aria-label`" in chinese
         assert "npm run build" in english and "npm run build" in chinese
-        assert "Do not create an autopilot" in english
-        assert "Full win/loss or end-to-end playthrough evidence is neither required" in english
-        assert "不要为了证明完成而编写自动驾驶器" in chinese
-        assert "无需也不要求提供完整胜负或端到端通关证据" in chinese
+        assert "Do not write or run browser automation" in english
+        assert "The Goal is complete when `npm run build` succeeds" in english
+        assert "不要编写或运行浏览器自动化" in chinese
+        assert "`npm run build` 成功并生成 `dist/` 后，Goal 即完成" in chinese
+        assert "smoke" not in english.lower()
+        assert "冒烟" not in chinese
 
 
 def test_season_one_operational_completion_contract_is_uniform() -> None:

@@ -30,7 +30,7 @@ def test_fable_profile_is_optional_claude_lane(season_plan: dict) -> None:
     profile = load_profiles(ROOT)["claude-fable-default"]
     receipt = _new_receipt(Path("/tmp/core-plan.json"), season_plan, profile)
 
-    assert profile.model == "claude-fable-5"
+    assert profile.model == "claude-fable-5-1"
     assert receipt["policy"] == {
         "blocks_core_matrix": False,
         "quota_failure": "defer",

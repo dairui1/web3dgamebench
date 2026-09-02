@@ -1,0 +1,24 @@
+[calibration]
+season = "season-1"
+profile = "pi-deepseek-v4-flash"
+tasks = ["canyon-strike", "bombsite-retake", "first-night"]
+backend = "harbor"
+
+# Existing-adapter evidence is reused where a clean historical evaluator report
+# exists. First Night had no clean legacy run, so it uses the stricter full
+# admission score rather than spending another potentially unbounded legacy run.
+[calibration.baselines.canyon-strike]
+kind = "historical-existing-adapter"
+passed_checks = 19
+total_checks = 19
+reference = "20260901T190744Z-canyon-strike-pi-deepseek-v4-flash-a1-19a68497"
+
+[calibration.baselines.bombsite-retake]
+kind = "historical-existing-adapter"
+passed_checks = 19
+total_checks = 20
+reference = "pi-goal-ab-20260902T034619Z/current_goal_timeout_snapshot"
+
+[calibration.baselines.first-night]
+kind = "conservative-full-admission"
+reference = "no-clean-existing-adapter-run"
