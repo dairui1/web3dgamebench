@@ -437,6 +437,7 @@
 
     return {
       receipt, cells, tasks, profiles, grid, counts, runner, active, canonical, currentTask, phase, taskState, runningTasks, preview,
+      controls: state.controls || {},
     };
   }
 
@@ -1208,6 +1209,8 @@
       ]);
       statusLine.dataset.rendered = key;
     }
+    const retryable = ['candidate-failure', 'evidence-failure', 'infrastructure-error'].includes(cell.status);
+    $('drawer-actions').hidden = !(retryable && d.controls.can_retry === true);
 
     const yesNo = (v) => (v === true ? '是' : v === false ? '否' : '--');
     const kv = [
@@ -1427,6 +1430,11 @@
     $('btn-interrupt').addEventListener('click', openInterruptDialog);
     $('btn-resume').addEventListener('click', () => runAction('resume', null, '已请求继续：执行进程正在从正式回执恢复。'));
     $('btn-retry').addEventListener('click', () => runAction('retry', {}, '失败单元格已保留历史记录、重新排队，并开始继续执行 Matrix。'));
+    $('drawer-retry').addEventListener('click', () => {
+      if (!app.selectedCell) return;
+      const cellId = app.selectedCell;
+      runAction('retry', { cell_ids: [cellId] }, `${cellId} 已保留历史记录、重新排队，并开始继续执行。`);
+    });
     $('btn-invalidate').addEventListener('click', openInvalidateDialog);
     $('btn-refresh').addEventListener('click', () => {
       const btn = $('btn-refresh');

@@ -61,6 +61,7 @@ def test_control_app_is_local_token_guarded_and_lists_frozen_options(
     assert "技术详情" in html
     assert 'id="btn-invalidate"' in html
     assert 'id="btn-retry"' in html
+    assert 'id="drawer-retry"' in html
     assert 'id="dlg-invalidate-reason"' in html
     state = supervisor.snapshot()
     assert state["controls"]["can_prepare"] is True

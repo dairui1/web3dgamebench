@@ -263,6 +263,12 @@
     </div>
     <div class="drawer-body">
       <div id="drawer-status" class="status-line"></div>
+      <div class="row-actions" id="drawer-actions" hidden>
+        <button type="button" class="btn" id="drawer-retry"
+                title="保留本轮记录，重新排队并继续执行这个单元格">
+          <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>重跑此项</span>
+        </button>
+      </div>
       <dl class="kv" id="drawer-kv"></dl>
       <div id="drawer-failures" class="failures" hidden>
         <h3 class="subhead">失败原因</h3>
