@@ -286,6 +286,7 @@ def command_matrix(args: argparse.Namespace) -> int:
                 backend=args.backend or "harbor",
                 smoke_receipt=(Path(args.smoke_receipt) if args.smoke_receipt else None),
                 stop_after_task=args.stop_after_task,
+                carry_receipt=(Path(args.carry_receipt) if args.carry_receipt else None),
             )
     except MatrixInterrupted as error:
         print(error.receipt_path)
@@ -417,6 +418,7 @@ def build_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--backend", choices=("native", "container", "harbor"))
     matrix.add_argument("--smoke-receipt")
     matrix.add_argument("--stop-after-task")
+    matrix.add_argument("--carry-receipt")
     matrix.set_defaults(func=command_matrix)
     publish = commands.add_parser("publish")
     publish_source = publish.add_mutually_exclusive_group(required=True)

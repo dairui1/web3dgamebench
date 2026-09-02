@@ -20,6 +20,7 @@ from web3dgamebench.matrix import (
     PlanDriftError,
     SeasonLock,
     _barrier_pause_requested,
+    _carry_completed_cells,
     _load_vendor_locks,
     _new_receipt,
     _write_receipt,
@@ -142,6 +143,43 @@ def test_plan_write_is_immutable_and_digest_checked(
     mutated["cells"][0]["attempt"] = 99
     with pytest.raises(PlanDriftError, match="digest mismatch"):
         verify_plan_digest(mutated)
+
+
+def test_carry_completed_cells_preserves_only_playable_results(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    source = _new_receipt(plan_path, season_plan, "harbor")
+    completed = source["cells"][0]
+    completed.update(
+        status="completed",
+        playable=True,
+        passed=True,
+        trusted=False,
+        run=str(tmp_path / "completed-run"),
+        artifacts={"schema_version": 1, "files": {}},
+    )
+    source["cells"][1].update(
+        status="evidence-failure",
+        playable=False,
+        passed=False,
+        trusted=False,
+        run=str(tmp_path / "failed-run"),
+    )
+    source["status"] = "invalidated"
+    source_path = tmp_path / "source.json"
+    _write_receipt(source_path, source)
+    monkeypatch.setattr(matrix_module, "verify_run_artifacts", lambda *_args: None)
+    receipt = _new_receipt(plan_path, season_plan, "harbor")
+
+    _carry_completed_cells(receipt, season_plan, source_path)
+
+    assert receipt["cells"][0]["status"] == "completed"
+    assert receipt["cells"][0]["carried_from_receipt"] == str(source_path.resolve())
+    assert receipt["cells"][1]["status"] == "pending"
+    assert receipt["carry_forward"]["carried_cells"] == 1
 
 
 def test_frozen_input_drift_stops_execution(
@@ -326,7 +364,9 @@ def test_publication_rechecks_failed_cell_artifacts(
     receipt = _new_receipt(plan_path, season_plan, "container")
     _terminalize(receipt)
     failed = receipt["cells"][0]
-    failed.update(status="candidate-failure", passed=False, trusted=False)
+    failed.update(
+        status="candidate-failure", playable=False, passed=False, trusted=False
+    )
     receipt.update(
         status="complete",
         receipt_path=str(receipt_path.resolve()),
@@ -662,6 +702,7 @@ def _terminalize(receipt: dict) -> None:
             {
                 "status": "completed",
                 "run": f"/runs/{cell['cell_id']}",
+                "playable": True,
                 "passed": True,
                 "trusted": True,
                 "artifacts": copy.deepcopy(artifacts),
@@ -679,10 +720,16 @@ def test_resume_only_runs_resumable_cells(
     receipt_path = tmp_path / "receipt.json"
     receipt = _new_receipt(plan_path, season_plan, "container")
     _terminalize(receipt)
-    receipt["cells"][1].update(status="candidate-failure", passed=False, trusted=False)
-    receipt["cells"][2].update(status="evidence-failure", passed=False, trusted=False)
+    receipt["cells"][1].update(
+        status="candidate-failure", playable=False, passed=False, trusted=False
+    )
+    receipt["cells"][2].update(
+        status="evidence-failure", playable=False, passed=False, trusted=False
+    )
     for index, status in ((3, "pending"), (4, "infrastructure-error"), (5, "interrupted")):
-        receipt["cells"][index].update(status=status, passed=False, trusted=False)
+        receipt["cells"][index].update(
+            status=status, playable=False, passed=False, trusted=False
+        )
     receipt["status"] = "interrupted"
     _write_receipt(receipt_path, receipt)
     matrix_module._claim_canonical_matrix("season-1", receipt_path, receipt)
@@ -694,6 +741,7 @@ def test_resume_only_runs_resumable_cells(
         cell.update(
             status="completed",
             run=f"/runs/{cell['cell_id']}",
+            playable=True,
             passed=True,
             trusted=True,
             artifacts=copy.deepcopy(receipt["cells"][0]["artifacts"]),

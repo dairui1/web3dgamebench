@@ -30,6 +30,39 @@ def test_prepare_preserves_the_canonical_task_brief(monkeypatch, tmp_path: Path)
     assert _candidate_prompt(task) == canonical.decode("utf-8")
 
 
+def test_prepare_recovery_seeds_failed_workspace_and_records_penalty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
+    task = load_task(ROOT, "first-night")
+    profile = load_profiles(ROOT)["codex-sol-medium"]
+    source = tmp_path / "source-run"
+    (source / "workspace").mkdir(parents=True)
+    (source / "workspace/game.js").write_text("export const repaired = true;\n")
+    (source / "workspace/node_modules").mkdir()
+    (source / "workspace/node_modules/ignored.js").write_text("ignored\n")
+    (source / "manifest.json").write_text(json.dumps({"run_id": "source-123"}))
+
+    run_root, workspace = prepare(
+        ROOT, task, profile, recovery_from=source
+    )
+    manifest = json.loads((run_root / "manifest.json").read_text())
+
+    assert (workspace / "game.js").is_file()
+    assert not (workspace / "node_modules").exists()
+    assert (workspace / "TASK.md").read_bytes() == task.brief.read_bytes()
+    assert manifest["repair"] == {
+        "assisted": True,
+        "attempt": 1,
+        "penalty_points": 100,
+        "source_run_id": "source-123",
+        "reason": "Automatic recovery pass after the original build was not playable.",
+        "changes": [
+            "Seeded the recovery pass from the original candidate workspace."
+        ],
+    }
+
+
 def test_run_manifest_records_goal_receipt_and_observed_codex_lifecycle(
     monkeypatch, tmp_path: Path
 ) -> None:

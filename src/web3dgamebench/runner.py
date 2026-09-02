@@ -86,13 +86,21 @@ def _candidate_prompt(task: Task) -> str:
     return task.brief.read_text(encoding="utf-8")
 
 
-def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple[Path, Path]:
+def prepare(
+    root: Path,
+    task: Task,
+    profile: Profile,
+    attempt: int = 1,
+    *,
+    recovery_from: Path | None = None,
+) -> tuple[Path, Path]:
     run_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{task.id}-{profile.id}-a{attempt}-{uuid.uuid4().hex[:8]}"
     run_root = runs_dir() / run_id
     workspace = run_root / "workspace"
     workspace.mkdir(parents=True)
+    seed = recovery_from / "workspace" if recovery_from is not None else task.starter
     shutil.copytree(
-        task.starter,
+        seed,
         workspace,
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("node_modules", "dist"),
@@ -121,6 +129,16 @@ def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple
         "workspace": str(workspace),
         "status": "prepared",
     }
+    if recovery_from is not None:
+        source_manifest = json.loads((recovery_from / "manifest.json").read_text())
+        manifest["repair"] = {
+            "assisted": True,
+            "attempt": 1,
+            "penalty_points": 100,
+            "source_run_id": source_manifest.get("run_id") or recovery_from.name,
+            "reason": "Automatic recovery pass after the original build was not playable.",
+            "changes": ["Seeded the recovery pass from the original candidate workspace."],
+        }
     (run_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return run_root, workspace
 
@@ -137,6 +155,7 @@ def run_once(
     *,
     backend: str = "container",
     cancel_event: threading.Event | None = None,
+    recovery_from: Path | None = None,
 ) -> Path:
     if backend not in {"native", "container", "harbor"}:
         raise ValueError(f"unknown backend: {backend}")
@@ -145,7 +164,9 @@ def run_once(
         raise ValueError(f"unknown profile: {profile_id}")
     profile = profiles[profile_id]
     task = load_task(root, task_id)
-    run_root, workspace = prepare(root, task, profile, attempt)
+    run_root, workspace = prepare(
+        root, task, profile, attempt, recovery_from=recovery_from
+    )
     prompt = _candidate_prompt(task)
     invocation_workspace = (
         Path("/workspace") if backend in {"container", "harbor"} else workspace

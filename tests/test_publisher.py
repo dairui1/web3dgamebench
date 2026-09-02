@@ -152,7 +152,7 @@ def test_season_one_run_requires_closed_matrix(tmp_path: Path) -> None:
         publish_runs(root, [run], games)
 
 
-def test_matrix_publication_requires_exact_trusted_run_set(
+def test_matrix_publication_requires_exact_playable_run_set(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     root = tmp_path / "bench"
@@ -174,8 +174,9 @@ def test_matrix_publication_requires_exact_trusted_run_set(
         "season": "season-1",
         "cells": [
             {
-                "run": str(expected),
-                "trusted": True,
+                    "run": str(expected),
+                    "playable": True,
+                    "trusted": True,
                 "task": "first-night",
                 "profile": "profile",
                 "attempt": 1,
@@ -188,7 +189,7 @@ def test_matrix_publication_requires_exact_trusted_run_set(
         lambda _root, value: (value, {}),
     )
 
-    with pytest.raises(PublishError, match="exactly match all trusted cells"):
+    with pytest.raises(PublishError, match="exactly match all playable cells"):
         publish_runs(
             root,
             [tmp_path / "different-run"],

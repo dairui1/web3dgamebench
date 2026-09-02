@@ -59,7 +59,7 @@ def _copy_source(workspace: Path, destination: Path) -> None:
 def load_publication_matrix(
     root: Path, receipt_path: Path
 ) -> tuple[dict[str, Any], list[Path]]:
-    """Load a closed matrix and return its complete set of trusted run roots."""
+    """Load a closed matrix and return its complete set of playable run roots."""
 
     try:
         receipt, _plan = validate_publication_receipt(
@@ -70,10 +70,10 @@ def load_publication_matrix(
     runs = [
         Path(cell["run"]).expanduser().resolve()
         for cell in receipt["cells"]
-        if cell["trusted"] is True
+        if cell["playable"] is True
     ]
     if not runs:
-        raise PublishError("closed matrix has no trusted passing runs")
+        raise PublishError("closed matrix has no playable runs")
     if len(runs) != len(set(runs)):
         raise PublishError("closed matrix references a run more than once")
     return receipt, runs
@@ -83,7 +83,7 @@ def _matrix_cells_by_run(receipt: dict[str, Any]) -> dict[Path, dict[str, Any]]:
     return {
         Path(cell["run"]).expanduser().resolve(): cell
         for cell in receipt["cells"]
-        if cell["trusted"] is True
+        if cell["playable"] is True
     }
 
 
@@ -222,7 +222,7 @@ def publish_runs(
         catalog = json.loads(template.read_text(encoding="utf-8"))
     if matrix_receipt is not None and set(resolved_runs) != set(matrix_cells):
         raise PublishError(
-            "publication runs must exactly match all trusted cells in the closed matrix"
+            "publication runs must exactly match all playable cells in the closed matrix"
         )
     if matrix_receipt is not None:
         catalog = _publication_catalog(root, catalog, matrix_receipt["season"], plan)

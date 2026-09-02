@@ -10,6 +10,7 @@ import tempfile
 import threading
 import uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1248,9 +1249,11 @@ def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
             raise MatrixError(f"matrix receipt cell has no passed result: {cell_id}")
         if not isinstance(cell.get("trusted"), bool):
             raise MatrixError(f"matrix receipt cell has no trusted result: {cell_id}")
-        if cell["passed"] is not cell["trusted"]:
-            raise MatrixError(f"matrix receipt cell pass and trust disagree: {cell_id}")
-        if (cell["status"] == "completed") is not cell["trusted"]:
+        if not isinstance(cell.get("playable"), bool):
+            raise MatrixError(f"matrix receipt cell has no playable result: {cell_id}")
+        if cell["passed"] is not cell["playable"]:
+            raise MatrixError(f"matrix receipt cell pass and playability disagree: {cell_id}")
+        if (cell["status"] == "completed") is not cell["playable"]:
             raise MatrixError(
                 f"matrix receipt cell terminal result is inconsistent: {cell_id}"
             )
@@ -1265,7 +1268,7 @@ def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
             not isinstance(files.get(name), str) for name in _CLOSURE_REQUIRED_FILES
         ):
             raise MatrixError(f"matrix receipt cell run closure is incomplete: {cell_id}")
-        if cell["trusted"] and (
+        if cell["playable"] and (
             not isinstance(files.get("evaluation/report.json"), str)
             or not isinstance(artifacts.get("render_source_sha256"), str)
             or not isinstance(artifacts.get("render_dist_sha256"), str)
@@ -1298,6 +1301,23 @@ def validate_publication_receipt(
         run_root = Path(cell["run"]).expanduser().resolve()
         verify_run_artifacts(run_root, cell.get("artifacts"))
         if cell["trusted"] is not True:
+            if cell["playable"] is not True:
+                continue
+            manifest = _candidate_manifest(run_root)
+            report = _evaluation_report(run_root / "evaluation/report.json")
+            playable, failures, _warnings = assess_playability(report)
+            repair = manifest.get("repair")
+            if (
+                not playable
+                or not isinstance(repair, dict)
+                or repair.get("assisted") is not True
+                or not isinstance(repair.get("penalty_points"), int)
+                or repair["penalty_points"] <= 0
+            ):
+                raise MatrixError(
+                    f"untrusted matrix cell is not a valid playable repair: "
+                    f"{cell['cell_id']} ({'; '.join(failures)})"
+                )
             continue
         manifest = _candidate_manifest(run_root)
         report = _evaluation_report(run_root / "evaluation/report.json")
@@ -1338,6 +1358,44 @@ def _new_receipt(plan_path: Path, plan: dict[str, Any], backend: str) -> dict[st
             }
             for cell in plan["cells"]
         ],
+    }
+
+
+def _carry_completed_cells(
+    receipt: dict[str, Any],
+    plan: dict[str, Any],
+    source_path: Path,
+) -> None:
+    source = load_matrix_receipt(source_path)
+    source_plan_ref = source.get("plan") or {}
+    source_plan_path = source_plan_ref.get("path")
+    if not isinstance(source_plan_path, str):
+        raise MatrixError("carry-forward receipt has no plan")
+    source_plan = _verify_plan_file(Path(source_plan_path), source)
+    if source.get("season") != receipt.get("season"):
+        raise MatrixError("carry-forward receipt belongs to another season")
+    source_cells = {cell["cell_id"]: cell for cell in source["cells"]}
+    if set(source_cells) != {cell["cell_id"] for cell in receipt["cells"]}:
+        raise MatrixError("carry-forward receipt has different matrix cells")
+    carried = 0
+    for cell in receipt["cells"]:
+        previous = source_cells[cell["cell_id"]]
+        if previous.get("status") != "completed" or previous.get("playable") is not True:
+            continue
+        task_id = cell["task"]
+        if source_plan["tasks"].get(task_id) != plan["tasks"].get(task_id):
+            raise MatrixError(f"cannot carry changed completed task: {task_id}")
+        run_root = Path(previous["run"]).expanduser().resolve()
+        verify_run_artifacts(run_root, previous.get("artifacts"))
+        replacement = deepcopy(previous)
+        replacement["carried_from_receipt"] = str(source_path.resolve())
+        cell.clear()
+        cell.update(replacement)
+        carried += 1
+    receipt["carry_forward"] = {
+        "source_receipt": str(source_path.resolve()),
+        "carried_cells": carried,
+        "policy": "unchanged-completed-tasks-only",
     }
 
 
@@ -1681,6 +1739,57 @@ def _execute_cell(
     report = _evaluation_report(report_path)
     trusted, trust_warnings = trusted_cell_gate(plan, cell, manifest, report, run_root)
     playable, playability_failures, admission_warnings = assess_playability(report)
+    if not playable and not cell.get("recovery_attempts"):
+        original_run = run_root
+        recovery = {
+            "attempt": 1,
+            "source_run": str(original_run),
+            "started_at": _now(),
+            "reason": "; ".join(playability_failures),
+            "penalty_points": 100,
+        }
+        cell.setdefault("previous_runs", []).append(str(original_run))
+        cell["recovery_attempts"] = [recovery]
+        cell["phase"] = "recovering"
+        _write_receipt(receipt_path, receipt)
+        run_root = run_once(
+            root,
+            cell["task"],
+            cell["profile"],
+            cell["attempt"],
+            backend=receipt["backend"],
+            cancel_event=cancel_event,
+            recovery_from=original_run,
+        )
+        cell["run"] = str(run_root)
+        manifest = _candidate_manifest(run_root)
+        if manifest.get("status") == "infrastructure-error":
+            raise MatrixError(
+                "recovery runtime exited without benchmark evidence: "
+                f"{run_root} (exit {manifest.get('exit_code')})"
+            )
+        if manifest.get("status") not in {"candidate-complete", "candidate-failure"}:
+            raise MatrixError(
+                f"recovery runtime returned an unknown status for {run_root}: "
+                f"{manifest.get('status')}"
+            )
+        cell["phase"] = "evaluating-recovery"
+        _write_receipt(receipt_path, receipt)
+        report_path = evaluate_run(root, run_root)
+        report = _evaluation_report(report_path)
+        trusted, trust_warnings = trusted_cell_gate(
+            plan, cell, manifest, report, run_root
+        )
+        playable, playability_failures, admission_warnings = assess_playability(report)
+        recovery.update(
+            {
+                "run": str(run_root),
+                "completed_at": _now(),
+                "playable": playable,
+            }
+        )
+        cell["repair"] = manifest.get("repair")
+        admission_warnings.append("assisted repair applied with 100 point penalty")
     if manifest.get("status") == "candidate-failure":
         admission_warnings.append("candidate lifecycle did not complete")
     admission_warnings.extend(trust_warnings)
@@ -1912,6 +2021,7 @@ def start_matrix(
     backend: str = "harbor",
     smoke_receipt: Path | None = None,
     stop_after_task: str | None = None,
+    carry_receipt: Path | None = None,
 ) -> Path:
     plan_path = plan_path.expanduser().resolve()
     plan = load_preflight_plan(plan_path)
@@ -1931,6 +2041,8 @@ def start_matrix(
     with SeasonLock(season_id):
         receipt_path = runs_dir() / f"matrix-{plan['plan_id']}-{uuid.uuid4().hex[:8]}.json"
         receipt = _new_receipt(plan_path, plan, backend)
+        if carry_receipt is not None:
+            _carry_completed_cells(receipt, plan, carry_receipt.expanduser().resolve())
         if smoke is not None:
             receipt["harness_smoke"] = {
                 "receipt": str(smoke_receipt.expanduser().resolve()),
