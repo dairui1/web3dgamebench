@@ -21,9 +21,9 @@
 
 当前冻结产物：
 
-- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T140916Z.json`
-- Plan digest：`44be668e83ae5388e75449cc56ff333ea834063cd5a3c82fb5bfce7e4f7994fb`
-- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T140917Z-feb4317b-03339cc8/receipt.json`（3/3 harness passed）。
+- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-20260902T151354Z-8764df02.json`
+- Plan digest：`a5deb941fca644e49d408cc0758eebba6e39e7e2a7130551bdc766223b3f37a6`
+- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T151354Z-8764df02-4df8ff12/receipt.json`（3/3 harness passed）。
 - Candidate image：`web3dgamebench-candidate:0.3.0` / `sha256:66e16b8f9d041bb8b5f17fda5f7aee7b9ee93ff7cf49b041ad3c75d2d54ca1e1`
 
 ## P1：本地 Matrix Control Plane
@@ -32,7 +32,7 @@
 - [x] WebUI 通过既有 Matrix CLI 启动或恢复 Harbor backend，不直接调用 Docker、Harbor 或改写 receipt。
 - [x] 支持在下一个 task barrier 暂停；控制命令绑定 `matrix_id`、持久化并由 Matrix 在 barrier 审计性确认。
 - [x] 支持立即中断托管进程组并沿用现有 trace 保全与 `interrupted` 恢复语义。
-- [x] 展示 10 × 8 cell 网格、状态分类、当前 task、plan/smoke/image provenance、runner 日志和 cell artifacts。
+- [x] 展示完整 Matrix cell 网格、状态分类、当前 task、plan/smoke/image provenance、runner 日志和 cell artifacts。
 - [x] 写操作使用本地随机 token，拒绝非 loopback Host/Origin；浏览器不接收模型凭证。
 - [x] 将 control runtime、UI 和 host dependency lock 纳入冻结 plan，并重新生成匹配的 Harbor smoke receipt。
 - [x] 前端由 Claude Code `2.1.258` + `claude-fable-5-1` 实现，经 1440 × 900 和 390 × 844 浏览器验收。
@@ -69,11 +69,11 @@
 - [x] bump Pi runtime/control/bridge version，并更新冻结的 image digest 与 runtime evidence schema。
 - [x] 补齐 unit、integration、Harbor smoke、timeout counterexample 和 receipt verification tests。
 - [x] 将旧 plan 标记 stale，保留原始审计记录，不原地修改旧 receipt。
-- [x] 重新生成 Season 1 plan，并核对完整 80-cell matrix、task barrier 和 profile 顺序；价格仍按冻结 pricing 配置与实际 token buckets 在 receipt 中结算。
+- [x] 将 Fable 纳入 Season 1 后重新生成 plan，并核对完整 90-cell matrix、task barrier 和 profile 顺序；价格仍按冻结 pricing 配置与实际 token buckets 在 receipt 中结算。
 - [x] 生成与新 plan、镜像和 bridge digest 一致的 harness smoke receipt。
 - [ ] 只有 plan review 与 smoke receipt 同时通过后，才从第一个 task barrier 重新开始完整 Matrix。
 - [ ] 执行期间继续遵守 same-task profiles 可并行、tasks 串行；不得人工修补 workspace。
-- [ ] 80-cell closure、Fable backfill、judge、publisher 全部完成前不得发布 task prompt 或生成游戏源码。
+- [ ] 90-cell closure、judge、publisher 全部完成前不得发布 task prompt 或生成游戏源码。
 
 ## 本次诊断基线
 
