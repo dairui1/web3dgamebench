@@ -25,6 +25,7 @@ from web3dgamebench.matrix import (
     _new_receipt,
     _write_receipt,
     close_run_artifacts,
+    create_extension_plan,
     create_preflight_plan,
     load_matrix_receipt,
     load_preflight_plan,
@@ -180,6 +181,52 @@ def test_carry_completed_cells_preserves_only_playable_results(
     assert receipt["cells"][0]["carried_from_receipt"] == str(source_path.resolve())
     assert receipt["cells"][1]["status"] == "pending"
     assert receipt["carry_forward"]["carried_cells"] == 1
+
+
+def test_extension_plan_runs_only_cells_not_covered_by_closed_receipts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    source = _new_receipt(plan_path, season_plan, "harbor")
+    _terminalize(source)
+    source["cells"][0].update(
+        status="candidate-failure", playable=False, passed=False, trusted=False
+    )
+    source.update(status="complete", completed_at="2026-09-03T00:00:00+00:00")
+    source_path = tmp_path / "closed-source.json"
+    _write_receipt(source_path, source)
+
+    expanded = copy.deepcopy(season_plan)
+    expanded["season"]["profiles"].append("gemini-new")
+    expanded["profiles"]["gemini-new"] = {
+        **expanded["profiles"]["codex-sol-medium"],
+        "model": "gemini-new",
+    }
+    for task_id in expanded["season"]["tasks"]:
+        expanded["cells"].append(
+            {
+                "cell_id": f"{task_id}::gemini-new::a1",
+                "task": task_id,
+                "profile": "gemini-new",
+                "harness": "codex",
+                "model": "gemini-new",
+                "effort": "medium",
+                "attempt": 1,
+            }
+        )
+    monkeypatch.setattr(matrix_module, "create_preflight_plan", lambda *_args: expanded)
+
+    extension = create_extension_plan(ROOT, "season-1", [source_path])
+
+    assert extension["matrix_kind"] == "extension"
+    assert len(extension["cells"]) == 10
+    assert {cell["profile"] for cell in extension["cells"]} == {"gemini-new"}
+    assert extension["extension"]["covered_cell_count"] == 90
+    assert extension["extension"]["full_cell_count"] == 100
+    covered = {cell["cell_id"]: cell for cell in extension["extension"]["covered_cells"]}
+    assert covered[source["cells"][0]["cell_id"]]["status"] == "candidate-failure"
 
 
 def test_frozen_input_drift_stops_execution(
@@ -364,9 +411,7 @@ def test_publication_rechecks_failed_cell_artifacts(
     receipt = _new_receipt(plan_path, season_plan, "container")
     _terminalize(receipt)
     failed = receipt["cells"][0]
-    failed.update(
-        status="candidate-failure", playable=False, passed=False, trusted=False
-    )
+    failed.update(status="candidate-failure", playable=False, passed=False, trusted=False)
     receipt.update(
         status="complete",
         receipt_path=str(receipt_path.resolve()),
@@ -467,7 +512,7 @@ def _trusted_evidence(
             "candidate_workdir": "/workspace",
             "image_digest": season_plan["runtime_environment"]["container_images"][
                 "candidate"
-            ]["id"]
+            ]["id"],
         },
     }
     frozen = season_plan["frozen_inputs"]["files"]
@@ -1062,6 +1107,10 @@ def test_formal_season_rejects_native_but_accepts_harbor_backend_name(
 
 def test_matrix_cli_requires_exactly_one_frozen_source() -> None:
     parser = build_parser()
+    extension_args = parser.parse_args(
+        ["plan", "--season", "season-1", "--extend-from", "/tmp/base.json"]
+    )
+    assert extension_args.extend_from == ["/tmp/base.json"]
     assert parser.parse_args(["matrix", "--season", "season-1"]).season == "season-1"
     assert parser.parse_args(["matrix", "--plan", "/tmp/plan.json"]).plan
     assert parser.parse_args(["matrix", "--resume", "/tmp/receipt.json"]).resume

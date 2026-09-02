@@ -51,6 +51,12 @@ family. Candidate containers use Docker init, a 1024-PID ceiling, a supervised C
 group, streamed trace files, and a 90-minute cell deadline. The task barrier stops on infrastructure
 failure so an operator can classify and resume the same immutable receipt.
 
+The closed canonical matrix anchors an append-only chain of extension batches. Each extension
+freezes the current task/profile cross product, records terminal unchanged cells covered by earlier
+closed receipts, and schedules only missing cells. Coverage is identity- and snapshot-sensitive, so
+editing an existing task or profile does not silently reuse incompatible evidence. Extensions do
+not replace or mutate the canonical claim and can be resumed independently.
+
 Pi uses the unmodified `@narumitw/pi-goal@0.54.4` runtime for goal persistence, managed-run
 lifecycle, and continuation across compaction. A small repository-frozen bridge only starts that
 managed run, keeps non-interactive `pi --print` alive until an upstream terminal state, and emits

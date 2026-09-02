@@ -14,6 +14,7 @@ from .evaluator import evaluate_run
 from .judge import run_judge
 from .matrix import (
     MatrixInterrupted,
+    create_extension_plan,
     create_plan_for_matrix,
     create_preflight_plan,
     invalidate_canonical_matrix,
@@ -32,7 +33,11 @@ def project_root() -> Path:
 
 def command_plan(args: argparse.Namespace) -> int:
     root = project_root()
-    plan = create_preflight_plan(root, args.season)
+    plan = (
+        create_extension_plan(root, args.season, [Path(path) for path in args.extend_from])
+        if args.extend_from
+        else create_preflight_plan(root, args.season)
+    )
     if args.output:
         path = write_preflight_plan(Path(args.output), plan)
         print(path)
@@ -368,6 +373,13 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.set_defaults(func=command_doctor)
     plan = commands.add_parser("plan")
     plan.add_argument("--season", required=True)
+    plan.add_argument(
+        "--extend-from",
+        action="append",
+        default=[],
+        metavar="RECEIPT",
+        help="exclude unchanged terminal cells already covered by a closed receipt",
+    )
     plan.add_argument("--output")
     plan.set_defaults(func=command_plan)
     run = commands.add_parser("run")

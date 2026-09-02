@@ -149,6 +149,11 @@ def _publication_catalog(
     expected = plan.get("season", {}).get("tasks")
     if task_ids != expected:
         raise PublishError("catalog task order does not match the frozen matrix plan")
+    current_tasks = {
+        task.get("id"): task
+        for task in current.get("tasks", [])
+        if isinstance(task, dict) and isinstance(task.get("id"), str)
+    }
     for task in catalog_tasks:
         if not all(
             isinstance(task.get(field), str) and task[field]
@@ -168,7 +173,8 @@ def _publication_catalog(
             evaluation.get("checklist"), list
         ):
             raise PublishError(f"catalog task evaluation is incomplete: {task['id']}")
-        task.setdefault("submissions", [])
+        existing = current_tasks.get(task["id"], {}).get("submissions", [])
+        task["submissions"] = existing if isinstance(existing, list) else []
     return catalog
 
 

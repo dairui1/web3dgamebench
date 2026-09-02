@@ -619,6 +619,83 @@ def create_preflight_plan(root: Path, season_id: str) -> dict[str, Any]:
     return plan
 
 
+def create_extension_plan(
+    root: Path, season_id: str, source_receipts: list[Path]
+) -> dict[str, Any]:
+    """Create a frozen plan containing only cells absent from earlier closed matrices."""
+
+    if not source_receipts:
+        raise MatrixError("an extension plan requires at least one source receipt")
+    plan = create_preflight_plan(root, season_id)
+    expected = {cell["cell_id"]: cell for cell in plan["cells"]}
+    covered: dict[str, dict[str, Any]] = {}
+    sources: list[dict[str, Any]] = []
+
+    for raw_path in source_receipts:
+        source_path = raw_path.expanduser().resolve()
+        source = validate_closed_receipt(load_matrix_receipt(source_path))
+        if source.get("season") != season_id:
+            raise MatrixError(f"extension source belongs to another season: {source_path}")
+        source_plan_ref = source.get("plan") or {}
+        source_plan_path = source_plan_ref.get("path")
+        if not isinstance(source_plan_path, str):
+            raise MatrixError(f"extension source has no plan: {source_path}")
+        source_plan = _verify_plan_file(Path(source_plan_path), source)
+        sources.append(
+            {
+                "matrix_id": source["matrix_id"],
+                "receipt": str(source_path),
+                "receipt_digest_sha256": source["receipt_digest_sha256"],
+                "plan_digest_sha256": source["plan_digest_sha256"],
+            }
+        )
+
+        candidate_cells = list(source["cells"])
+        inherited = source_plan.get("extension", {}).get("covered_cells", [])
+        if isinstance(inherited, list):
+            candidate_cells.extend(item for item in inherited if isinstance(item, dict))
+        for previous in candidate_cells:
+            cell_id = previous.get("cell_id")
+            current = expected.get(cell_id)
+            if current is None or previous.get("status") not in _TERMINAL_CELL_STATUSES:
+                continue
+            task_id = current["task"]
+            profile_id = current["profile"]
+            if source_plan.get("tasks", {}).get(task_id) != plan["tasks"].get(task_id):
+                continue
+            if source_plan.get("profiles", {}).get(profile_id) != plan["profiles"].get(
+                profile_id
+            ):
+                continue
+            provenance = {
+                "cell_id": cell_id,
+                "task": task_id,
+                "profile": profile_id,
+                "attempt": current["attempt"],
+                "status": previous["status"],
+                "receipt": previous.get("receipt", str(source_path)),
+                "receipt_digest_sha256": previous.get(
+                    "receipt_digest_sha256", source["receipt_digest_sha256"]
+                ),
+            }
+            covered.setdefault(cell_id, provenance)
+
+    missing = [cell for cell in plan["cells"] if cell["cell_id"] not in covered]
+    if not missing:
+        raise MatrixError("extension plan has no new cells to run")
+    plan["matrix_kind"] = "extension"
+    plan["extension"] = {
+        "source_receipts": sources,
+        "covered_cells": [covered[cell_id] for cell_id in expected if cell_id in covered],
+        "covered_cell_count": len(covered),
+        "full_cell_count": len(expected),
+    }
+    plan["cells"] = missing
+    plan.pop("plan_digest_sha256", None)
+    plan["plan_digest_sha256"] = _value_sha256(plan)
+    return plan
+
+
 def _atomic_json_replace(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -754,7 +831,55 @@ def verify_frozen_inputs(root: Path, plan: dict[str, Any]) -> None:
         for profile_id in season.profiles
         for attempt in range(1, season.attempts + 1)
     ]
-    if plan.get("cells") != expected_cells:
+    if plan.get("matrix_kind") == "extension":
+        extension = plan.get("extension")
+        covered_cells = (
+            extension.get("covered_cells") if isinstance(extension, dict) else None
+        )
+        if not isinstance(covered_cells, list):
+            raise PlanDriftError("extension plan coverage is malformed")
+        planned_by_id = {
+            cell.get("cell_id"): cell
+            for cell in plan.get("cells", [])
+            if isinstance(cell, dict) and isinstance(cell.get("cell_id"), str)
+        }
+        covered_by_id = {
+            cell.get("cell_id"): cell
+            for cell in covered_cells
+            if isinstance(cell, dict) and isinstance(cell.get("cell_id"), str)
+        }
+        expected_by_id = {cell["cell_id"]: cell for cell in expected_cells}
+        if (
+            len(planned_by_id) != len(plan.get("cells", []))
+            or len(covered_by_id) != len(covered_cells)
+            or set(planned_by_id) & set(covered_by_id)
+            or set(planned_by_id) | set(covered_by_id) != set(expected_by_id)
+            or any(
+                planned_by_id[cell_id] != expected_by_id[cell_id]
+                for cell_id in planned_by_id
+            )
+        ):
+            raise PlanDriftError(
+                "extension plan cells and coverage do not match the season configuration"
+            )
+        for cell_id, coverage in covered_by_id.items():
+            expected = expected_by_id[cell_id]
+            if any(
+                coverage.get(key) != expected[key] for key in ("task", "profile", "attempt")
+            ):
+                raise PlanDriftError(f"extension coverage identity changed: {cell_id}")
+            if coverage.get("status") not in _TERMINAL_CELL_STATUSES:
+                raise PlanDriftError(f"extension coverage is not terminal: {cell_id}")
+            if not all(
+                isinstance(coverage.get(key), str) and coverage[key]
+                for key in ("receipt", "receipt_digest_sha256")
+            ):
+                raise PlanDriftError(f"extension coverage has no provenance: {cell_id}")
+        if extension.get("covered_cell_count") != len(covered_cells) or extension.get(
+            "full_cell_count"
+        ) != len(expected_cells):
+            raise PlanDriftError("extension plan coverage counts are inconsistent")
+    elif plan.get("cells") != expected_cells:
         raise PlanDriftError("planned matrix cells do not match the season configuration")
     current_tasks = {
         task_id: _task_snapshot(load_task(root, task_id)) for task_id in season.tasks
@@ -910,7 +1035,7 @@ def _barrier_pause_requested(receipt: dict[str, Any], task_id: str) -> bool:
 def _claim_canonical_matrix(
     season_id: str, receipt_path: Path, receipt: dict[str, Any]
 ) -> Path | None:
-    if season_id != "season-1":
+    if season_id != "season-1" or receipt.get("matrix_kind") == "extension":
         return None
     path = _canonical_matrix_path(season_id)
     value = {
@@ -996,7 +1121,7 @@ def invalidate_canonical_matrix(season_id: str, *, reason: str) -> Path:
 def _assert_canonical_matrix(
     season_id: str, receipt_path: Path, receipt: dict[str, Any]
 ) -> None:
-    if season_id != "season-1":
+    if season_id != "season-1" or receipt.get("matrix_kind") == "extension":
         return
     path = _canonical_matrix_path(season_id)
     try:
@@ -1026,6 +1151,13 @@ def _verify_canonical_publication_receipt(receipt: dict[str, Any]) -> None:
     receipt_path = Path(raw_path).expanduser().resolve()
     if raw_path != str(receipt_path):
         raise MatrixError("season-1 matrix receipt path is not canonical")
+    if receipt.get("matrix_kind") == "extension":
+        stored = _load_receipt(receipt_path)
+        if stored.get("receipt_digest_sha256") != receipt.get("receipt_digest_sha256"):
+            raise MatrixError(
+                "publication receipt does not match the stored extension receipt"
+            )
+        return
     _assert_canonical_matrix("season-1", receipt_path, receipt)
     stored = _load_receipt(receipt_path)
     if stored.get("receipt_digest_sha256") != receipt.get("receipt_digest_sha256"):
@@ -1057,7 +1189,7 @@ def _verify_canonical_publication_receipt(receipt: dict[str, Any]) -> None:
 def _seal_canonical_matrix(
     season_id: str, receipt_path: Path, receipt: dict[str, Any]
 ) -> Path | None:
-    if season_id != "season-1":
+    if season_id != "season-1" or receipt.get("matrix_kind") == "extension":
         return None
     validate_closed_receipt(receipt)
     receipt_path = receipt_path.expanduser().resolve()
@@ -1231,8 +1363,6 @@ def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
     cells = receipt.get("cells")
     if not isinstance(cells, list) or not cells:
         raise MatrixError("matrix receipt has no cells")
-    if receipt["season"] == "season-1" and len(cells) != 90:
-        raise MatrixError("season-1 matrix receipt must contain exactly 90 cells")
     seen: set[str] = set()
     for cell in cells:
         if not isinstance(cell, dict):
@@ -1252,7 +1382,9 @@ def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(cell.get("playable"), bool):
             raise MatrixError(f"matrix receipt cell has no playable result: {cell_id}")
         if cell["passed"] is not cell["playable"]:
-            raise MatrixError(f"matrix receipt cell pass and playability disagree: {cell_id}")
+            raise MatrixError(
+                f"matrix receipt cell pass and playability disagree: {cell_id}"
+            )
         if (cell["status"] == "completed") is not cell["playable"]:
             raise MatrixError(
                 f"matrix receipt cell terminal result is inconsistent: {cell_id}"
@@ -1297,6 +1429,8 @@ def validate_publication_receipt(
     plan_path = Path(plan_reference["path"]).expanduser().resolve()
     plan = _verify_plan_file(plan_path, validated)
     verify_frozen_inputs(root, plan)
+    if plan.get("matrix_kind") == "extension":
+        _verify_extension_sources(plan)
     for cell in validated["cells"]:
         run_root = Path(cell["run"]).expanduser().resolve()
         verify_run_artifacts(run_root, cell.get("artifacts"))
@@ -1330,10 +1464,49 @@ def validate_publication_receipt(
     return validated, plan
 
 
+def _verify_extension_sources(plan: dict[str, Any]) -> None:
+    extension = plan.get("extension")
+    sources = extension.get("source_receipts") if isinstance(extension, dict) else None
+    coverage = extension.get("covered_cells") if isinstance(extension, dict) else None
+    if not isinstance(sources, list) or not sources or not isinstance(coverage, list):
+        raise MatrixError("extension plan has no source receipt lineage")
+    known: dict[str, str] = {}
+    for source in sources:
+        if not isinstance(source, dict) or not isinstance(source.get("receipt"), str):
+            raise MatrixError("extension source receipt is malformed")
+        source_path = Path(source["receipt"]).expanduser().resolve()
+        source_receipt = validate_closed_receipt(load_matrix_receipt(source_path))
+        if source_receipt.get("season") != plan.get("season", {}).get("id"):
+            raise MatrixError(f"extension source belongs to another season: {source_path}")
+        if source_receipt.get("receipt_digest_sha256") != source.get(
+            "receipt_digest_sha256"
+        ) or source_receipt.get("plan_digest_sha256") != source.get("plan_digest_sha256"):
+            raise MatrixError(f"extension source receipt changed: {source_path}")
+        known[str(source_path)] = source_receipt["receipt_digest_sha256"]
+    for cell in coverage:
+        raw_path = cell.get("receipt") if isinstance(cell, dict) else None
+        expected_digest = (
+            cell.get("receipt_digest_sha256") if isinstance(cell, dict) else None
+        )
+        if not isinstance(raw_path, str) or not isinstance(expected_digest, str):
+            raise MatrixError("extension coverage provenance is malformed")
+        source_path = str(Path(raw_path).expanduser().resolve())
+        if source_path not in known:
+            source_receipt = validate_closed_receipt(load_matrix_receipt(Path(source_path)))
+            if source_receipt.get("season") != plan.get("season", {}).get("id"):
+                raise MatrixError(
+                    f"extension coverage belongs to another season: {source_path}"
+                )
+            known[source_path] = source_receipt["receipt_digest_sha256"]
+        if known[source_path] != expected_digest:
+            raise MatrixError(f"extension coverage receipt changed: {source_path}")
+
+
 def _new_receipt(plan_path: Path, plan: dict[str, Any], backend: str) -> dict[str, Any]:
-    return {
+    receipt = {
         "schema_version": 2,
         "matrix_id": f"{plan['plan_id']}-{uuid.uuid4().hex[:8]}",
+        "matrix_kind": plan.get("matrix_kind", "canonical"),
         "season": plan["season"]["id"],
         "backend": backend,
         "status": "running",
@@ -1359,6 +1532,13 @@ def _new_receipt(plan_path: Path, plan: dict[str, Any], backend: str) -> dict[st
             for cell in plan["cells"]
         ],
     }
+    if plan.get("matrix_kind") == "extension":
+        receipt["extension"] = {
+            "source_receipts": deepcopy(plan["extension"]["source_receipts"]),
+            "covered_cell_count": plan["extension"]["covered_cell_count"],
+            "full_cell_count": plan["extension"]["full_cell_count"],
+        }
+    return receipt
 
 
 def _carry_completed_cells(
@@ -1777,9 +1957,7 @@ def _execute_cell(
         _write_receipt(receipt_path, receipt)
         report_path = evaluate_run(root, run_root)
         report = _evaluation_report(report_path)
-        trusted, trust_warnings = trusted_cell_gate(
-            plan, cell, manifest, report, run_root
-        )
+        trusted, trust_warnings = trusted_cell_gate(plan, cell, manifest, report, run_root)
         playable, playability_failures, admission_warnings = assess_playability(report)
         recovery.update(
             {
@@ -2038,6 +2216,8 @@ def start_matrix(
 
         smoke = verify_smoke_receipt(plan_path, plan, smoke_receipt, backend=backend)
     verify_frozen_inputs(root, plan)
+    if plan.get("matrix_kind") == "extension":
+        _verify_extension_sources(plan)
     with SeasonLock(season_id):
         receipt_path = runs_dir() / f"matrix-{plan['plan_id']}-{uuid.uuid4().hex[:8]}.json"
         receipt = _new_receipt(plan_path, plan, backend)
@@ -2089,6 +2269,8 @@ def resume_matrix(root: Path, receipt_path: Path, *, backend: str | None = None)
         _assert_canonical_matrix(season_id, receipt_path, receipt)
         plan = _verify_plan_file(plan_path, receipt)
         verify_frozen_inputs(root, plan)
+        if plan.get("matrix_kind") == "extension":
+            _verify_extension_sources(plan)
         if receipt.get("status") == "complete":
             closure_path = _canonical_closure_path(season_id)
             if closure_path.is_file():

@@ -19,7 +19,7 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     (root / "configs").mkdir()
     (root / "configs/pricing.toml").write_text(
         '[pricing]\ncurrency = "USD"\nunit_tokens = 1000000\nas_of = "2026-08-31"\n'
-        '[models.model]\ninput = 2\ncached_input = 0.2\noutput = 10\n'
+        "[models.model]\ninput = 2\ncached_input = 0.2\noutput = 10\n"
         'source = "https://example.com/pricing"\nsource_label = "Official pricing"\n'
     )
     workspace.mkdir(parents=True)
@@ -67,17 +67,17 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     (tmp_path / "run/evaluation").mkdir()
     (tmp_path / "run/evaluation/report.json").write_text(
         json.dumps(
-                {
-                    "trusted": True,
-                    "passed": True,
-                    "build": {"passed": True},
-                    "checks": [
-                        {"name": "build", "passed": True},
-                        {"name": "desktop.canvas-visible", "passed": True},
-                        {"name": "desktop.nonblank", "passed": True},
-                        {"name": "desktop.starts", "passed": True},
-                    ],
-                    "evaluator": {"render_source_sha256": render_source_sha256(render)},
+            {
+                "trusted": True,
+                "passed": True,
+                "build": {"passed": True},
+                "checks": [
+                    {"name": "build", "passed": True},
+                    {"name": "desktop.canvas-visible", "passed": True},
+                    {"name": "desktop.nonblank", "passed": True},
+                    {"name": "desktop.starts", "passed": True},
+                ],
+                "evaluator": {"render_source_sha256": render_source_sha256(render)},
                 "evidence": {
                     "render_source_sha256": render_source_sha256(render),
                     "post_build_render_source_sha256": render_source_sha256(render),
@@ -174,9 +174,9 @@ def test_matrix_publication_requires_exact_playable_run_set(
         "season": "season-1",
         "cells": [
             {
-                    "run": str(expected),
-                    "playable": True,
-                    "trusted": True,
+                "run": str(expected),
+                "playable": True,
+                "trusted": True,
                 "task": "first-night",
                 "profile": "profile",
                 "attempt": 1,
@@ -221,15 +221,14 @@ def test_publish_rejects_render_modified_after_evaluation(
 
 def test_frozen_season_one_catalog_matches_the_matrix_task_order() -> None:
     catalog = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "configs/catalogs/season-1.json"
-        ).read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "configs/catalogs/season-1.json").read_text(
+            encoding="utf-8"
+        )
     )
     seasons = tomllib.loads(
-        (
-            Path(__file__).resolve().parents[1] / "configs/seasons.toml"
-        ).read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "configs/seasons.toml").read_text(
+            encoding="utf-8"
+        )
     )["seasons"]
 
     assert catalog["schema_version"] == 1
@@ -240,7 +239,18 @@ def test_frozen_season_one_catalog_matches_the_matrix_task_order() -> None:
     current = {
         "schema_version": 1,
         "season": {"id": "season-1"},
-        "tasks": [{"id": task_id, "title": "drifted"} for task_id in seasons["season-1"]["tasks"]],
+        "tasks": [
+            {
+                "id": task_id,
+                "title": "drifted",
+                "submissions": (
+                    [{"profileId": "existing", "id": "existing-submission"}]
+                    if index == 0
+                    else []
+                ),
+            }
+            for index, task_id in enumerate(seasons["season-1"]["tasks"])
+        ],
     }
     selected = publisher_module._publication_catalog(
         Path(__file__).resolve().parents[1],
@@ -249,3 +259,6 @@ def test_frozen_season_one_catalog_matches_the_matrix_task_order() -> None:
         {"season": {"tasks": seasons["season-1"]["tasks"]}},
     )
     assert selected["tasks"][0]["title"] == catalog["tasks"][0]["title"]
+    assert selected["tasks"][0]["submissions"] == [
+        {"profileId": "existing", "id": "existing-submission"}
+    ]

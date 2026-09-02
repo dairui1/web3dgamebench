@@ -15,6 +15,7 @@
 13. Publish playable cells from the evaluator's immutable `render/` snapshot, never from the mutable candidate workspace. Missing replay, cost, provenance, network isolation, or secondary viewport checks are recorded as warnings rather than publication errors.
 14. Deploy the frozen season catalog, games, Arena API, and D1 migration.
 15. Verify desktop, 390 px phone, keyboard, pointer/touch, restart, cross-task pair sampling, voting, and leaderboard behavior on the live domain.
+16. Grow a closed season through immutable extension batches. Build each extension plan from one or more closed receipts, record terminal unchanged cells as provenance-only coverage, and execute only the remaining cells. Never rerun candidate or evidence failures merely because a profile or task was added.
 
 Pi's persistent implementation loop comes from unmodified upstream `pi-goal` and is intentionally
 not capped by a generic model-turn or tool-call counter. The benchmark bridge only makes its managed
@@ -31,6 +32,12 @@ The official pilot and Season 1 use one attempt per profile. Failed candidate co
 evidence failures remain terminal cells; only interrupted or infrastructure-failed cells may be
 retried. Task-specific private playtest judges provide semantic diagnostics, while automated checks
 remain admission and reliability gates and blind human preference votes determine the ranking.
+
+The canonical Season 1 matrix is the immutable base batch, not a permanent 90-cell ceiling. Adding
+a profile expands it across every active task; adding a task expands it across every active profile.
+An extension freezes the current cross product, subtracts unchanged terminal cells named by closed
+source receipts, and stores their receipt digests as coverage provenance. Its own receipt contains
+only newly executed cells, so later environments are not retroactively attributed to the base plan.
 
 Harbor is the official candidate execution backend, but it is not the benchmark authority. The
 repository runner launches one Harbor trial per cell and retains task/profile scheduling, task

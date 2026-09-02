@@ -72,6 +72,10 @@ uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt 
 uv run web3dgamebench matrix --resume /path/to/matrix-receipt.json
 # After all 90 cells are terminal:
 uv run web3dgamebench publish --matrix /path/to/closed-matrix.json --games-repo ../web3dgamebench-games
+# Later, add profiles or tasks in config and freeze only the missing cells:
+uv run web3dgamebench plan --season season-1 --extend-from /path/to/closed-matrix.json --output /path/to/season-1-extension.json
+uv run web3dgamebench smoke --plan /path/to/season-1-extension.json --backend harbor
+uv run web3dgamebench matrix --plan /path/to/season-1-extension.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor
 ```
 
 `web3dgamebench control` starts the private operator UI at `http://127.0.0.1:8765`.
@@ -85,6 +89,12 @@ operators must resume its receipt instead. Candidate and evidence failures remai
 results, while provider, harness, and evaluator infrastructure failures stop the matrix and remain
 resumable. Closing binds every run manifest, trace, evaluator report, evaluated source tree, and
 playable bundle digest. Publication revalidates those bindings and uses the frozen Season 1 catalog.
+
+After the canonical receipt closes, Season 1 is appendable rather than fixed at 90 cells. An
+extension plan records unchanged terminal cells as covered and emits only the missing cross-product
+cells. Completed, candidate-failed, and evidence-failed cells are retained as benchmark evidence;
+changed task/profile snapshots and infrastructure failures remain uncovered. A closed extension
+receipt can be the source of the next extension.
 
 The candidate image deliberately layers the pinned runtimes on ReconBench's local
 `reconbench-candidate:0.147.0` base. Candidate generation, production rendering, and browser
