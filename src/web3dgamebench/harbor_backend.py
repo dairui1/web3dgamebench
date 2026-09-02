@@ -67,15 +67,13 @@ def _copy_runtime_assets(root: Path, environment: Path) -> None:
         "infra/candidate/codex_goal_runner.py",
         "infra/candidate/egress_proxy.py",
         "infra/candidate/pi_command_timeout.js",
+        "infra/candidate/pi_goal_runner.ts",
+        "infra/candidate/pi_goal_bridge.json",
     ):
         source = root / relative
         if not source.is_file():
             raise HarborBackendError(f"required frozen runtime asset is missing: {source}")
         shutil.copy2(source, environment / source.name)
-    goal_fork = root / "infra/candidate/pi-goal-benchmark"
-    if not goal_fork.is_dir():
-        raise HarborBackendError(f"required frozen runtime asset is missing: {goal_fork}")
-    shutil.copytree(goal_fork, environment / goal_fork.name)
 
 
 def _write_task(
@@ -107,7 +105,8 @@ COPY npm-cache/ /vendor/npm-cache/
 COPY codex_goal_runner.py /usr/local/bin/web3dgamebench-codex-goal
 COPY chromium /usr/local/bin/chromium
 COPY pi_command_timeout.js /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js
-COPY pi-goal-benchmark/ /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal/
+COPY pi_goal_runner.ts /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts
+COPY pi_goal_bridge.json /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-bridge.json
 RUN chmod 0555 /usr/local/bin/web3dgamebench-codex-goal /usr/local/bin/chromium \\
     && mkdir -p /workspace \\
     && chown candidate:candidate /workspace

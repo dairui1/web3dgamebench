@@ -179,6 +179,14 @@ class Web3DPi(_Web3DHarborAgent):
             for name, value in adapter.items()
         ):
             raise RuntimeError("invalid Pi adapter environment")
+        await self.exec_as_agent(
+            environment,
+            command=(
+                "mkdir -p /runtime-home/pi-agent && "
+                "printf '%s\\n' '{\"rpc\":{\"enabled\":true}}' "
+                "> /runtime-home/pi-agent/pi-goal.json"
+            ),
+        )
         return {
             "OPENCODE_API_KEY": key,
             "PI_CODING_AGENT_DIR": "/runtime-home/pi-agent",

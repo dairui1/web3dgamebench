@@ -55,7 +55,7 @@ def test_candidate_commands_have_a_bounded_runtime() -> None:
     config = load_container_config(ROOT)
     assert config.command_timeout_seconds == 5400
     assert config.candidate_total_timeout_seconds == 5400
-    assert config.pi_adapter.runtime_evidence_schema_version == 3
+    assert config.pi_adapter.runtime_evidence_schema_version == 4
     assert config.pi_adapter.calibration_total_timeout_seconds == 5400
     assert config.pids_limit == 1024
 
@@ -78,8 +78,11 @@ def test_task_retains_machine_readable_runtime_metadata() -> None:
     assert task.goal_completion == "contract-and-evidence"
     assert task.viewports["desktop"].width == 1440
     assert task.viewports["phone"].height == 844
-    assert task.checks.restart
-    assert task.checks.pointer_or_touch_input
+    assert task.checks.canvas_nonblank
+    assert task.checks.resize
+    assert not task.checks.runtime_state
+    assert not task.checks.restart
+    assert not task.checks.pointer_or_touch_input
     assert task.review_brief == task.root / "goal.zh-CN.md"
     assert task.reference_archetype == "Minecraft"
 

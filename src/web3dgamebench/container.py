@@ -20,9 +20,6 @@ class PiAdapterConfig:
     version: str
     upstream_pi_goal_version: str
     runtime_evidence_schema_version: int
-    verification_window_seconds: int
-    repeat_verification_warning: int
-    repeat_verification_terminate: int
     calibration_total_timeout_seconds: int
 
     def environment(self) -> dict[str, str]:
@@ -31,15 +28,6 @@ class PiAdapterConfig:
             "WEB3DGAMEBENCH_PI_GOAL_UPSTREAM_VERSION": self.upstream_pi_goal_version,
             "WEB3DGAMEBENCH_RUNTIME_EVIDENCE_SCHEMA_VERSION": str(
                 self.runtime_evidence_schema_version
-            ),
-            "WEB3DGAMEBENCH_PI_VERIFICATION_WINDOW_SECONDS": str(
-                self.verification_window_seconds
-            ),
-            "WEB3DGAMEBENCH_PI_REPEAT_VERIFICATION_WARNING": str(
-                self.repeat_verification_warning
-            ),
-            "WEB3DGAMEBENCH_PI_REPEAT_VERIFICATION_TERMINATE": str(
-                self.repeat_verification_terminate
             ),
         }
 
@@ -89,13 +77,6 @@ def load_container_config(root: Path) -> ContainerConfig:
             runtime_evidence_schema_version=int(
                 adapter["runtime_evidence_schema_version"]
             ),
-            verification_window_seconds=int(adapter["verification_window_seconds"]),
-            repeat_verification_warning=int(
-                adapter["repeat_verification_warning"]
-            ),
-            repeat_verification_terminate=int(
-                adapter["repeat_verification_terminate"]
-            ),
             calibration_total_timeout_seconds=int(
                 adapter["calibration_total_timeout_seconds"]
             ),
@@ -109,9 +90,6 @@ def load_container_config(root: Path) -> ContainerConfig:
         raise ContainerError("pids_limit must be positive")
     adapter_limits = (
         config.pi_adapter.runtime_evidence_schema_version,
-        config.pi_adapter.verification_window_seconds,
-        config.pi_adapter.repeat_verification_warning,
-        config.pi_adapter.repeat_verification_terminate,
         config.pi_adapter.calibration_total_timeout_seconds,
     )
     if (
@@ -120,11 +98,6 @@ def load_container_config(root: Path) -> ContainerConfig:
         or any(value <= 0 for value in adapter_limits)
     ):
         raise ContainerError("Pi adapter version and limits must be positive")
-    if (
-        config.pi_adapter.repeat_verification_warning
-        >= config.pi_adapter.repeat_verification_terminate
-    ):
-        raise ContainerError("Pi repeated-verification warning must precede termination")
     return config
 
 
@@ -253,7 +226,9 @@ def container_invocation_argv(profile: Profile, argv: tuple[str, ...]) -> list[s
         "--extension",
         "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-command-timeout.js",
         "--extension",
-        "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal/benchmark.ts",
+        "/usr/lib/node_modules/@narumitw/pi-goal/dist/index.ts",
+        "--extension",
+        "/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts",
     ]
     return command
 
@@ -293,6 +268,11 @@ def wrap_command(
             raise ContainerError(f"missing {profile.credential_env}")
         environment[profile.runtime_env] = value
         environment["PI_CODING_AGENT_DIR"] = "/runtime-home/pi-agent"
+        pi_agent_dir = credential_dir / "pi-agent"
+        pi_agent_dir.mkdir(mode=0o700)
+        (pi_agent_dir / "pi-goal.json").write_text(
+            '{"rpc":{"enabled":true}}\n', encoding="utf-8"
+        )
         environment["WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS"] = str(
             config.command_timeout_seconds
         )
@@ -315,10 +295,10 @@ def wrap_command(
     args.extend(["-v", f"{chromium_wrapper}:/usr/local/bin/chromium:ro"])
     if profile.harness == "pi":
         timeout_extension = root / "infra/candidate/pi_command_timeout.js"
-        goal_runner_extension = root / "infra/candidate/pi-goal-benchmark"
+        goal_runner_extension = root / "infra/candidate/pi_goal_runner.ts"
         if not timeout_extension.is_file():
             raise ContainerError(f"missing Pi command timeout extension: {timeout_extension}")
-        if not goal_runner_extension.is_dir():
+        if not goal_runner_extension.is_file():
             raise ContainerError(f"missing Pi Goal runner extension: {goal_runner_extension}")
         extension_target = (
             "/usr/lib/node_modules/@earendil-works/pi-coding-agent/"
@@ -328,7 +308,7 @@ def wrap_command(
         args.extend(
             [
                 "-v",
-                f"{goal_runner_extension}:/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal:ro",
+                f"{goal_runner_extension}:/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts:ro",
             ]
         )
     if config.memory:

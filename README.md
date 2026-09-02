@@ -1,6 +1,6 @@
 # Web3DGameBench
 
-Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Candidate cells, Pi shell commands, the Pi verification guard, and non-canonical calibration runs all use the same 90-minute timeout. Pi keeps persistent Goal continuation for implementation and stops candidate work after a successful build for the current source revision. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
+Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Candidate cells, Pi shell commands, and non-canonical calibration runs all use the same 90-minute timeout. Pi uses upstream `pi-goal` for persistent Goal continuation, with a thin bridge for non-interactive execution. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
 
 The public result is intentionally two-part:
 

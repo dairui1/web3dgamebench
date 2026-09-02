@@ -33,8 +33,9 @@ Restarting the WebUI does not automatically resume an interrupted or incomplete 
   `pi-deepseek-v4-flash`, Harbor, and the frozen 90-minute diagnostic ceiling. Its receipt is
   explicitly non-canonical and binds the watchdog probe, plan digest, prompt/control hashes,
   image identity, trace, workspace digest, completion evidence, evaluator report, and baseline
-  comparison. A clean historical existing-adapter score is reused for Canyon Strike and Bombsite
-  Retake; First Night uses the stricter full-admission score because no clean legacy run exists.
+  comparison. Because candidate prompts and admission checks changed together, all three tasks must
+  pass every current admission check; earlier detailed-prompt scores are diagnostic history, not
+  numerical A/B baselines.
 - **Start** accepts only plan and smoke receipt paths below the managed run directory and always
   uses the Harbor backend. Season 1 rejects a stale plan, mismatched smoke receipt, an existing
   canonical claim, or a missing/failed calibration receipt for the exact selected plan digest.

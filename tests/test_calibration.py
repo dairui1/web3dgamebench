@@ -6,6 +6,7 @@ import pytest
 
 from web3dgamebench.calibration import (
     CalibrationError,
+    _completion_evidence,
     load_calibration_gate,
     require_calibration_gate,
     run_calibration,
@@ -47,6 +48,50 @@ def test_gate_rejects_mutated_receipt(tmp_path: Path) -> None:
     )
 
     assert load_calibration_gate(tmp_path) is None
+
+
+def test_completion_evidence_comes_from_runner_evaluator_build() -> None:
+    manifest = {
+        "prompt": {
+            "task_brief_preserved": True,
+            "workspace_task_brief_sha256_after": "a" * 64,
+        },
+        "goal": {
+            "lifecycle": [
+                {"tool": "update_goal", "status": "complete"},
+            ]
+        },
+    }
+    report = {
+        "trusted": True,
+        "build": {"passed": True},
+        "evidence": {
+            "render_source_unchanged": True,
+            "render_source_sha256": "b" * 64,
+            "render_dist_sha256": "c" * 64,
+        },
+    }
+
+    assert _completion_evidence(manifest, report) == {
+        "source": "runner-evaluator",
+        "build": "npm run build",
+        "task_sha256": "a" * 64,
+        "sourceSha256": "b" * 64,
+        "distSha256": "c" * 64,
+    }
+
+
+def test_completion_evidence_rejects_goal_only_self_report() -> None:
+    manifest = {
+        "prompt": {"task_brief_preserved": True},
+        "goal": {
+            "lifecycle": [
+                {"tool": "update_goal", "status": "complete"},
+            ]
+        },
+    }
+
+    assert _completion_evidence(manifest, {"trusted": True}) is None
 
 
 def test_calibration_stops_after_first_failed_task(monkeypatch, tmp_path: Path) -> None:

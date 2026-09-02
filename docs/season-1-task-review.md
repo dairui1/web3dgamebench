@@ -9,7 +9,7 @@ tasks to `season-1`; its profile list, resolved through `configs/profiles.toml`,
 harness and model set. Before any paid run, inspect the complete expansion with
 `uv run web3dgamebench plan --season season-1`.
 
-Signal Drift remains an immutable `Pilot 0` artifact. The official season contains ten recognizable 3D game archetypes. Each task has one canonical English goal contract for candidate runs and one Chinese mirror for review. Persistent execution control is activated by the harness outside the task prompt; the candidate prompt itself never instructs a model to invoke `/goal`.
+Signal Drift remains an immutable `Pilot 0` artifact. The official season contains ten recognizable 3D game archetypes. Each task has one short, single-paragraph canonical English user prompt and one Chinese mirror for review. Detailed runtime contracts and judge rubrics remain private evaluator inputs rather than candidate-visible implementation checklists. Persistent execution control is activated by the harness outside the task prompt; the candidate prompt itself never instructs a model to invoke `/goal`.
 
 | # | Task | Familiar reference | Core completion event | English | 中文 |
 |---|---|---|---|---|---|
@@ -29,11 +29,12 @@ Signal Drift remains an immutable `Pilot 0` artifact. The official season contai
 Season 1 does not use ten variations of the same movement demo. Its critical paths span flight
 physics, tactical combat, editable voxel state, quest state machines, boss telegraphs, paired
 portal rendering and spatial transforms, precision platforming, racing AI, RTS economy and navigation, and concurrent
-kitchen workflows. Each task couples several systems and defines a causally valid win path as a
-quality target. Candidate completion requires only a successful production build; desktop and phone
-runtime admission, deterministic evaluation, private playtest judging, and human preference
-then measure feature completeness and game effect. A polished scene or a fabricated runtime object
-therefore cannot earn a strong semantic judgment merely by passing admission.
+kitchen workflows. Each prompt names a recognizable product and core loop without prescribing an
+implementation checklist. Candidate completion requires only a successful production build;
+desktop and phone admission checks build integrity, a visible nonblank canvas, resizing, page
+errors, and runtime network use. Private playtest judging and human preference then measure feature
+completeness and game effect, so a polished but shallow scene cannot earn a strong semantic result
+merely by passing admission.
 
 After the private matrix closes, retain per-task admission rate, rubric evidence coverage, score
 distribution, broken-vote rate, and pairwise preference entropy. Near-universal success, a
@@ -42,10 +43,10 @@ in the next season; they are not reasons to change a frozen Season 1 task after 
 
 ## Goal contract policy
 
-- The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex, Claude Code, and Pi must all expose observed Goal creation and completion in their traces; Pi uses the frozen benchmark adapter's structured lifecycle rather than the generic interactive completion policy.
-- No wall-clock or token limit is embedded in a task contract. The runtime applies one 90-minute timeout to formal cells, Pi commands, the verification guard, and non-canonical calibration, without a global implementation turn/tool cap.
-- Candidate completion is operational: the production build must load as a visible, interactive 3D game at both viewports, a primary control and restart must work, and the checked flow must avoid runtime and layout failures.
+- The harness activates an audited external persistence control, then supplies the exact canonical English prompt unchanged. Codex, Claude Code, and Pi must all expose observed Goal creation and completion in their traces; Pi uses upstream `pi-goal` plus a thin non-interactive lifecycle bridge.
+- No wall-clock or token limit is embedded in a task prompt. The runtime applies one 90-minute timeout to formal cells, Pi commands, and non-canonical calibration, without a global implementation turn/tool cap.
+- Candidate completion is operational: upstream Goal reaches complete. Admission separately requires a reproducible build and a visible, nonblank, layout-safe game at both viewports without page errors or runtime network access.
 - Candidates are not asked to write autopilots or prove full win/loss and end-to-end paths. Missing systems, balance, polish, and game feel lower the evaluated result instead of forcing indefinite self-testing.
-- Milestones and target systems guide implementation and grading; they are not an exhaustive self-proof checklist.
+- Detailed gameplay expectations belong to private playtest rubrics and human comparison, not hidden machine-only API requirements.
 - Classic game names establish a shared interaction reference only. Every submission must use original names, geometry, maps, characters, audio, and other assets.
 - Chinese files are review mirrors and are not sent alongside English files during a scored run.

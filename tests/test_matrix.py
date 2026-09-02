@@ -81,10 +81,13 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
         "npm",
     }
     assert versions["pi_goal_upstream"] == "0.54.4"
-    assert versions["pi_adapter"] == "web3dgamebench-pi-adapter-v3"
-    assert (
-        season_plan["runtime_control"]["pi_adapter"]["verification_window_seconds"] == 5400
-    )
+    assert versions["pi_adapter"] == "web3dgamebench-pi-goal-bridge-v1"
+    assert season_plan["runtime_control"]["pi_adapter"] == {
+        "version": "web3dgamebench-pi-goal-bridge-v1",
+        "upstream_pi_goal_version": "0.54.4",
+        "runtime_evidence_schema_version": 4,
+        "calibration_total_timeout_seconds": 5400,
+    }
     assert all(versions.values())
     capabilities = season_plan["runtime_environment"]["candidate_toolchain"]["capabilities"]
     assert capabilities["codex_features"]["goals"] == "goals stable true"

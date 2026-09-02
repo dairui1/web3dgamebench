@@ -51,19 +51,17 @@ family. Candidate containers use Docker init, a 1024-PID ceiling, a supervised C
 group, streamed trace files, and a 90-minute cell deadline. The task barrier stops on infrastructure
 failure so an operator can classify and resume the same immutable receipt.
 
-Pi loads the repository-frozen `web3dgamebench-pi-adapter-v3`, a narrow fork of
-`@narumitw/pi-goal@0.54.4`. It preserves managed-run lifecycle, session persistence, and automatic
-continuation across compaction. It replaces the generic completion tools with
-`benchmark_complete` and `benchmark_blocked`. Completion accepts only a recorded successful build
-for unchanged TASK/source/dist digests. Browser automation, viewport checks, and full playthroughs
-are explicitly excluded from candidate completion; the private evaluator owns runtime admission.
+Pi uses the unmodified `@narumitw/pi-goal@0.54.4` runtime for goal persistence, managed-run
+lifecycle, and continuation across compaction. A small repository-frozen bridge only starts that
+managed run, keeps non-interactive `pi --print` alive until an upstream terminal state, and emits
+one normalized lifecycle event. It does not replace upstream tools, prompts, completion policy, or
+workflow logic.
 
-The adapter does not impose a global model-turn or tool-call budget on implementation. Completion
-convergence is revision-scoped: a successful build records the source and bundle, prompts immediate
-completion, and blocks further shell verification against that unchanged revision. Attempts to add
-browser automation before completion are rejected or converged as candidate verification overruns.
-runner remains the external wall-clock watchdog: formal cells, Pi calibration runs, Pi shell
-commands, and the verification guard all use 5400 seconds.
+All harnesses share the short build-only persistent objective. Goal completion is lifecycle
+evidence, not proof that the game works. After candidate exit, the repository evaluator independently
+rebuilds the captured source offline and binds the unchanged source and resulting `dist/` digests;
+task-specific runtime admission remains private. The runner remains the external wall-clock
+watchdog, with formal cells, Pi calibration runs, and Pi shell commands capped at 5400 seconds.
 
 Harbor job and trial artifacts are converted into the canonical run layout. `harbor.json` binds the
 raw job and trial results, while `harbor-task-lock.json` binds the generated task to the frozen

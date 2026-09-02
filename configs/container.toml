@@ -1,5 +1,5 @@
 [container]
-image = "web3dgamebench-candidate:0.2.0"
+image = "web3dgamebench-candidate:0.3.0"
 evaluator_image = "web3dgamebench-evaluator:0.1.0"
 internal_network = "web3dgamebench-internal"
 egress_network = "web3dgamebench-egress"
@@ -21,10 +21,7 @@ egress_allow = [
 ]
 
 [container.pi_adapter]
-version = "web3dgamebench-pi-adapter-v3"
+version = "web3dgamebench-pi-goal-bridge-v1"
 upstream_pi_goal_version = "0.54.4"
-runtime_evidence_schema_version = 3
-verification_window_seconds = 5400
-repeat_verification_warning = 2
-repeat_verification_terminate = 3
+runtime_evidence_schema_version = 4
 calibration_total_timeout_seconds = 5400

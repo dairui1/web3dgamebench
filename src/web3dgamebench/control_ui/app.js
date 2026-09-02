@@ -54,13 +54,12 @@
   const CALIBRATION_CHECKS = [
     { key: 'trusted_terminal', label: '可信终态', title: 'manifest status 为 candidate-complete，且 goal 被观测为 complete' },
     { key: 'task_brief_preserved', label: 'brief 保留', title: 'prompt.task_brief_preserved 为 true' },
-    { key: 'completion_evidence', label: '完成证据', title: 'update_goal complete 附带 build 证据与 1440x900 / 390x844 双 viewport' },
+    { key: 'completion_evidence', label: '完成证据', title: '上游 goal complete，且 runner evaluator 独立构建成功并绑定 source/dist digest' },
     { key: 'bounded_verification', label: '验证有界', title: 'failure_scope 不是 candidate-verification-overrun' },
     { key: 'evaluator_trusted', label: 'evaluator 可信', title: 'evaluation report 的 trusted 为 true' },
     { key: 'evaluator_not_below_baseline', label: '≥ baseline', title: 'evaluator passed_checks 不低于 baseline 要求' },
   ];
   const BASELINE_KIND = {
-    'historical-existing-adapter': '历史基线',
     'conservative-full-admission': '保守全量',
   };
   const CALIB_ROW = {

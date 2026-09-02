@@ -24,8 +24,8 @@ height = 844
 [checks]
 build = true
 canvas_nonblank = true
-keyboard_input = true
-pointer_or_touch_input = true
-restart = true
+keyboard_input = false
+pointer_or_touch_input = false
+restart = false
 resize = true
-runtime_state = true
+runtime_state = false

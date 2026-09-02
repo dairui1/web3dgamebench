@@ -69,9 +69,13 @@ commands = {
     "node_version": ["node", "--version"],
     "npm_version": ["npm", "--version"],
     "pi_help": ["pi", "--help"],
-    "pi_adapter": [
+    "pi_goal_bridge": [
         "python3", "-c",
-        "import json; print(json.dumps(json.load(open('/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal/fork.json')), sort_keys=True))",
+        "import json; print(json.dumps(json.load(open('/usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-bridge.json')), sort_keys=True))",
+    ],
+    "pi_goal_version": [
+        "python3", "-c",
+        "import json; print(json.load(open('/usr/lib/node_modules/@narumitw/pi-goal/package.json'))['version'])",
     ],
     "pi_version": ["pi", "--version"],
 }
@@ -195,7 +199,8 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
         "codex_version",
         "claude_version",
         "pi_version",
-        "pi_adapter",
+        "pi_goal_bridge",
+        "pi_goal_version",
         "node_version",
         "npm_version",
         *_REQUIRED_CLI_FLAGS,
@@ -235,20 +240,21 @@ def _runtime_environment(root: Path) -> dict[str, Any]:
         )
     }
     try:
-        adapter = json.loads(probe["pi_adapter"]["stdout"])
+        adapter = json.loads(probe["pi_goal_bridge"]["stdout"])
     except json.JSONDecodeError as error:
         raise MatrixError("candidate image returned invalid Pi adapter identity") from error
     if adapter != {
         "adapter_version": config.pi_adapter.version,
-        "entrypoint": "benchmark.ts",
-        "license": "MIT",
+        "entrypoint": "pi_goal_runner.ts",
         "runtime_evidence_schema_version": (
             config.pi_adapter.runtime_evidence_schema_version
         ),
         "upstream_package": "@narumitw/pi-goal",
         "upstream_version": config.pi_adapter.upstream_pi_goal_version,
     }:
-        raise MatrixError("candidate image Pi adapter identity does not match config")
+        raise MatrixError("candidate image Pi Goal bridge identity does not match config")
+    if probe["pi_goal_version"]["stdout"] != config.pi_adapter.upstream_pi_goal_version:
+        raise MatrixError("candidate image upstream pi-goal version does not match config")
     versions["pi_goal_upstream"] = adapter["upstream_version"]
     versions["pi_adapter"] = adapter["adapter_version"]
     capabilities = {
@@ -440,10 +446,15 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "src/web3dgamebench/runtime_contracts.py", "runtime-contract-loader"),
         (root / "src/web3dgamebench/runtime_schema.py", "runtime-schema"),
     ]
-    fork = root / "infra/candidate/pi-goal-benchmark"
     inputs.extend(
-        (path, "candidate-goal-runtime")
-        for path in sorted(item for item in fork.iterdir() if item.is_file())
+        (
+            root / relative,
+            "candidate-goal-runtime",
+        )
+        for relative in (
+            "infra/candidate/pi_goal_runner.ts",
+            "infra/candidate/pi_goal_bridge.json",
+        )
     )
     return inputs
 
@@ -1435,7 +1446,7 @@ def trusted_cell_gate(
             expected_methods = {
                 "codex": "codex-app-server-thread-goal-set",
                 "claude-code": "claude-code-native-slash-goal",
-                "pi": "web3dgamebench-pi-adapter-managed-run",
+                "pi": "upstream-pi-goal-with-noninteractive-bridge",
             }
             harness = profile["harness"]
             if goal.get("native_goal") is not True:

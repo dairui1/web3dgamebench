@@ -46,7 +46,6 @@ def test_season_one_has_ten_distinct_ready_tasks() -> None:
         }
         assert task.brief == task_root / "goal.en.md"
         assert (task_root / raw["review_brief"]).is_file()
-
         seeds.add(raw["seed"])
         references.add(raw["reference_archetype"])
 
@@ -54,101 +53,24 @@ def test_season_one_has_ten_distinct_ready_tasks() -> None:
     assert len(references) == len(SEASON_ONE_TASKS)
 
 
-def test_goal_contracts_are_bilingual_and_external_goal_safe() -> None:
-    english_sections = (
-        "## Objective",
-        "## Operational completion contract",
-        "## Target game systems",
-        "## Execution checkpoints",
-        "## Quality targets",
-        "## Runtime inspection contract",
-        "## Constraints and final evidence",
-    )
-    chinese_sections = (
-        "## 目标",
-        "## 运行完成合同",
-        "## 目标游戏系统",
-        "## 执行检查点",
-        "## 质量目标",
-        "## 运行时检查合同",
-        "## 约束与最终证据",
-    )
-
+def test_goal_prompts_are_bilingual_single_paragraph_user_requests() -> None:
     for task_id in SEASON_ONE_TASKS:
         task_root, raw = _raw_task(task_id)
         english = (task_root / raw["brief"]).read_text(encoding="utf-8")
         chinese = (task_root / raw["review_brief"]).read_text(encoding="utf-8")
 
+        assert english.startswith(f"# {raw['title']}\n\n")
+        assert chinese.startswith(f"# {raw['title']} / ")
+        assert len(english.strip().splitlines()) == 3
+        assert len(chinese.strip().splitlines()) == 3
+        assert 55 <= len(english.split()) <= 110
+        assert "Three.js" in english and "Three.js" in chinese
+        assert raw["reference_archetype"] in english
         assert "/goal" not in english
-        assert all(section in english for section in english_sections)
-        assert all(section in chinese for section in chinese_sections)
-        assert "window.__WEB3DGAMEBENCH__" in english
-        assert "window.__WEB3DGAMEBENCH__" in chinese
-        assert "schema-valid from the first rendered frame" in english
-        assert "`R` must restart immediately" in english
-        assert "从首个渲染帧起" in chinese
-        assert "按 `R` 必须立即重新开始" in chinese
-        assert "1440 x 900" in english and "390 x 844" in english
-        assert "1440 x 900" in chinese and "390 x 844" in chinese
-        assert "horizontal page overflow stays within 2 CSS pixels" in english
-        assert "`console.error`" in english
-        assert "whose text, `aria-label`, or title identifies it as Restart" in english
-        assert "页面横向溢出不得超过 2 个 CSS 像素" in chinese
-        assert "`console.error`" in chinese
-        assert "`aria-label`" in chinese
-        assert "npm run build" in english and "npm run build" in chinese
-        assert "Do not write or run browser automation" in english
-        assert "The Goal is complete when `npm run build` succeeds" in english
-        assert "不要编写或运行浏览器自动化" in chinese
-        assert "`npm run build` 成功并生成 `dist/` 后，Goal 即完成" in chinese
-        assert "smoke" not in english.lower()
-        assert "冒烟" not in chinese
-
-
-def test_season_one_operational_completion_contract_is_uniform() -> None:
-    english_contracts: set[str] = set()
-    chinese_contracts: set[str] = set()
-
-    for task_id in SEASON_ONE_TASKS:
-        task_root, raw = _raw_task(task_id)
-        english = (task_root / raw["brief"]).read_text(encoding="utf-8")
-        chinese = (task_root / raw["review_brief"]).read_text(encoding="utf-8")
-        english_contracts.add(
-            english.split("## Operational completion contract", 1)[1].split(
-                "## Target game systems", 1
-            )[0].strip()
-        )
-        chinese_contracts.add(
-            chinese.split("## 运行完成合同", 1)[1].split("## 目标游戏系统", 1)[0].strip()
-        )
-
-    assert len(english_contracts) == 1
-    assert len(chinese_contracts) == 1
-
-
-def test_season_one_goals_do_not_require_end_to_end_self_play() -> None:
-    forbidden_english = (
-        "complete loop has been played",
-        "played at both required viewports",
-        "Build and play complete",
-        "Build and solve the full",
-        "Build and finish full",
-        "verified winning run",
-    )
-    forbidden_chinese = (
-        "完整试玩了",
-        "分别试玩了完整",
-        "完整解谜结果",
-        "完整比赛试玩结果",
-        "经验证的获胜流程",
-    )
-
-    for task_id in SEASON_ONE_TASKS:
-        task_root, raw = _raw_task(task_id)
-        english = (task_root / raw["brief"]).read_text(encoding="utf-8")
-        chinese = (task_root / raw["review_brief"]).read_text(encoding="utf-8")
-        assert not any(phrase in english for phrase in forbidden_english)
-        assert not any(phrase in chinese for phrase in forbidden_chinese)
+        assert "npm run build" not in english
+        assert "window.__WEB3DGAMEBENCH__" not in english
+        assert "1440 x 900" not in english
+        assert "执行检查点" not in chinese
 
 
 def test_season_one_tasks_are_in_the_ready_runnable_season() -> None:

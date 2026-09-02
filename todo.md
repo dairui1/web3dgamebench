@@ -21,10 +21,10 @@
 
 当前冻结产物：
 
-- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T114815Z.json`
-- Plan digest：`2d2784bb45f40031a2796cebabb6bb274abb4cf33a66bbb3eb8ef0631d3e299b`
-- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T114816Z-079fb484-391944df/receipt.json`（3/3 harness passed）。
-- Candidate image：`web3dgamebench-candidate:0.2.0` / `sha256:e402fb482a085d66bf081eff264628a9df11fb16e231a070419510c45a6f55f4`
+- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T133600Z.json`
+- Plan digest：`ea41a1f41990d1190d79cd08a946072bfbea48913d65cf2806159c2d54322e37`
+- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T133601Z-bf6f6797-34cfc5d2/receipt.json`（3/3 harness passed）。
+- Candidate image：`web3dgamebench-candidate:0.3.0` / `sha256:66e16b8f9d041bb8b5f17fda5f7aee7b9ee93ff7cf49b041ad3c75d2d54ca1e1`
 
 ## P1：本地 Matrix Control Plane
 
@@ -37,44 +37,40 @@
 - [x] 将 control runtime、UI 和 host dependency lock 纳入冻结 plan，并重新生成匹配的 Harbor smoke receipt。
 - [x] 前端由 Claude Code `2.1.258` + `claude-fable-5-1` 实现，经 1440 × 900 和 390 × 844 浏览器验收。
 
-## P1：实现 Benchmark 专用 Pi Adapter
+## P1：收缩为原生 pi-goal + 薄 Bridge
 
-- [x] 移除对通用 Goal 插件 completion policy 的依赖，保留 Pi `0.84.4`、模型、工具集和候选镜像的其他冻结条件。
-- [x] 新增 benchmark 专用 lifecycle，至少提供 `active`、`complete`、`blocked`、`interrupted` 和 `timed_out` 终态，并写入结构化 trace。
+- [x] 使用未修改的 `@narumitw/pi-goal@0.54.4`，不再维护 benchmark 专用 fork、completion tool 或 prompt policy。
+- [x] 只保留薄 bridge：启动 upstream managed run，让 `pi --print` 等待终态，并写入统一 lifecycle 事件。
 - [x] 将外部 Goal 缩短为“实现 TASK.md，并在 `npm run build` 成功后停止”。
 - [x] 明确声明：feature completeness、平衡、game feel 和完整胜负流程由提交后的 evaluator/judge 评估，不是候选自证终点。
-- [x] 提供结构化 completion tool，只要求最终一次 `npm run build` 成功、TASK.md hash 未变化，且 source/dist 与该构建一致。
-- [x] completion tool 只校验 evidence 结构和真实命令记录，不要求完整通关，也不把候选自述当作 evaluator 通过。
-- [x] 由 runner 负责等待并记录 lifecycle 终态，避免依赖交互式 slash command 保持 `pi --print` 存活。
+- [x] Goal complete 只代表上游 lifecycle 结束；TASK hash、独立构建、source/dist digest 由 runner evaluator 在退出后验证。
 
 ## P1：外部强制收敛
 
 - [x] 外部 watchdog 由 runner/process-group 负责，能够中断单次长 agent run，而不是只在 `agent_end` 后检查。
-- [x] 保留 wall clock 和单条 shell command 的硬边界；不对实现阶段做粗粒度的全局 turn/tool cap，改为在 source + dist revision 构建成功后立即收敛。
-- [x] 对连续重复的 full-playthrough、autopilot 或同一路径浏览器脚本发出一次收敛提醒；再次发生则终止为明确的 candidate verification overrun。
-- [x] 正式 cell、Pi shell command、verification guard 与 calibration 统一使用 `5400s`（90 分钟）硬上限。
+- [x] 保留 wall clock 和单条 shell command 的硬边界，不对实现阶段做粗粒度的全局 turn/tool cap。
+- [x] 正式 cell、Pi shell command 与 calibration 统一使用 `5400s`（90 分钟）硬上限。
 - [x] 将 timeout 分类拆开：provider/Harbor infrastructure failure 与 candidate non-termination 不再混为一类。
 
 ## P2：Evaluator 对齐
 
 - [x] 删除候选侧 smoke helper 和所有 Goal 中的 smoke evidence 要求。
-- [x] 明确禁止候选编写浏览器自动化、autopilot 或完整通关脚本。
-- [x] 保持 adapter completion 与 evaluator admission 为两个独立 gate：前者在构建成功后结束候选执行，后者独立判断 submission 是否可信可玩。
+- [x] 将十个候选可见 TASK 全部缩成单段自然用户 prompt，不暴露 schema、检查点、数值阈值或 evaluator 验收清单。
+- [x] 保持 Goal completion 与 evaluator admission 为两个独立 gate：前者结束候选执行，后者独立判断 submission 是否可信可玩。
 
 ## P2：Calibration Gate
 
 - [ ] 使用全新、非 canonical workspace 运行 `bombsite-retake`、`canyon-strike` 和 `first-night`。
 - [ ] 第一轮只跑 `pi-deepseek-v4-flash`，保持同一 provider/model 串行执行，禁止与 canonical Matrix 并发。
-- [ ] 对每个任务比较现有 adapter 与新 adapter；普通 Pi 和 `pi-goal-pro` 仅保留为历史诊断，不再扩大样本。
+- [ ] 运行 upstream pi-goal + bridge；prompt 和 admission 已同时变化，旧 fork 结果只作历史诊断，不声称为严格 A/B。
 - [ ] 每个 calibration run 保存 prompt/control hash、镜像 digest、trace、workspace digest、completion receipt 和 evaluator report。
-- [ ] 新 adapter 必须全部满足以下条件才可进入正式重启：
+- [ ] upstream pi-goal + bridge 必须全部满足以下条件才可进入正式重启：
   - 3/3 lifecycle 得到可信终态，无 Harbor `5400s` timeout；
   - TASK.md 未修改；
   - build evidence 完整，TASK.md、source 和 dist digest 一致；
-  - 没有为了 completion 反复运行完整胜负流程；
-  - evaluator 结果不低于相同 workspace budget 下的现有 adapter 基线；
+  - evaluator 的当前通用 admission checks 全部通过；
   - watchdog 能在测试用无限单次 agent run 中真实抢占，而不是只更新计数器。
-- [ ] 任一条件失败则继续修 adapter，Matrix 保持停止。
+- [ ] 任一条件失败则修 bridge 或 runner，Matrix 保持停止。
 
 ## P3：正式重启条件
 

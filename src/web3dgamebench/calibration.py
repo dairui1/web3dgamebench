@@ -94,7 +94,9 @@ def _passed_checks(report: dict[str, Any]) -> tuple[int, int]:
     return sum(item.get("passed") is True for item in checks), len(checks)
 
 
-def _completion_evidence(manifest: dict[str, Any]) -> dict[str, Any] | None:
+def _completion_evidence(
+    manifest: dict[str, Any], report: dict[str, Any]
+) -> dict[str, Any] | None:
     lifecycle = (manifest.get("goal") or {}).get("lifecycle") or []
     if not any(
         item.get("tool") == "update_goal" and item.get("status") == "complete"
@@ -102,27 +104,24 @@ def _completion_evidence(manifest: dict[str, Any]) -> dict[str, Any] | None:
         if isinstance(item, dict)
     ):
         return None
-    events_path = Path(manifest["workspace"]).parent / "events.jsonl"
-    try:
-        lines = events_path.read_text(encoding="utf-8").splitlines()
-    except OSError:
+    prompt = manifest.get("prompt") or {}
+    evidence = report.get("evidence") or {}
+    if (
+        report.get("trusted") is not True
+        or (report.get("build") or {}).get("passed") is not True
+        or prompt.get("task_brief_preserved") is not True
+        or evidence.get("render_source_unchanged") is not True
+        or not isinstance(evidence.get("render_source_sha256"), str)
+        or not isinstance(evidence.get("render_dist_sha256"), str)
+    ):
         return None
-    for line in reversed(lines):
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        entry = event.get("entry") if isinstance(event, dict) else None
-        data = entry.get("data") if isinstance(entry, dict) else None
-        if (
-            isinstance(entry, dict)
-            and entry.get("customType") == "web3dgamebench-lifecycle"
-            and isinstance(data, dict)
-            and data.get("status") == "complete"
-            and isinstance(data.get("evidence"), dict)
-        ):
-            return data["evidence"]
-    return None
+    return {
+        "source": "runner-evaluator",
+        "build": "npm run build",
+        "task_sha256": prompt.get("workspace_task_brief_sha256_after"),
+        "sourceSha256": evidence["render_source_sha256"],
+        "distSha256": evidence["render_dist_sha256"],
+    }
 
 
 def _watchdog_probe() -> dict[str, Any]:
@@ -165,7 +164,7 @@ def _task_result(
         if baseline.get("kind") == "conservative-full-admission"
         else int(baseline.get("passed_checks", 0))
     )
-    evidence = _completion_evidence(manifest)
+    evidence = _completion_evidence(manifest, report or {})
     checks = {
         "trusted_terminal": manifest.get("status") == "candidate-complete"
         and (manifest.get("goal") or {}).get("activation_status") == "observed-complete",

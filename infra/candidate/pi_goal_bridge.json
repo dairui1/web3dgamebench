@@ -1,0 +1,7 @@
+{
+  "adapter_version": "web3dgamebench-pi-goal-bridge-v1",
+  "entrypoint": "pi_goal_runner.ts",
+  "runtime_evidence_schema_version": 4,
+  "upstream_package": "@narumitw/pi-goal",
+  "upstream_version": "0.54.4"
+}

@@ -83,15 +83,7 @@ def _terminal_lifecycle_status(stdout: str) -> str | None:
 
 
 def _candidate_prompt(task: Task) -> str:
-    return (
-        "Implement the benchmark game in TASK.md. Work only inside this workspace. "
-        "Do not use the network or external assets. You have the supplied dependency set. "
-        "After the final relevant change, run npm run build once and stop when it succeeds. "
-        "Do not write or run browser automation, automated runtime checks, autopilots, or full "
-        "playthroughs; the post-run evaluator handles runtime verification. Preserve build "
-        "failures honestly; do not claim a build you did not run.\n\n"
-        + task.brief.read_text(encoding="utf-8")
-    )
+    return task.brief.read_text(encoding="utf-8")
 
 
 def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple[Path, Path]:

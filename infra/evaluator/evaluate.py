@@ -384,7 +384,9 @@ def _primary_canvas(page: Any) -> Any:
     return canvases.nth(index)
 
 
-def _start(page: Any, contract: dict, *, mobile: bool) -> None:
+def _start(
+    page: Any, contract: dict, *, mobile: bool, require_runtime_state: bool = True
+) -> None:
     def control_key(control: dict) -> tuple[int, float]:
         label = str(control.get("label", "")).casefold()
         named = any(
@@ -407,6 +409,8 @@ def _start(page: Any, contract: dict, *, mobile: bool) -> None:
     for control in controls[:16]:
         _activate_point(page, control["x"], control["y"], mobile=mobile)
         page.wait_for_timeout(250)
+        if not require_runtime_state:
+            return
         state = _state(page, contract)
         if isinstance(state, dict) and state.get("phase") in contract["started_phases"]:
             return
@@ -1001,13 +1005,21 @@ def _evaluate_viewport(
             variance = sum(ImageStat.Stat(image).var)
             checks.append(check(f"{label}.nonblank", variance > 30, round(variance, 2)))
 
-        _start(page, contract, mobile=mobile)
-        state_started = _state(page, contract)
-        started = (
-            isinstance(state_started, dict)
-            and state_started.get("phase") in contract["started_phases"]
-            and valid_state(state_started, contract)
+        _start(
+            page,
+            contract,
+            mobile=mobile,
+            require_runtime_state=enabled["runtime_state"],
         )
+        state_started = _state(page, contract)
+        if enabled["runtime_state"]:
+            started = (
+                isinstance(state_started, dict)
+                and state_started.get("phase") in contract["started_phases"]
+                and valid_state(state_started, contract)
+            )
+        else:
+            started = _primary_canvas(page).is_visible()
         checks.append(check(f"{label}.starts", started, state_started))
         for recipe in contract["probes"][label]:
             input_type = recipe["input"]["type"]
@@ -1034,14 +1046,14 @@ def _evaluate_viewport(
             page.wait_for_timeout(300)
             state_post_resize = _state(page, contract)
             resized_metrics = _canvas_metrics(page)
-            same_run = (
+            same_run = not enabled["runtime_state"] or (
                 isinstance(state_pre_resize, dict)
                 and isinstance(state_post_resize, dict)
                 and state_pre_resize.get("restartCount")
                 == state_post_resize.get("restartCount")
             )
             resize_passed = (
-                valid_state(state_post_resize, contract)
+                (not enabled["runtime_state"] or valid_state(state_post_resize, contract))
                 and same_run
                 and resized_metrics["width"] > 0
                 and resized_metrics["height"] > 0

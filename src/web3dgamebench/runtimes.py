@@ -35,8 +35,8 @@ class Invocation:
     goal_activation: GoalActivation | None
 
 
-_GOAL_CONTROL_VERSION = "web3dgamebench-operational-completion-v4"
-_RUNTIME_EVIDENCE_SCHEMA_VERSION = 3
+_GOAL_CONTROL_VERSION = "web3dgamebench-operational-completion-v5"
+_RUNTIME_EVIDENCE_SCHEMA_VERSION = 4
 _GOAL_OBJECTIVE = "Implement TASK.md and stop after a successful npm run build."
 
 
@@ -81,8 +81,8 @@ def _goal_activation(
         activation_method = "claude-code-native-slash-goal"
         evidence = "trace:goal-status"
     elif profile.harness == "pi":
-        activation_method = "web3dgamebench-pi-adapter-managed-run"
-        evidence = "trace:web3dgamebench-lifecycle"
+        activation_method = "upstream-pi-goal-with-noninteractive-bridge"
+        evidence = "trace:goal-state+web3dgamebench-lifecycle"
     else:
         raise ValueError(f"unsupported harness: {profile.harness}")
 
@@ -341,7 +341,7 @@ def build_invocation(
             "--no-prompt-templates",
             "--no-themes",
             "--tools",
-            "read,bash,edit,write,grep,find,ls,benchmark_complete,benchmark_blocked",
+            "read,bash,edit,write,grep,find,ls,goal_complete,goal_blocked,goal_wait",
             "--no-approve",
         ]
         if control_prompt:

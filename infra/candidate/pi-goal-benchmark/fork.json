@@ -1,8 +1,0 @@
-{
-  "adapter_version": "web3dgamebench-pi-adapter-v3",
-  "upstream_package": "@narumitw/pi-goal",
-  "upstream_version": "0.54.4",
-  "runtime_evidence_schema_version": 3,
-  "license": "MIT",
-  "entrypoint": "benchmark.ts"
-}

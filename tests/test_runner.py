@@ -27,7 +27,7 @@ def test_prepare_preserves_the_canonical_task_brief(monkeypatch, tmp_path: Path)
     assert task.brief.read_bytes() == canonical
     assert (workspace / "TASK.md").read_bytes() == canonical
     assert b"external persistent-goal control" not in canonical
-    assert _candidate_prompt(task).endswith(canonical.decode("utf-8"))
+    assert _candidate_prompt(task) == canonical.decode("utf-8")
 
 
 def test_run_manifest_records_goal_receipt_and_observed_codex_lifecycle(

@@ -32,12 +32,9 @@ def container_config() -> ContainerConfig:
         candidate_total_timeout_seconds=5400,
         pids_limit=1024,
         pi_adapter=PiAdapterConfig(
-            version="web3dgamebench-pi-adapter-v3",
+            version="web3dgamebench-pi-goal-bridge-v1",
             upstream_pi_goal_version="0.54.4",
-            runtime_evidence_schema_version=3,
-            verification_window_seconds=5400,
-            repeat_verification_warning=2,
-            repeat_verification_terminate=3,
+            runtime_evidence_schema_version=4,
             calibration_total_timeout_seconds=5400,
         ),
     )
@@ -51,13 +48,12 @@ def minimal_root(tmp_path: Path) -> Path:
         "infra/candidate/codex_goal_runner.py",
         "infra/candidate/egress_proxy.py",
         "infra/candidate/pi_command_timeout.js",
+        "infra/candidate/pi_goal_runner.ts",
+        "infra/candidate/pi_goal_bridge.json",
     ):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("frozen", encoding="utf-8")
-    fork = root / "infra/candidate/pi-goal-benchmark"
-    fork.mkdir(parents=True)
-    (fork / "benchmark.ts").write_text("frozen", encoding="utf-8")
     return root
 
 

@@ -54,10 +54,13 @@ def test_pi_container_caps_each_command_without_limiting_the_task(
     assert env_file.stat().st_mode & 0o777 == 0o600
     assert "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS=5400" in env_file.read_text()
     assert "OPENCODE_API_KEY=test-only-token" in env_file.read_text()
+    assert (
+        env_file.parent / "pi-agent/pi-goal.json"
+    ).read_text() == '{"rpc":{"enabled":true}}\n'
     assert all("test-only-token" not in argument for argument in argv)
     assert "/tmp:rw,nosuid,nodev,size=1g" in argv
     assert any("/usr/local/bin/chromium:ro" in argument for argument in argv)
-    assert any("web3dgamebench-goal:ro" in argument for argument in argv)
+    assert any("web3dgamebench-goal-runner.ts:ro" in argument for argument in argv)
     assert all("web3dgamebench-smoke" not in argument for argument in argv)
     assert "WEB3DGAMEBENCH_PI_GOAL_UPSTREAM_VERSION=0.54.4" in env_file.read_text()
 
@@ -93,7 +96,7 @@ def test_container_codex_uses_external_boundary() -> None:
         (
             "pi-deepseek-v4-flash",
             True,
-            "web3dgamebench-pi-adapter-managed-run",
+            "upstream-pi-goal-with-noninteractive-bridge",
         ),
     ],
 )
