@@ -37,38 +37,6 @@
   const OPERATION_LABEL = {
     'matrix-start': '启动 Matrix',
     'matrix-resume': '继续 Matrix',
-    calibration: '校准门禁',
-  };
-
-  // Calibration gate vocabulary. Task order, profile and season mirror configs/calibration.toml;
-  // the receipt stays authoritative and any extra task it reports is appended to the rows.
-  const CALIBRATION_TASKS = ['canyon-strike', 'bombsite-retake', 'first-night'];
-  const CALIBRATION_PROFILE = 'pi-deepseek-v4-flash';
-  const CALIBRATION_SEASON = 'season-1';
-  const CALIBRATION_STATUS = {
-    running: { label: '运行中', chip: 'chip-cyan' },
-    passed: { label: '已通过', chip: 'chip-green' },
-    failed: { label: '未通过', chip: 'chip-red' },
-    interrupted: { label: '已中断', chip: 'chip-amber' },
-  };
-  const CALIBRATION_CHECKS = [
-    { key: 'trusted_terminal', label: '可信终态', title: 'manifest status 为 candidate-complete，且 goal 被观测为 complete' },
-    { key: 'task_brief_preserved', label: 'brief 保留', title: 'prompt.task_brief_preserved 为 true' },
-    { key: 'completion_evidence', label: '完成证据', title: '上游 goal complete，且 runner evaluator 独立构建成功并绑定 source/dist digest' },
-    { key: 'bounded_verification', label: '验证有界', title: 'failure_scope 不是 candidate-verification-overrun' },
-    { key: 'evaluator_trusted', label: 'evaluator 可信', title: 'evaluation report 的 trusted 为 true' },
-    { key: 'evaluator_not_below_baseline', label: '≥ baseline', title: 'evaluator passed_checks 不低于 baseline 要求' },
-  ];
-  const BASELINE_KIND = {
-    'conservative-full-admission': '保守全量',
-  };
-  const CALIB_ROW = {
-    passed: { label: '通过', chip: 'chip-green', icon: 'i-check' },
-    failed: { label: '未通过', chip: 'chip-red', icon: 'i-x' },
-    running: { label: '运行中', chip: 'chip-cyan', icon: 'i-loader', spin: true },
-    pending: { label: '待执行', chip: 'chip-neutral', icon: 'i-circle' },
-    skipped: { label: '未执行', chip: 'chip-amber', icon: 'i-pause-circle' },
-    stale: { label: '未完成 · runner 已退出', chip: 'chip-amber', icon: 'i-alert-triangle' },
   };
 
   const RUN_FILES = [
@@ -98,13 +66,10 @@
     lastFocus: null,
     matrixSignature: '',
     optionsSignature: '',
-    calibPlansSignature: '',
-    calibTableKey: '',
     cellButtons: new Map(),
     pauseRequestedAt: null,
     lastRunnerKey: null,
     lastMatrixStatus: null,
-    lastCalibrationKey: null,
     planCache: { path: null, data: null, loading: false },
     smokeCache: { path: null, data: null, loading: false },
     fileDialogPath: null,
@@ -382,27 +347,15 @@
     const runner = state.runner || { status: 'idle' };
     const active = runner.active === true;
     const canonical = state.canonical || null;
-    const calibration = state.calibration && typeof state.calibration === 'object' ? state.calibration : null;
-    const calibrating = active && runner.operation === 'calibration';
-    const calibTasks = calibrationTaskList(calibration);
-    const calibResults = calibrationResults(calibration);
-    const calibNext = calibration && calibration.status === 'running'
-      ? (calibTasks.find((t) => !calibResults.some((r) => r.task === t)) || null)
-      : null;
 
     let currentTask = runningTasks.length ? runningTasks.join(', ') : null;
     if (!currentTask && active) {
       const next = tasks.find((t) => (grid.size && cells.some((c) => c.task === t && (c.status === 'pending' || statusMeta(c.status).resumable))));
       currentTask = next ? next + '（准备中）' : null;
     }
-    if (calibrating) currentTask = calibNext ? calibNext + '（校准）' : null;
 
     let phase;
-    if (calibrating) {
-      phase = calibration && calibration.status === 'running'
-        ? `校准门禁执行中 · 已完成 ${calibResults.length}/${calibTasks.length} task`
-        : '校准 runner 启动中（尚未写入 receipt）';
-    } else if (active) {
+    if (active) {
       if (counts.evaluating > 0 && counts.running === counts.evaluating) phase = '评估中 (evaluating)';
       else if (counts.evaluating > 0) phase = 'candidate 执行 + 评估中';
       else if (counts.running > 0) phase = 'candidate 执行中';
@@ -423,7 +376,6 @@
 
     return {
       receipt, cells, tasks, profiles, grid, counts, runner, active, canonical, currentTask, phase, taskState, runningTasks,
-      calibration, calibrating, calibTasks, calibResults, calibNext,
     };
   }
 
@@ -437,8 +389,6 @@
     const d = derive(state);
     trackTransitions(d);
     renderTop(state);
-    // Plan selectors are filled before the controls so start gating sees the current selection.
-    renderCalibration(state, d);
     renderStartPanel(state, d);
     renderControls(state, d);
     renderOverview(state, d);
@@ -473,23 +423,6 @@
     }
     app.lastMatrixStatus = matrixStatus;
 
-    const gate = d.calibration;
-    const calKey = gate ? `${gate.calibration_id}|${gate.status}|${d.calibResults.length}` : 'none';
-    if (app.lastCalibrationKey !== null && calKey !== app.lastCalibrationKey && gate) {
-      const [prevId, prevStatus, prevCount] = app.lastCalibrationKey.split('|');
-      const last = d.calibResults[d.calibResults.length - 1];
-      if (prevId === gate.calibration_id && Number(prevCount) < d.calibResults.length && last) {
-        const ev = last.evaluator && typeof last.evaluator === 'object' ? last.evaluator : null;
-        logActivity(last.status === 'passed' ? 'ok' : 'warn', `校准 task ${last.task} ${last.status === 'passed' ? '通过' : '未通过'}（evaluator ${ev ? `${ev.passed_checks}/${ev.total_checks}` : '--'}${last.status === 'passed' ? '' : '；未通过：' + failedCheckLabels(last).join('、')}）`);
-      }
-      if (gate.status !== prevStatus || prevId !== gate.calibration_id) {
-        if (gate.status === 'passed') logActivity('ok', `校准 ${gate.calibration_id} 已通过（${d.calibResults.length}/${d.calibTasks.length} task，watchdog 通过），Matrix 门禁已解锁。`);
-        else if (gate.status === 'failed') logActivity('warn', `校准 ${gate.calibration_id} 未通过：${calibrationFailureDetail(gate) || '原因未记录'}`);
-        else if (gate.status === 'interrupted') logActivity('warn', `校准 ${gate.calibration_id} 已中断（完成 ${d.calibResults.length}/${d.calibTasks.length} task），需重新校准。`);
-        else if (gate.status === 'running') logActivity('info', `校准 ${gate.calibration_id} 已开始（${gate.profile || CALIBRATION_PROFILE}，串行 ${d.calibTasks.length} task，${gate.backend || 'harbor'}）。`);
-      }
-    }
-    app.lastCalibrationKey = calKey;
   }
 
   function renderTop(state) {
@@ -504,12 +437,10 @@
       interrupt: $('btn-interrupt'),
       resume: $('btn-resume'),
     };
-    const gate = gateStatus(state, selectedPlan() || selectedCalibPlan());
-    buttons.start.disabled = app.busy || controls.can_start !== true || !gate.ok;
+    buttons.start.disabled = app.busy || controls.can_start !== true;
     buttons.pause.disabled = app.busy || controls.can_pause !== true;
     buttons.interrupt.disabled = app.busy || controls.can_interrupt !== true;
     buttons.resume.disabled = app.busy || controls.can_resume !== true;
-    $('btn-calibrate').disabled = app.busy || controls.can_calibrate !== true || !selectedCalibPlan();
 
     const runnerMeta = RUNNER_STATUS[d.runner.status] || { label: d.runner.status || '--', chip: 'chip-neutral' };
     let runnerLabel = 'runner ' + runnerMeta.label;
@@ -520,17 +451,15 @@
 
     let hint;
     const receiptStatus = d.receipt ? d.receipt.status : null;
-    if (d.calibrating) {
-      hint = `校准门禁正在串行执行（已完成 ${d.calibResults.length}/${d.calibTasks.length} task${d.calibNext ? '，当前 ' + d.calibNext : ''}）。「暂停」不适用于校准；「中断」会向进程组发送 SIGINT，receipt 将标记为 interrupted，需重新校准。`;
-    } else if (d.active) {
+    if (d.active) {
       hint = controls.can_pause
         ? 'Matrix 正在执行。「暂停」会在下一个 task barrier 优雅停止；「中断」立即向进程组发送 SIGINT。'
         : 'runner 正在运行，当前 receipt 状态不接受 pause，仅可立即中断。';
       if (app.pauseRequestedAt) hint = `已于 ${fmtTime(app.pauseRequestedAt)} 请求 pause，runner 将在当前 task 完成后停止。仍可立即中断。`;
     } else if (!d.canonical) {
-      if (gate.ok && controls.can_start) hint = '校准门禁已通过并与所选 plan 一致。选择 smoke receipt 后点击「启动」创建 canonical Matrix。';
-      else if (gate.ok) hint = '校准门禁已通过，但服务端当前不允许启动 Matrix。';
-      else hint = '启动已锁定：' + gate.reason;
+      hint = controls.can_start
+        ? '选择匹配的 plan 与 smoke receipt 后点击「启动」创建 canonical Matrix。'
+        : '服务端当前不允许启动 Matrix。';
     } else if (controls.can_resume) {
       hint = `canonical Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」从 receipt 恢复未完成的 cell。`;
     } else if (receiptStatus === 'complete') {
@@ -560,21 +489,28 @@
       app.optionsSignature = signature;
       const planSel = $('sel-plan');
       const smokeSel = $('sel-smoke');
-      const prevPlan = planSel.value || $('sel-calib-plan').value;
+      const prevPlan = planSel.value;
       const prevSmoke = smokeSel.value;
       fillPlanSelect(planSel, plans);
       replaceChildren(smokeSel, smokes.length ? smokes.map((s) => el('option', {
         value: s.path,
         text: `${s.name}  ·  ${s.status || '?'}  ·  ${s.backend || '?'}  ·  ${shortDigest(s.plan_digest)}`,
       })) : [el('option', { value: '', text: '（runs/smoke 下没有可用 receipt）' })]);
-      const wantedPlan = plans.some((p) => p.path === prevPlan) ? prevPlan : preferredPlanPath(state, plans);
+      const wantedPlan = plans.some((p) => p.path === prevPlan) ? prevPlan : (plans[0] && plans[0].path);
       if (wantedPlan) planSel.value = wantedPlan;
-      syncPlanSelects(planSel.value);
       if (smokes.some((s) => s.path === prevSmoke)) smokeSel.value = prevSmoke;
       else pickMatchingSmoke();
       smokeSel.disabled = !smokes.length;
     }
     renderStartMeta();
+  }
+
+  function fillPlanSelect(select, plans) {
+    replaceChildren(select, plans.length ? plans.map((p) => el('option', {
+      value: p.path,
+      text: `${p.name}  ·  ${p.season || '?'}  ·  ${shortDigest(p.digest)}`,
+    })) : [el('option', { value: '', text: '（runs/plans 下没有可用 plan）' })]);
+    select.disabled = !plans.length;
   }
 
   function selectedPlan() {
@@ -604,8 +540,6 @@
     setText('plan-meta', plan ? `${plan.plan_id || '--'} · 修改于 ${fmtTime(plan.modified_at)}` : '--');
     setText('smoke-meta', smoke ? `${smoke.smoke_id || '--'} · 完成于 ${fmtTime(smoke.completed_at)}` : '--');
     const warnings = [];
-    const gate = gateStatus(app.state, plan);
-    if (!gate.ok) warnings.push('校准门禁：' + gate.reason);
     if (plan && smoke && smoke.plan_digest && plan.digest && smoke.plan_digest !== plan.digest) {
       warnings.push('所选 smoke receipt 的 plan digest 与所选 plan 不一致，启动时的 Harbor 校验会拒绝。');
     }
@@ -981,333 +915,6 @@
   }
 
   // ------------------------------------------------------------------
-  // Calibration gate
-  // ------------------------------------------------------------------
-
-  function calibrationResults(gate) {
-    return gate && Array.isArray(gate.tasks)
-      ? gate.tasks.filter((t) => t && typeof t === 'object' && typeof t.task === 'string')
-      : [];
-  }
-
-  function calibrationTaskList(gate) {
-    const tasks = CALIBRATION_TASKS.slice();
-    for (const result of calibrationResults(gate)) if (!tasks.includes(result.task)) tasks.push(result.task);
-    return tasks;
-  }
-
-  function failedCheckLabels(result) {
-    const checks = result && result.checks && typeof result.checks === 'object' ? result.checks : {};
-    const labels = [];
-    for (const check of CALIBRATION_CHECKS) if (checks[check.key] !== true) labels.push(check.label);
-    for (const key of Object.keys(checks)) {
-      if (!CALIBRATION_CHECKS.some((c) => c.key === key) && checks[key] !== true) labels.push(key);
-    }
-    return labels;
-  }
-
-  function calibrationFailureDetail(gate) {
-    const tasks = calibrationTaskList(gate);
-    const results = calibrationResults(gate);
-    const parts = [];
-    if (gate.watchdog && gate.watchdog.passed !== true) {
-      parts.push('watchdog 未通过' + (gate.watchdog.reason ? '（' + gate.watchdog.reason + '）' : ''));
-    }
-    const failed = results.filter((r) => r.status !== 'passed').map((r) => `${r.task}[${failedCheckLabels(r).join('、') || '未知'}]`);
-    if (failed.length) parts.push('task 未通过：' + failed.join('，'));
-    const missing = tasks.filter((t) => !results.some((r) => r.task === t));
-    if (missing.length) parts.push('task 未执行：' + missing.join('，'));
-    return parts.join('；');
-  }
-
-  // Precise reason why Matrix start is (or is not) unlocked for the given plan.
-  function gateStatus(state, plan) {
-    const gate = state && state.calibration && typeof state.calibration === 'object' ? state.calibration : null;
-    const runner = (state && state.runner) || {};
-    const active = runner.active === true;
-    const calibrating = active && runner.operation === 'calibration';
-    if (!gate) {
-      return {
-        ok: false,
-        level: 'amber',
-        reason: calibrating ? '校准正在启动，尚未写入 receipt。' : '尚无校准 receipt。请先在「校准门禁」面板选择 plan 并运行 3-task 校准。',
-      };
-    }
-    const id = gate.calibration_id || '（无 id）';
-    const tasks = calibrationTaskList(gate);
-    const done = calibrationResults(gate).length;
-    if (gate.status === 'running') {
-      return calibrating
-        ? { ok: false, level: 'cyan', reason: `校准 ${id} 正在执行（已完成 ${done}/${tasks.length} task），完成前不能启动 Matrix。` }
-        : { ok: false, level: 'amber', reason: `校准 ${id} 记录为 running，但 runner 已退出（完成 ${done}/${tasks.length} task）；该 receipt 未闭合，需重新校准。` };
-    }
-    if (gate.status === 'failed') {
-      const detail = calibrationFailureDetail(gate);
-      return { ok: false, level: 'red', reason: `校准 ${id} 未通过${detail ? '：' + detail : ''}。请修复后重新校准。` };
-    }
-    if (gate.status === 'interrupted') {
-      return { ok: false, level: 'amber', reason: `校准 ${id} 已被中断（完成 ${done}/${tasks.length} task），需重新运行完整校准。` };
-    }
-    if (gate.status !== 'passed') {
-      return { ok: false, level: 'red', reason: `校准 ${id} 状态为 ${gate.status || '未知'}，不能作为门禁。` };
-    }
-    if (!plan) {
-      return { ok: false, level: 'amber', reason: `校准 ${id} 已通过，但尚未选择 plan；请选择 digest 为 ${shortDigest(gate.plan_digest_sha256)} 的 plan。` };
-    }
-    if (!plan.digest || plan.digest !== gate.plan_digest_sha256) {
-      return {
-        ok: false,
-        level: 'red',
-        reason: `校准 ${id} 通过的 plan digest ${shortDigest(gate.plan_digest_sha256)}（${baseName(gate.plan)}）与所选 plan ${plan.name}（${shortDigest(plan.digest)}）不一致；请改选 ${baseName(gate.plan)}，或对所选 plan 重新校准。`,
-      };
-    }
-    return { ok: true, level: 'green', reason: `校准 ${id} 已通过，plan digest ${shortDigest(gate.plan_digest_sha256)} 与所选 plan ${plan.name} 一致。` };
-  }
-
-  function selectedCalibPlan() {
-    const path = $('sel-calib-plan').value;
-    const plans = (app.state && app.state.options && app.state.options.plans) || [];
-    return plans.find((p) => p.path === path) || null;
-  }
-
-  function preferredPlanPath(state, plans) {
-    const gate = state && state.calibration;
-    if (!gate || gate.status !== 'passed') return null;
-    const match = plans.find((p) => p.digest && p.digest === gate.plan_digest_sha256);
-    return match ? match.path : null;
-  }
-
-  function fillPlanSelect(select, plans) {
-    replaceChildren(select, plans.length ? plans.map((p) => el('option', {
-      value: p.path,
-      text: `${p.name}  ·  ${p.season || '?'}  ·  ${shortDigest(p.digest)}`,
-    })) : [el('option', { value: '', text: '（runs/plans 下没有可用 plan）' })]);
-    select.disabled = !plans.length;
-  }
-
-  // The calibration selector and the Matrix start selector always describe the same plan.
-  function syncPlanSelects(path) {
-    if (!path) return;
-    for (const id of ['sel-plan', 'sel-calib-plan']) {
-      const select = $(id);
-      if (select.value === path) continue;
-      if (Array.from(select.options).some((o) => o.value === path)) select.value = path;
-    }
-  }
-
-  function renderCalibration(state, d) {
-    const controls = state.controls || {};
-    const gate = d.calibration;
-    const plans = state.options && Array.isArray(state.options.plans) ? state.options.plans : [];
-    const signature = plans.map((p) => p.path + '|' + p.modified_at).join(';');
-    if (signature !== app.calibPlansSignature) {
-      app.calibPlansSignature = signature;
-      const select = $('sel-calib-plan');
-      const previous = select.value || $('sel-plan').value;
-      fillPlanSelect(select, plans);
-      const wanted = plans.some((p) => p.path === previous) ? previous : preferredPlanPath(state, plans);
-      if (wanted) select.value = wanted;
-    }
-    const plan = selectedCalibPlan();
-    setText('calib-plan-meta', plan ? `${plan.plan_id || '--'} · ${plan.season || '?'} · digest ${shortDigest(plan.digest)} · 修改于 ${fmtTime(plan.modified_at)}` : '--');
-
-    let chipCls = 'chip-neutral';
-    let chipText = '无校准 receipt';
-    if (gate) {
-      const meta = CALIBRATION_STATUS[gate.status] || { label: gate.status || '未知', chip: 'chip-neutral' };
-      chipCls = meta.chip;
-      chipText = `${meta.label} · ${d.calibResults.length}/${d.calibTasks.length} task`;
-      if (gate.status === 'running' && !d.calibrating) {
-        chipCls = 'chip-amber';
-        chipText = `未闭合 · ${d.calibResults.length}/${d.calibTasks.length} task`;
-      }
-    }
-    setChip($('calib-chip'), chipCls, chipText);
-
-    const gs = gateStatus(state, plan);
-    const banner = $('calib-banner');
-    const bannerCls = { green: 'banner-green', cyan: 'banner-cyan', amber: 'banner-amber', red: 'banner-red' }[gs.level] || '';
-    const bannerIcon = { green: 'i-check', cyan: 'i-loader', amber: 'i-alert-triangle', red: 'i-alert-octagon' }[gs.level] || 'i-info';
-    const bannerClass = ('banner ' + bannerCls).trim();
-    if (banner.className !== bannerClass) banner.className = bannerClass;
-    const iconNode = $('calib-banner-icon');
-    if (iconNode.getAttribute('href') !== '#' + bannerIcon) iconNode.setAttribute('href', '#' + bannerIcon);
-    setText('calib-banner-text', (gs.ok ? 'Matrix 启动已解锁：' : 'Matrix 启动已锁定：') + gs.reason);
-    if (banner.hidden) banner.hidden = false;
-
-    let hint;
-    if (d.calibrating) hint = `校准正在串行执行（${gate && gate.profile ? gate.profile : CALIBRATION_PROFILE}，Harbor）。如需停止，请在「操作」中「中断」；receipt 将标记为 interrupted。`;
-    else if (d.active) hint = `runner 正在执行「${OPERATION_LABEL[d.runner.operation] || d.runner.operation || '其他操作'}」，校准不可用。`;
-    else if (d.canonical) hint = '本季已存在 canonical Matrix，校准已冻结；以下为历史门禁 receipt，仅供追溯。';
-    else if (!plans.length) hint = 'runs/plans 下没有可用 plan，无法校准。';
-    else if (controls.can_calibrate === true) {
-      hint = gate && gate.status === 'passed'
-        ? '门禁已有通过的 receipt。再次校准会用新的 receipt 替换门禁指针（需二次确认）。'
-        : '选择 plan 后点击「启动校准」（需二次确认）。校准通过后，只有同一 plan 才能启动 Matrix。';
-    } else hint = '当前不允许校准。';
-    setText('calib-hint', hint);
-
-    setText('cb-id', gate ? gate.calibration_id : '--');
-    const gatePlan = gate && typeof gate.plan === 'string' ? gate.plan : null;
-    updatePathCell('cb-plan', gatePlan, gatePlan ? baseName(gatePlan) : null);
-    let digestText = '--';
-    if (gate) {
-      digestText = shortDigest(gate.plan_digest_sha256);
-      if (plan && plan.digest) digestText += plan.digest === gate.plan_digest_sha256 ? ' · 与所选 plan 一致' : ' · 与所选 plan 不一致';
-    }
-    setText('cb-digest', digestText);
-    setText('cb-profile', gate ? `${gate.profile || '--'} / ${gate.backend || '--'}${gate.canonical === false ? ' · 非 canonical' : ''}` : '--');
-
-    const watchdogNode = $('cb-watchdog');
-    let wdCls = null;
-    let wdText = '--';
-    if (gate && gate.watchdog && typeof gate.watchdog === 'object') {
-      if (gate.watchdog.passed === true) {
-        wdCls = 'chip-green';
-        const code = gate.watchdog.exit_code;
-        wdText = `已通过 · 进程组可被 SIGTERM 抢占${code === undefined || code === null ? '' : '（exit ' + code + '）'}`;
-      } else {
-        wdCls = 'chip-red';
-        wdText = `未通过：${gate.watchdog.reason || '原因未知'}`;
-      }
-    } else if (gate) {
-      wdCls = 'chip-amber';
-      wdText = '未记录';
-    }
-    const wdKey = (wdCls || '') + '|' + wdText;
-    if (watchdogNode.dataset.rendered !== wdKey) {
-      replaceChildren(watchdogNode, wdCls ? el('span', { class: 'chip ' + wdCls, text: wdText }) : '--');
-      watchdogNode.dataset.rendered = wdKey;
-    }
-
-    let finished = '--';
-    if (gate && gate.completed_at) finished = fmtTime(gate.completed_at);
-    else if (gate && gate.status === 'running') finished = d.calibrating ? '运行中 · 已运行 ' + fmtDuration(gate.started_at) : '未闭合';
-    setText('cb-times', gate ? `${fmtTime(gate.started_at)} / ${finished}` : '--');
-    updatePathCell('cb-receipt', gate && gate.path ? gate.path : null, gate && gate.path ? `${parentName(gate.path)}/${baseName(gate.path)}` : null);
-
-    const tableKey = JSON.stringify([gate ? gate.calibration_id : null, gate ? gate.status : null, d.calibResults.length, d.calibrating, d.calibNext, d.calibTasks]);
-    if (tableKey !== app.calibTableKey) {
-      app.calibTableKey = tableKey;
-      replaceChildren($('calib-body'), d.calibTasks.map((task) => calibrationRow(task, d)));
-    }
-  }
-
-  function calibrationRow(task, d) {
-    const result = d.calibResults.find((r) => r.task === task) || null;
-    let rowState;
-    if (result) rowState = result.status === 'passed' ? 'passed' : 'failed';
-    else if (!d.calibration) rowState = 'pending';
-    else if (d.calibration.status === 'running') rowState = d.calibrating ? (d.calibNext === task ? 'running' : 'pending') : 'stale';
-    else rowState = 'skipped';
-    const meta = CALIB_ROW[rowState];
-    const order = CALIBRATION_TASKS.indexOf(task);
-
-    const statusChip = el('span', { class: 'chip ' + meta.chip }, [svgIcon(meta.icon, meta.spin ? 'icon-spin' : null), meta.label]);
-
-    let checksCell;
-    if (result) {
-      const checks = result.checks && typeof result.checks === 'object' ? result.checks : {};
-      const items = CALIBRATION_CHECKS.map((c) => {
-        const ok = checks[c.key] === true;
-        return el('span', { class: 'chk ' + (ok ? 'chk-ok' : 'chk-fail'), title: `${c.key}：${ok ? '通过' : '未通过'}\n${c.title}` }, [svgIcon(ok ? 'i-check' : 'i-x'), c.label]);
-      });
-      for (const key of Object.keys(checks)) {
-        if (CALIBRATION_CHECKS.some((c) => c.key === key)) continue;
-        const ok = checks[key] === true;
-        items.push(el('span', { class: 'chk ' + (ok ? 'chk-ok' : 'chk-fail'), title: key }, [svgIcon(ok ? 'i-check' : 'i-x'), key]));
-      }
-      const okCount = items.filter((n) => n.classList.contains('chk-ok')).length;
-      checksCell = el('div', { class: 'chk-list', 'aria-label': `${okCount}/${items.length} 项检查通过` }, items);
-    } else {
-      checksCell = document.createTextNode('--');
-    }
-
-    let scoreCell;
-    if (result) {
-      const ev = result.evaluator && typeof result.evaluator === 'object' ? result.evaluator : {};
-      const bl = result.baseline && typeof result.baseline === 'object' ? result.baseline : {};
-      const below = !!(result.checks && result.checks.evaluator_not_below_baseline === false);
-      const required = bl.required_passed_checks === undefined || bl.required_passed_checks === null ? '?' : bl.required_passed_checks;
-      const kind = BASELINE_KIND[bl.kind] || bl.kind || '未知基线';
-      const title = [
-        `baseline kind: ${bl.kind || '--'}`,
-        bl.reference ? `reference: ${bl.reference}` : null,
-        bl.passed_checks !== undefined ? `baseline ${bl.passed_checks}/${bl.total_checks}` : null,
-        `evaluator trusted: ${ev.trusted === true ? 'yes' : 'no'} · passed: ${ev.passed === true ? 'yes' : 'no'}`,
-      ].filter(Boolean).join('\n');
-      const fmt = (v) => (v === undefined || v === null ? '--' : String(v));
-      scoreCell = el('div', { class: 'score' + (below ? ' is-below' : ''), title }, [
-        el('span', { class: 'score-main', text: `${fmt(ev.passed_checks)}/${fmt(ev.total_checks)}` }),
-        el('span', { class: 'score-baseline', text: ` vs ≥${required} · ${kind}` }),
-        ev.trusted === true ? null : el('span', { class: 'score-flag', text: ' · 未 trusted' }),
-      ]);
-    } else {
-      scoreCell = document.createTextNode('--');
-    }
-
-    let artifactCell;
-    if (result) {
-      const run = typeof result.run === 'string' ? result.run.replace(/\/+$/, '') : null;
-      const files = [
-        { label: 'manifest', path: result.manifest || (run ? run + '/manifest.json' : null), kind: 'candidate manifest' },
-        { label: 'events', path: result.trace || (run ? run + '/events.jsonl' : null), kind: 'candidate 事件流' },
-        { label: 'stderr', path: run ? run + '/stderr.log' : null, kind: 'candidate stderr' },
-        { label: 'report', path: result.evaluation || null, kind: 'evaluation 报告' },
-      ];
-      artifactCell = el('div', { class: 'calib-artifacts' }, files.map((f) => {
-        const btn = el('button', {
-          type: 'button',
-          class: 'btn btn-sm',
-          disabled: !f.path,
-          title: f.path ? `查看 ${f.kind}：${f.path}` : `${f.kind} 尚未生成`,
-          'aria-label': f.path ? `查看 ${task} 的 ${f.kind}` : `${task} 的 ${f.kind} 尚未生成`,
-        }, [svgIcon('i-file-text'), f.label]);
-        if (f.path) btn.addEventListener('click', () => openFile(f.path));
-        return btn;
-      }));
-    } else {
-      artifactCell = document.createTextNode('--');
-    }
-
-    return el('tr', { class: 'calib-row is-' + rowState, 'data-task': task }, [
-      el('td', { class: 'task mono', 'data-label': 'task' }, [el('span', { class: 'task-order', text: (order >= 0 ? order + 1 : '+') + '. ' }), task]),
-      el('td', { 'data-label': '状态' }, statusChip),
-      el('td', { 'data-label': '检查' }, checksCell),
-      el('td', { 'data-label': 'evaluator' }, scoreCell),
-      el('td', { 'data-label': 'artifact' }, artifactCell),
-    ]);
-  }
-
-  function openCalibrateDialog() {
-    const plan = selectedCalibPlan();
-    if (!plan) {
-      notify('warn', '请先选择校准 plan。');
-      return;
-    }
-    const gate = app.state && app.state.calibration && typeof app.state.calibration === 'object' ? app.state.calibration : null;
-    setText('dlg-calib-plan', plan.path);
-    setText('dlg-calib-digest', plan.digest || '--');
-    setText('dlg-calib-season', `${plan.season || '--'}${plan.season && plan.season !== CALIBRATION_SEASON ? `（与校准配置 ${CALIBRATION_SEASON} 不一致，服务端会拒绝）` : ''}`);
-    setText('dlg-calib-tasks', CALIBRATION_TASKS.join(' → '));
-    setText('dlg-calib-profile', CALIBRATION_PROFILE);
-    setText('dlg-calib-backend', 'harbor');
-    if (gate) {
-      const meta = CALIBRATION_STATUS[gate.status] || { label: gate.status || '未知' };
-      const same = !!(plan.digest && plan.digest === gate.plan_digest_sha256);
-      setText('dlg-calib-current', `${gate.calibration_id || '--'} · ${meta.label} · digest ${shortDigest(gate.plan_digest_sha256)}${same ? '（同一 plan）' : '（不同 plan）'} → 将被替换`);
-    } else {
-      setText('dlg-calib-current', '无（首次校准）');
-    }
-    const ack = $('dlg-calib-ack');
-    ack.checked = false;
-    $('dlg-calibrate-confirm').disabled = true;
-    app.lastFocus = document.activeElement;
-    $('dlg-calibrate').showModal();
-    ack.focus();
-  }
-
-  // ------------------------------------------------------------------
   // Drawer
   // ------------------------------------------------------------------
 
@@ -1498,17 +1105,10 @@
       notify('warn', '请先选择 plan 与 smoke receipt。');
       return;
     }
-    const gs = gateStatus(app.state, plan);
-    if (!gs.ok) {
-      notify('warn', '启动已锁定：' + gs.reason, true);
-      return;
-    }
-    const gate = app.state.calibration;
     setText('dlg-start-plan', plan.path);
     setText('dlg-start-digest', plan.digest || '--');
     setText('dlg-start-smoke', smoke.path);
     setText('dlg-start-smoke-status', `${smoke.status || '--'} · backend ${smoke.backend || '--'} · plan digest ${shortDigest(smoke.plan_digest)}${smoke.plan_digest && plan.digest && smoke.plan_digest !== plan.digest ? '（与 plan 不一致）' : ''}`);
-    setText('dlg-start-gate', `${gate.calibration_id || '--'} · ${(CALIBRATION_STATUS[gate.status] || { label: gate.status }).label} · digest ${shortDigest(gate.plan_digest_sha256)} · 与 plan 一致`);
     setText('dlg-start-backend', 'harbor');
     app.lastFocus = document.activeElement;
     $('dlg-start').showModal();
@@ -1521,9 +1121,7 @@
     setText('dlg-int-op', d.runner.operation ? `${OPERATION_LABEL[d.runner.operation] || d.runner.operation} (${d.runner.operation})` : '--');
     setText('dlg-int-pid', d.runner.pid ? `${d.runner.pid} / ${d.runner.pgid || '--'}` : '--');
     setText('dlg-int-task', d.currentTask || '--');
-    replaceChildren($('dlg-int-text'), d.calibrating
-      ? ['将向校准进程组发送 SIGINT。校准 receipt 会被标记为 ', el('strong', { text: 'interrupted' }), '，门禁不会通过；之后需要重新运行完整的 3-task 校准。「暂停」不适用于校准。']
-      : ['将向 runner 进程组发送 SIGINT。正在执行的 candidate 会被标记为 ', el('strong', { text: 'interrupted' }), '，之后可通过「继续」恢复。若只想在当前 task 完成后停止，请改用「暂停」。']);
+    replaceChildren($('dlg-int-text'), ['将向 runner 进程组发送 SIGINT。正在执行的 candidate 会被标记为 ', el('strong', { text: 'interrupted' }), '，之后可通过「继续」恢复。若只想在当前 task 完成后停止，请改用「暂停」。']);
     const ack = $('dlg-int-ack');
     ack.checked = false;
     $('dlg-interrupt-confirm').disabled = true;
@@ -1553,28 +1151,13 @@
     });
     $('notice-close').addEventListener('click', () => { $('notice').hidden = true; });
 
-    const onPlanChange = (sourceId) => {
-      syncPlanSelects($(sourceId).value);
+    const onPlanChange = () => {
       pickMatchingSmoke();
       if (app.state) applyState(app.state); else renderStartMeta();
     };
-    $('sel-plan').addEventListener('change', () => onPlanChange('sel-plan'));
-    $('sel-calib-plan').addEventListener('change', () => onPlanChange('sel-calib-plan'));
+    $('sel-plan').addEventListener('change', onPlanChange);
     $('sel-smoke').addEventListener('change', renderStartMeta);
     $('start-form').addEventListener('submit', (event) => { event.preventDefault(); openStartDialog(); });
-    $('calib-form').addEventListener('submit', (event) => {
-      event.preventDefault();
-      if (!$('btn-calibrate').disabled) openCalibrateDialog();
-    });
-
-    $('dlg-calib-ack').addEventListener('change', (event) => { $('dlg-calibrate-confirm').disabled = !event.target.checked; });
-    $('dlg-calibrate-confirm').addEventListener('click', () => {
-      const plan = selectedCalibPlan();
-      $('dlg-calibrate').close();
-      if (!plan) return;
-      runAction('calibrate', { plan: plan.path, backend: 'harbor' }, `已提交校准请求：${baseName(plan.path)}（${CALIBRATION_PROFILE} × ${CALIBRATION_TASKS.length} task，harbor，非 canonical）。`);
-    });
-
     $('dlg-start-confirm').addEventListener('click', () => {
       const plan = selectedPlan();
       const smoke = selectedSmoke();

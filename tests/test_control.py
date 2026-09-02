@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,25 +16,6 @@ def _write_json(path: Path, value: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
     return path
-
-
-def _write_passed_gate(state: Path, plan: Path) -> None:
-    plan_value = json.loads(plan.read_text(encoding="utf-8"))
-    receipt = _write_json(
-        state / "calibration/gate/receipt.json",
-        {
-            "calibration_id": "gate",
-            "status": "passed",
-            "plan_digest_sha256": plan_value.get("plan_digest_sha256"),
-        },
-    )
-    _write_json(
-        state / "calibration/latest.json",
-        {
-            "receipt": str(receipt),
-            "receipt_sha256": hashlib.sha256(receipt.read_bytes()).hexdigest(),
-        },
-    )
 
 
 def test_control_app_is_local_token_guarded_and_lists_frozen_options(
@@ -58,7 +38,6 @@ def test_control_app_is_local_token_guarded_and_lists_frozen_options(
             "plan_digest_sha256": "a" * 64,
         },
     )
-    _write_passed_gate(tmp_path, plan)
     app = create_control_app(ROOT, tmp_path)
     supervisor = app.state.supervisor
 
@@ -80,7 +59,6 @@ def test_start_action_passes_only_managed_harbor_paths(tmp_path: Path) -> None:
         tmp_path / "plans/plan.json", {"plan_digest_sha256": "a" * 64}
     )
     smoke = _write_json(tmp_path / "smoke/smoke/receipt.json", {})
-    _write_passed_gate(tmp_path, plan)
     app = create_control_app(ROOT, tmp_path)
     supervisor = app.state.supervisor
     captured: dict[str, object] = {}

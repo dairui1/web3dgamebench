@@ -154,7 +154,6 @@ def command_run(args: argparse.Namespace) -> int:
         args.profile,
         args.attempt,
         backend=args.backend,
-        calibration=args.calibration,
     )
     print(run_root)
     return 0
@@ -164,17 +163,6 @@ def command_smoke(args: argparse.Namespace) -> int:
     from .smoke import run_smoke
 
     receipt = run_smoke(project_root(), Path(args.plan), backend=args.backend)
-    print(receipt)
-    value = json.loads(receipt.read_text(encoding="utf-8"))
-    return 0 if value.get("status") == "passed" else 1
-
-
-def command_calibrate(args: argparse.Namespace) -> int:
-    from .calibration import run_calibration
-
-    receipt = run_calibration(
-        project_root(), Path(args.plan), backend=args.backend
-    )
     print(receipt)
     value = json.loads(receipt.read_text(encoding="utf-8"))
     return 0 if value.get("status") == "passed" else 1
@@ -377,11 +365,6 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--profile", required=True)
     run.add_argument("--attempt", type=int, default=1)
     run.add_argument(
-        "--calibration",
-        action="store_true",
-        help="mark a non-canonical Pi diagnostic and enforce the shorter timeout",
-    )
-    run.add_argument(
         "--backend", choices=("native", "container", "harbor"), default="harbor"
     )
     run.set_defaults(func=command_run)
@@ -389,12 +372,6 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--plan", required=True)
     smoke.add_argument("--backend", choices=("container", "harbor"), default="harbor")
     smoke.set_defaults(func=command_smoke)
-    calibrate = commands.add_parser(
-        "calibrate", help="run the frozen non-canonical three-task Pi gate"
-    )
-    calibrate.add_argument("--plan", required=True)
-    calibrate.add_argument("--backend", choices=("harbor",), default="harbor")
-    calibrate.set_defaults(func=command_calibrate)
     vendor = commands.add_parser("vendor")
     vendor.set_defaults(func=command_vendor)
     evaluate = commands.add_parser("evaluate")

@@ -414,7 +414,6 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "configs/profiles.toml", "profile-config"),
         (root / "configs/judges.toml", "judge-config"),
         (root / "configs/container.toml", "container-config"),
-        (root / "configs/calibration.toml", "calibration-gate-config"),
         (root / "vendor/manifest.json", "vendor-manifest"),
         (root / "infra/candidate/Dockerfile", "candidate-image"),
         (root / "infra/candidate/chromium", "candidate-browser-runtime"),
@@ -425,7 +424,6 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "infra/evaluator/evaluate.py", "evaluator"),
         (root / "infra/judge/pi/playtest-judge.ts", "judge-runtime"),
         (root / "src/web3dgamebench/cli.py", "matrix-runtime"),
-        (root / "src/web3dgamebench/calibration.py", "calibration-gate-runtime"),
         (root / "src/web3dgamebench/control.py", "matrix-operator-runtime"),
         (root / "src/web3dgamebench/control_ui/index.html", "matrix-operator-ui"),
         (root / "src/web3dgamebench/control_ui/styles.css", "matrix-operator-ui"),
@@ -1849,12 +1847,6 @@ def start_matrix(
         from .smoke import verify_smoke_receipt
 
         smoke = verify_smoke_receipt(plan_path, plan, smoke_receipt, backend=backend)
-        from .calibration import CalibrationError, require_calibration_gate
-
-        try:
-            require_calibration_gate(plan_path)
-        except CalibrationError as error:
-            raise MatrixError(str(error)) from error
     verify_frozen_inputs(root, plan)
     with SeasonLock(season_id):
         receipt_path = runs_dir() / f"matrix-{plan['plan_id']}-{uuid.uuid4().hex[:8]}.json"

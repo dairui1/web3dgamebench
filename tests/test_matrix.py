@@ -86,7 +86,6 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
         "version": "web3dgamebench-pi-goal-bridge-v1",
         "upstream_pi_goal_version": "0.54.4",
         "runtime_evidence_schema_version": 4,
-        "calibration_total_timeout_seconds": 5400,
     }
     assert all(versions.values())
     capabilities = season_plan["runtime_environment"]["candidate_toolchain"]["capabilities"]

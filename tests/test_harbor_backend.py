@@ -35,7 +35,6 @@ def container_config() -> ContainerConfig:
             version="web3dgamebench-pi-goal-bridge-v1",
             upstream_pi_goal_version="0.54.4",
             runtime_evidence_schema_version=4,
-            calibration_total_timeout_seconds=5400,
         ),
     )
 

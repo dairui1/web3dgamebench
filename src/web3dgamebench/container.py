@@ -20,7 +20,6 @@ class PiAdapterConfig:
     version: str
     upstream_pi_goal_version: str
     runtime_evidence_schema_version: int
-    calibration_total_timeout_seconds: int
 
     def environment(self) -> dict[str, str]:
         return {
@@ -77,9 +76,6 @@ def load_container_config(root: Path) -> ContainerConfig:
             runtime_evidence_schema_version=int(
                 adapter["runtime_evidence_schema_version"]
             ),
-            calibration_total_timeout_seconds=int(
-                adapter["calibration_total_timeout_seconds"]
-            ),
         ),
     )
     if config.command_timeout_seconds <= 0:
@@ -88,14 +84,10 @@ def load_container_config(root: Path) -> ContainerConfig:
         raise ContainerError("candidate_total_timeout_seconds must be positive")
     if config.pids_limit <= 0:
         raise ContainerError("pids_limit must be positive")
-    adapter_limits = (
-        config.pi_adapter.runtime_evidence_schema_version,
-        config.pi_adapter.calibration_total_timeout_seconds,
-    )
     if (
         not config.pi_adapter.version
         or not config.pi_adapter.upstream_pi_goal_version
-        or any(value <= 0 for value in adapter_limits)
+        or config.pi_adapter.runtime_evidence_schema_version <= 0
     ):
         raise ContainerError("Pi adapter version and limits must be positive")
     return config

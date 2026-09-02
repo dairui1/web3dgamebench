@@ -17,7 +17,6 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .calibration import load_calibration_gate, require_calibration_gate
 from .matrix import MatrixError, load_matrix_receipt, request_matrix_pause
 from .runner import runs_dir
 
@@ -44,11 +43,6 @@ def _atomic_json(path: Path, value: object) -> None:
 class StartRequest(BaseModel):
     plan: str
     smoke_receipt: str
-    backend: str = "harbor"
-
-
-class CalibrationRequest(BaseModel):
-    plan: str
     backend: str = "harbor"
 
 
@@ -290,18 +284,14 @@ class MatrixSupervisor:
         active = runner.get("status") == "running" and self._pid_alive(runner.get("pid"))
         receipt_status = receipt.get("status") if receipt else None
         has_canonical = canonical is not None
-        calibration = load_calibration_gate(self.runs)
-        calibration_passed = bool(calibration and calibration.get("status") == "passed")
         return {
             "server_time": _now(),
             "runner": {**runner, "active": active},
             "canonical": canonical,
             "receipt": self._receipt_view(receipt_path, receipt),
-            "calibration": calibration,
             "options": {"plans": plans, "smokes": smokes},
             "controls": {
-                "can_calibrate": not active and not has_canonical,
-                "can_start": not active and not has_canonical and calibration_passed,
+                "can_start": not active and not has_canonical,
                 "can_resume": not active
                 and has_canonical
                 and receipt_status in {"incomplete", "interrupted", "running"},
@@ -357,7 +347,6 @@ class MatrixSupervisor:
             raise RuntimeError("a canonical matrix already exists; resume it instead")
         plan = self._safe_option(request.plan, self.runs / "plans")
         smoke = self._safe_option(request.smoke_receipt, self.runs / "smoke")
-        require_calibration_gate(plan, directory=self.runs)
         self._spawn(
             "matrix-start",
             [
@@ -371,26 +360,6 @@ class MatrixSupervisor:
                 "harbor",
                 "--smoke-receipt",
                 str(smoke),
-            ],
-        )
-
-    def calibrate(self, request: CalibrationRequest) -> None:
-        if request.backend != "harbor":
-            raise ValueError("calibration is frozen to the Harbor backend")
-        if self._canonical() is not None:
-            raise RuntimeError("calibration cannot run after a canonical Matrix is claimed")
-        plan = self._safe_option(request.plan, self.runs / "plans")
-        self._spawn(
-            "calibration",
-            [
-                sys.executable,
-                "-m",
-                "web3dgamebench.cli",
-                "calibrate",
-                "--plan",
-                str(plan),
-                "--backend",
-                "harbor",
             ],
         )
 
@@ -517,18 +486,6 @@ def create_control_app(root: Path, state_root: Path | None = None) -> FastAPI:
         authorize(x_web3d_control_token)
         try:
             supervisor.start(body)
-        except (RuntimeError, ValueError) as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
-        return {"status": "accepted"}
-
-    @app.post("/api/actions/calibrate", status_code=202)
-    def calibrate(
-        body: CalibrationRequest,
-        x_web3d_control_token: str | None = Header(default=None),
-    ) -> dict[str, str]:
-        authorize(x_web3d_control_token)
-        try:
-            supervisor.calibrate(body)
         except (RuntimeError, ValueError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {"status": "accepted"}

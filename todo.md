@@ -5,7 +5,7 @@
 - [x] 保持 Season 1 Matrix 停止，不从当前 receipt 继续执行。
 - [x] 不直接切换到普通 Pi：虽然能较快退出，但没有可验证的 goal lifecycle，且本次官方 evaluator 仅通过 14/20。
 - [x] 不采用 `pi-goal-pro`：它不能直接驱动当前 `pi --print`，并且本次 `autoTurnCount` 达到 39/25 后仍未暂停。
-- [x] 在完成下面的 calibration gate 前，不重跑 80-cell Matrix，不发布任何候选产物。
+- [x] 正式 Matrix 只依赖冻结 plan 与匹配的 Harbor smoke receipt，不再执行额外的完整游戏预检。
 
 旧 Matrix 曾于 2026-09-02 显式标记为 `invalidated`；随后已按操作要求删除全部旧 Matrix receipt、run workspace、canonical claim 和 control history。历史诊断摘要单独保留，不可恢复或纳入正式 Season 1。
 
@@ -21,9 +21,9 @@
 
 当前冻结产物：
 
-- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T133600Z.json`
-- Plan digest：`ea41a1f41990d1190d79cd08a946072bfbea48913d65cf2806159c2d54322e37`
-- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T133601Z-bf6f6797-34cfc5d2/receipt.json`（3/3 harness passed）。
+- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T135349Z.json`
+- Plan digest：`517560ecb521b3e80e357dfe9eea9dde279ff471a9b3bdcc7e7e567c7cf42e2d`
+- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T135351Z-a4034470-730cdc52/receipt.json`（3/3 harness passed）。
 - Candidate image：`web3dgamebench-candidate:0.3.0` / `sha256:66e16b8f9d041bb8b5f17fda5f7aee7b9ee93ff7cf49b041ad3c75d2d54ca1e1`
 
 ## P1：本地 Matrix Control Plane
@@ -49,7 +49,7 @@
 
 - [x] 外部 watchdog 由 runner/process-group 负责，能够中断单次长 agent run，而不是只在 `agent_end` 后检查。
 - [x] 保留 wall clock 和单条 shell command 的硬边界，不对实现阶段做粗粒度的全局 turn/tool cap。
-- [x] 正式 cell、Pi shell command 与 calibration 统一使用 `5400s`（90 分钟）硬上限。
+- [x] 正式 cell 与 Pi shell command 统一使用 `5400s`（90 分钟）硬上限。
 - [x] 将 timeout 分类拆开：provider/Harbor infrastructure failure 与 candidate non-termination 不再混为一类。
 
 ## P2：Evaluator 对齐
@@ -58,19 +58,11 @@
 - [x] 将十个候选可见 TASK 全部缩成单段自然用户 prompt，不暴露 schema、检查点、数值阈值或 evaluator 验收清单。
 - [x] 保持 Goal completion 与 evaluator admission 为两个独立 gate：前者结束候选执行，后者独立判断 submission 是否可信可玩。
 
-## P2：Calibration Gate
+## P2：移除额外校准门禁
 
-- [ ] 使用全新、非 canonical workspace 运行 `bombsite-retake`、`canyon-strike` 和 `first-night`。
-- [ ] 第一轮只跑 `pi-deepseek-v4-flash`，保持同一 provider/model 串行执行，禁止与 canonical Matrix 并发。
-- [ ] 运行 upstream pi-goal + bridge；prompt 和 admission 已同时变化，旧 fork 结果只作历史诊断，不声称为严格 A/B。
-- [ ] 每个 calibration run 保存 prompt/control hash、镜像 digest、trace、workspace digest、completion receipt 和 evaluator report。
-- [ ] upstream pi-goal + bridge 必须全部满足以下条件才可进入正式重启：
-  - 3/3 lifecycle 得到可信终态，无 Harbor `5400s` timeout；
-  - TASK.md 未修改；
-  - build evidence 完整，TASK.md、source 和 dist digest 一致；
-  - evaluator 的当前通用 admission checks 全部通过；
-  - watchdog 能在测试用无限单次 agent run 中真实抢占，而不是只更新计数器。
-- [ ] 任一条件失败则修 bridge 或 runner，Matrix 保持停止。
+- [x] 删除三任务非 canonical 运行、receipt 指针和 `web3dgamebench calibrate` CLI。
+- [x] 删除 Matrix 与控制台对校准 receipt 的启动依赖。
+- [x] 保留普通 Harbor smoke 作为 plan-bound harness 预检；不再用完整游戏生成充当前置 smoke。
 
 ## P3：正式重启条件
 
@@ -80,7 +72,7 @@
 - [x] 重新生成 Season 1 plan，并核对完整 80-cell matrix、task barrier 和 profile 顺序；价格仍按冻结 pricing 配置与实际 token buckets 在 receipt 中结算。
 - [x] 生成与新 plan、镜像和 bridge digest 一致的 harness smoke receipt。
 - [ ] 只有 plan review 与 smoke receipt 同时通过后，才从第一个 task barrier 重新开始完整 Matrix。
-- [ ] 执行期间继续遵守 same-task profiles 可并行、tasks 串行；不得混入 calibration 或人工修补 workspace。
+- [ ] 执行期间继续遵守 same-task profiles 可并行、tasks 串行；不得人工修补 workspace。
 - [ ] 80-cell closure、Fable backfill、judge、publisher 全部完成前不得发布 task prompt 或生成游戏源码。
 
 ## 本次诊断基线

@@ -38,13 +38,13 @@ merely by passing admission.
 
 After the private matrix closes, retain per-task admission rate, rubric evidence coverage, score
 distribution, broken-vote rate, and pairwise preference entropy. Near-universal success, a
-near-universal floor, or criteria that are routinely unverified are calibration findings to address
+near-universal floor, or criteria that are routinely unverified are review findings to address
 in the next season; they are not reasons to change a frozen Season 1 task after scored runs begin.
 
 ## Prompt and Goal policy
 
 - The harness activates an audited external persistence control, then supplies the exact canonical English prompt unchanged. Codex, Claude Code, and Pi must all expose observed Goal creation and completion in their traces; Pi uses upstream `pi-goal` plus a thin non-interactive lifecycle bridge.
-- No wall-clock or token limit is embedded in a task prompt. The runtime applies one 90-minute timeout to formal cells, Pi commands, and non-canonical calibration, without a global implementation turn/tool cap.
+- No wall-clock or token limit is embedded in a task prompt. The runtime applies one 90-minute timeout to formal cells and Pi commands, without a global implementation turn/tool cap.
 - Candidate completion is operational: upstream Goal reaches complete. Admission separately requires a reproducible build and a visible, nonblank, layout-safe game at both viewports without page errors or runtime network access.
 - Candidates are not asked to write autopilots or prove full win/loss and end-to-end paths. Missing systems, balance, polish, and game feel lower the evaluated result instead of forcing indefinite self-testing.
 - Detailed gameplay expectations belong to private playtest rubrics and human comparison, not hidden machine-only API requirements.

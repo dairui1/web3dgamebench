@@ -135,7 +135,6 @@ def run_once(
     *,
     backend: str = "container",
     cancel_event: threading.Event | None = None,
-    calibration: bool = False,
 ) -> Path:
     if backend not in {"native", "container", "harbor"}:
         raise ValueError(f"unknown backend: {backend}")
@@ -143,8 +142,6 @@ def run_once(
     if profile_id not in profiles:
         raise ValueError(f"unknown profile: {profile_id}")
     profile = profiles[profile_id]
-    if calibration and profile.harness != "pi":
-        raise ValueError("calibration timeout is reserved for Pi adapter diagnostics")
     task = load_task(root, task_id)
     run_root, workspace = prepare(root, task, profile, attempt)
     prompt = _candidate_prompt(task)
@@ -163,12 +160,8 @@ def run_once(
     manifest_path = run_root / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     container_config = load_container_config(root)
-    effective_timeout_seconds = (
-        container_config.pi_adapter.calibration_total_timeout_seconds
-        if calibration
-        else container_config.candidate_total_timeout_seconds
-    )
-    manifest["execution_mode"] = "calibration" if calibration else "benchmark"
+    effective_timeout_seconds = container_config.candidate_total_timeout_seconds
+    manifest["execution_mode"] = "benchmark"
     manifest["candidate_timeout_seconds"] = effective_timeout_seconds
     manifest["prompt"] = {
         "candidate_sha256": invocation.candidate_prompt_sha256,

@@ -17,7 +17,7 @@ Read endpoints are local-only; every state-changing endpoint additionally requir
 ## Authority
 
 The browser never runs Harbor or edits a receipt. It sends typed actions to one supervisor,
-which launches the existing `web3dgamebench calibrate` or `web3dgamebench matrix` command in a
+which launches the existing `web3dgamebench matrix` command in a
 separate process group. The
 Matrix process still owns `SeasonLock`, frozen-input verification, task scheduling, trusted
 evaluation, receipt updates, closure, and canonical-claim enforcement. Harbor remains the
@@ -29,16 +29,9 @@ Restarting the WebUI does not automatically resume an interrupted or incomplete 
 
 ## Actions
 
-- **Calibration Gate** runs `canyon-strike`, `bombsite-retake`, and `first-night` serially with
-  `pi-deepseek-v4-flash`, Harbor, and the frozen 90-minute diagnostic ceiling. Its receipt is
-  explicitly non-canonical and binds the watchdog probe, plan digest, prompt/control hashes,
-  image identity, trace, workspace digest, completion evidence, evaluator report, and baseline
-  comparison. Because candidate prompts and admission checks changed together, all three tasks must
-  pass every current admission check; earlier detailed-prompt scores are diagnostic history, not
-  numerical A/B baselines.
 - **Start** accepts only plan and smoke receipt paths below the managed run directory and always
   uses the Harbor backend. Season 1 rejects a stale plan, mismatched smoke receipt, an existing
-  canonical claim, or a missing/failed calibration receipt for the exact selected plan digest.
+  canonical claim, or a smoke receipt that does not pass for the exact selected plan digest.
 - **Pause at barrier** writes a command bound to the current `matrix_id`. The Matrix acknowledges
   it only after every active harness chain for the current task returns, records the barrier in
   the receipt, and exits as `incomplete`.

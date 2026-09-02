@@ -1,6 +1,6 @@
 # Web3DGameBench
 
-Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Candidate cells, Pi shell commands, and non-canonical calibration runs all use the same 90-minute timeout. Pi uses upstream `pi-goal` for persistent Goal continuation, with a thin bridge for non-interactive execution. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
+Web3DGameBench is a reproducible arena for coding agents that build complete, playable Three.js games. Every system receives the same frozen task, starter dependency set, and browser checks. Candidate cells and Pi shell commands use the same 90-minute timeout. Pi uses upstream `pi-goal` for persistent Goal continuation, with a thin bridge for non-interactive execution. Candidate containers also use a PID limit and a supervised Chromium launcher. Candidate work happens in disposable workspaces with no access to other submissions. Source and playable builds are published only after the full season matrix closes.
 
 The public result is intentionally two-part:
 
@@ -68,8 +68,6 @@ docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
 uv run web3dgamebench doctor
 uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
 uv run web3dgamebench smoke --plan /path/to/season-1-plan.json --backend harbor
-# Run the frozen, non-canonical three-task Pi bridge gate against a reviewed plan:
-uv run web3dgamebench calibrate --plan /path/to/season-1-plan.json --backend harbor
 uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor
 # Stop cleanly at a task barrier when operating the season in review windows:
 uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor --stop-after-task canyon-strike
@@ -84,9 +82,7 @@ uv run web3dgamebench publish --matrix /path/to/closed-matrix.json --games-repo 
 ```
 
 `web3dgamebench control` starts the private operator UI at `http://127.0.0.1:8765`.
-Its Calibration Gate runs the three frozen Pi diagnostics serially and keeps canonical Matrix
-start locked until their digest-bound receipt passes.
-It can start a reviewed plan, request a graceful pause at the next task barrier, interrupt
+It can start a reviewed plan with a matching smoke receipt, request a graceful pause at the next task barrier, interrupt
 the managed process group, and resume the same canonical receipt. The control plane listens
 only on loopback, keeps its write token outside the repository, and never exposes model
 credentials to the browser. See `docs/control-plane.md` for its operating and recovery contract.

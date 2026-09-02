@@ -61,7 +61,7 @@ All harnesses share the short build-only persistent objective. Goal completion i
 evidence, not proof that the game works. After candidate exit, the repository evaluator independently
 rebuilds the captured source offline and binds the unchanged source and resulting `dist/` digests;
 task-specific runtime admission remains private. The runner remains the external wall-clock
-watchdog, with formal cells, Pi calibration runs, and Pi shell commands capped at 5400 seconds.
+watchdog, with formal cells and Pi shell commands capped at 5400 seconds.
 
 Harbor job and trial artifacts are converted into the canonical run layout. `harbor.json` binds the
 raw job and trial results, while `harbor-task-lock.json` binds the generated task to the frozen

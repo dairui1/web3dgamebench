@@ -230,29 +230,3 @@ def test_argv_prompt_runtime_never_inherits_operator_stdin(
     run_once(ROOT, "first-night", "pi-qwen3-8-flash", backend="native")
 
     assert observed["input_text"] is None
-
-
-def test_pi_calibration_uses_external_short_timeout(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("WEB3DGAMEBENCH_RUNS_DIR", str(tmp_path / "runs"))
-    monkeypatch.setenv("OPENCODE_GO_APIKEY", "test-key")
-    observed: dict[str, object] = {}
-
-    def completed_run(*args, **kwargs):
-        observed.update(kwargs)
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
-
-    monkeypatch.setattr("web3dgamebench.runner.run_captured", completed_run)
-    run_root = run_once(
-        ROOT,
-        "first-night",
-        "pi-qwen3-8-flash",
-        backend="native",
-        calibration=True,
-    )
-    manifest = json.loads((run_root / "manifest.json").read_text())
-
-    assert observed["timeout_seconds"] == 5400
-    assert manifest["execution_mode"] == "calibration"
-    assert manifest["candidate_timeout_seconds"] == 5400

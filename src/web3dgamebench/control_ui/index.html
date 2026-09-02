@@ -92,53 +92,6 @@
       </div>
     </section>
 
-    <section class="panel calibration" id="calibration-panel" aria-labelledby="calibration-heading">
-      <div class="panel-head">
-        <h2 id="calibration-heading">Calibration Gate <span class="muted">校准门</span></h2>
-        <div class="chip-row">
-          <span class="chip chip-amber" title="calibration receipt 不是 canonical，不计入 Matrix">non-canonical</span>
-          <span class="chip chip-neutral" title="串行执行 3 个 task，单一 profile">串行 · pi-deepseek-v4-flash</span>
-          <span id="calib-chip" class="chip chip-neutral" aria-live="polite">无 receipt</span>
-        </div>
-      </div>
-      <form id="calib-form" class="form-grid form-grid-cal" autocomplete="off">
-        <label class="field">
-          <span class="field-label">plan（按修改时间倒序）</span>
-          <select id="sel-calib-plan" name="plan" required></select>
-          <span class="field-meta mono" id="calib-plan-meta">--</span>
-        </label>
-        <div class="field">
-          <span class="field-label">backend: harbor · 3 task 串行</span>
-          <div class="field-btns">
-            <button type="submit" class="btn" id="btn-calibrate" disabled
-                    title="运行 calibration gate：串行执行 3 个 task（非 canonical），需要二次确认" aria-label="运行 calibration gate">
-              <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg><span>运行 calibration</span>
-            </button>
-          </div>
-        </div>
-      </form>
-      <p id="calib-hint" class="hint" aria-live="polite">等待状态…</p>
-      <div id="calib-banner" class="banner banner-amber">
-        <svg class="icon" aria-hidden="true"><use id="calib-banner-icon" href="#i-lock"/></svg>
-        <span id="calib-banner-text">Matrix 启动已锁定。</span>
-      </div>
-      <div class="matrix-scroll">
-        <table class="calib-table" aria-label="calibration task">
-          <thead><tr><th>task</th><th>状态</th><th>检查</th><th>evaluator</th><th>artifact</th></tr></thead>
-          <tbody id="calib-body"></tbody>
-        </table>
-      </div>
-      <dl class="kv cal-kv">
-        <dt>watchdog</dt><dd id="cb-watchdog">--</dd>
-        <dt>calibration_id</dt><dd id="cb-id" class="mono">--</dd>
-        <dt>plan</dt><dd id="cb-plan" class="mono">--</dd>
-        <dt>plan digest</dt><dd id="cb-digest" class="mono">--</dd>
-        <dt>profile / backend</dt><dd id="cb-profile" class="mono">--</dd>
-        <dt>开始 / 完成</dt><dd id="cb-times" class="mono">--</dd>
-        <dt>receipt</dt><dd id="cb-receipt" class="mono">--</dd>
-      </dl>
-    </section>
-
     <section class="panel start-panel" id="start-panel" aria-labelledby="start-heading" hidden>
       <div class="panel-head">
         <h2 id="start-heading">启动前配置</h2>
@@ -217,7 +170,7 @@
         </table>
         <div class="empty" id="matrix-empty">
           <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>
-          <p>尚未加载任何 Matrix receipt。先通过「校准门禁」，再选择同一 plan 与 smoke receipt 后点击「启动」创建 canonical Matrix。</p>
+          <p>尚未加载任何 Matrix receipt。选择匹配的 plan 与 smoke receipt 后点击「启动」创建 canonical Matrix。</p>
         </div>
       </div>
       <ul class="legend" id="matrix-legend" aria-label="图例">
@@ -310,39 +263,11 @@
         <dt>plan digest</dt><dd id="dlg-start-digest" class="mono">--</dd>
         <dt>smoke receipt</dt><dd id="dlg-start-smoke" class="mono">--</dd>
         <dt>smoke 状态</dt><dd id="dlg-start-smoke-status" class="mono">--</dd>
-        <dt>校准门禁</dt><dd id="dlg-start-gate" class="mono">--</dd>
         <dt>backend</dt><dd id="dlg-start-backend" class="mono">harbor</dd>
       </dl>
       <div class="dialog-actions">
         <button type="button" class="btn" value="cancel" data-close>取消</button>
         <button type="button" class="btn btn-primary" id="dlg-start-confirm">确认启动</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="dlg-calibrate" class="dialog" aria-labelledby="dlg-calib-title">
-    <form method="dialog">
-      <h2 id="dlg-calib-title">确认启动校准门禁</h2>
-      <p class="dialog-warn">
-        <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
-        <span>将以 Harbor backend <strong>串行</strong>执行 3 个校准 task，profile 固定为 <strong>pi-deepseek-v4-flash</strong>。此运行为<strong>非 canonical</strong>：不创建 canonical Matrix，但其 receipt 会替换当前门禁指针，并成为本季 Matrix 启动的前置条件。</span>
-      </p>
-      <dl class="kv kv-dialog">
-        <dt>plan</dt><dd id="dlg-calib-plan" class="mono">--</dd>
-        <dt>plan digest</dt><dd id="dlg-calib-digest" class="mono">--</dd>
-        <dt>season</dt><dd id="dlg-calib-season" class="mono">--</dd>
-        <dt>task（串行）</dt><dd id="dlg-calib-tasks" class="mono">--</dd>
-        <dt>profile</dt><dd id="dlg-calib-profile" class="mono">pi-deepseek-v4-flash</dd>
-        <dt>backend</dt><dd id="dlg-calib-backend" class="mono">harbor</dd>
-        <dt>当前门禁</dt><dd id="dlg-calib-current" class="mono">--</dd>
-      </dl>
-      <label class="check">
-        <input type="checkbox" id="dlg-calib-ack">
-        <span>我确认启动非 canonical 的串行校准（pi-deepseek-v4-flash × 3 task，Harbor），并了解它会替换现有门禁 receipt</span>
-      </label>
-      <div class="dialog-actions">
-        <button type="button" class="btn" value="cancel" data-close>取消</button>
-        <button type="button" class="btn btn-primary" id="dlg-calibrate-confirm" disabled>确认启动校准</button>
       </div>
     </form>
   </dialog>
