@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generatedAt": "2026-09-02T17:47:39.111505+00:00",
+  "generatedAt": "2026-09-02T19:02:43Z",
   "season": {
     "id": "season-1",
     "status": "public-preview"
@@ -42,12 +42,32 @@
           "harness": "claude-code",
           "model": "claude-fable-5-1",
           "playUrl": "/playground/canyon-strike/claude-fable-default/",
-          "officialApiCost": null,
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 6.014342,
+            "usage": {
+              "uncachedInputTokens": 732,
+              "cachedInputTokens": 661037,
+              "cacheWriteTokens": 101921,
+              "outputTokens": 91355,
+              "reasoningTokens": 31165,
+              "totalTokens": 855045
+            },
+            "ratesPerMillion": {
+              "input": 10.0,
+              "cachedInput": 0.25,
+              "cacheWrite": 12.5,
+              "output": 50.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-09-03",
+            "source": "https://claude.com/pricing",
+            "sourceLabel": "Anthropic Claude Fable 5.1 pricing"
+          },
           "status": "published",
           "runStatus": "candidate-complete",
-          "notices": [
-            "api-cost-unavailable"
-          ],
+          "notices": [],
           "traceId": "20260902T163321Z-canyon-strike-claude-fable-default-a1-3c30c77b",
           "replayUrl": "/replay/20260902T163321Z-canyon-strike-claude-fable-default-a1-3c30c77b",
           "traceSummary": {

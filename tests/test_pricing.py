@@ -36,6 +36,28 @@ def test_official_cost_uses_cache_and_output_rates() -> None:
     assert result["usage"]["totalTokens"] == 1_100_000
 
 
+def test_fable_cost_uses_official_prompt_cache_rates() -> None:
+    result = estimate_official_cost(
+        load_pricing(ROOT),
+        "claude-fable-5-1",
+        {
+            "inputTokens": 732,
+            "cachedTokens": 661_037,
+            "cacheWriteTokens": 101_921,
+            "outputTokens": 91_355,
+        },
+        "claude-jsonl-v1",
+        "2026-09-02T16:33:21+00:00",
+    )
+    assert result["total"] == 6.014342
+    assert result["ratesPerMillion"] == {
+        "input": 10.0,
+        "cachedInput": 0.25,
+        "cacheWrite": 12.5,
+        "output": 50.0,
+    }
+
+
 def test_deepseek_weekend_run_uses_off_peak_rates() -> None:
     result = estimate_official_cost(
         load_pricing(ROOT),
