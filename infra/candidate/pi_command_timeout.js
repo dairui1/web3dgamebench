@@ -1,6 +1,6 @@
 import { createBashTool } from "./dist/index.js";
 
-const FALLBACK_TIMEOUT_SECONDS = 1200;
+const FALLBACK_TIMEOUT_SECONDS = 5400;
 
 function configuredTimeout() {
   const value = Number.parseInt(

@@ -30,7 +30,7 @@ Restarting the WebUI does not automatically resume an interrupted or incomplete 
 ## Actions
 
 - **Calibration Gate** runs `canyon-strike`, `bombsite-retake`, and `first-night` serially with
-  `pi-deepseek-v4-flash`, Harbor, and the frozen 2700-second diagnostic ceiling. Its receipt is
+  `pi-deepseek-v4-flash`, Harbor, and the frozen 90-minute diagnostic ceiling. Its receipt is
   explicitly non-canonical and binds the watchdog probe, plan digest, prompt/control hashes,
   image identity, trace, workspace digest, completion evidence, evaluator report, and baseline
   comparison. A clean historical existing-adapter score is reused for Canyon Strike and Bombsite

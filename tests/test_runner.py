@@ -139,7 +139,7 @@ def test_total_timeout_preserves_run_and_classifies_candidate_nontermination(
     def timed_out(*args, **kwargs):
         kwargs["stdout_path"].write_text('{"type":"partial"}\n')
         kwargs["stderr_path"].write_text("still working\n")
-        raise ProcessTimedOut(7200)
+        raise ProcessTimedOut(5400)
 
     monkeypatch.setattr("web3dgamebench.runner.run_captured", timed_out)
     run_root = run_once(ROOT, "first-night", "codex-sol-medium", backend="native")
@@ -148,7 +148,7 @@ def test_total_timeout_preserves_run_and_classifies_candidate_nontermination(
     assert manifest["status"] == "candidate-failure"
     assert manifest["failure_scope"] == "candidate-non-termination"
     assert manifest["timed_out"] is True
-    assert manifest["timeout_seconds"] == 7200
+    assert manifest["timeout_seconds"] == 5400
     events = (run_root / "events.jsonl").read_text().splitlines()
     assert json.loads(events[0]) == {"type": "partial"}
     assert json.loads(events[-1])["entry"]["data"]["status"] == "timed_out"
@@ -253,6 +253,6 @@ def test_pi_calibration_uses_external_short_timeout(
     )
     manifest = json.loads((run_root / "manifest.json").read_text())
 
-    assert observed["timeout_seconds"] == 2700
+    assert observed["timeout_seconds"] == 5400
     assert manifest["execution_mode"] == "calibration"
-    assert manifest["candidate_timeout_seconds"] == 2700
+    assert manifest["candidate_timeout_seconds"] == 5400

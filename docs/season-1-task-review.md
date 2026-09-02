@@ -43,7 +43,7 @@ in the next season; they are not reasons to change a frozen Season 1 task after 
 ## Goal contract policy
 
 - The harness activates an audited external persistence control, then supplies the exact canonical English contract unchanged. Codex, Claude Code, and Pi must all expose observed Goal creation and completion in their traces; Pi uses the frozen benchmark adapter's structured lifecycle rather than the generic interactive completion policy.
-- No wall-clock or token limit is embedded in a task contract. The runtime applies a two-hour formal-cell ceiling, a 2700-second non-canonical calibration ceiling, and revision-scoped bounded verification without a global implementation turn/tool cap.
+- No wall-clock or token limit is embedded in a task contract. The runtime applies one 90-minute timeout to formal cells, Pi commands, the verification guard, and non-canonical calibration, without a global implementation turn/tool cap.
 - Candidate completion is operational: the production build must load as a visible, interactive 3D game at both viewports, a primary control and restart must work, and the checked flow must avoid runtime and layout failures.
 - Candidates are not asked to write autopilots or prove full win/loss and end-to-end paths. Missing systems, balance, polish, and game feel lower the evaluated result instead of forcing indefinite self-testing.
 - Milestones and target systems guide implementation and grading; they are not an exhaustive self-proof checklist.

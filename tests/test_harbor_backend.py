@@ -28,17 +28,17 @@ def container_config() -> ContainerConfig:
         egress_allow=("openai.com", "anthropic.com"),
         memory="8g",
         cpus="6",
-        command_timeout_seconds=1200,
-        candidate_total_timeout_seconds=7200,
+        command_timeout_seconds=5400,
+        candidate_total_timeout_seconds=5400,
         pids_limit=1024,
         pi_adapter=PiAdapterConfig(
             version="web3dgamebench-pi-adapter-v3",
             upstream_pi_goal_version="0.54.4",
             runtime_evidence_schema_version=3,
-            verification_window_seconds=1200,
+            verification_window_seconds=5400,
             repeat_verification_warning=2,
             repeat_verification_terminate=3,
-            calibration_total_timeout_seconds=2700,
+            calibration_total_timeout_seconds=5400,
         ),
     )
 
@@ -79,7 +79,7 @@ def test_harbor_task_materialization_is_profile_generic_and_preserves_boundaries
         profile,
         "instruction",
         container_config(),
-        7200,
+        5400,
     )
 
     task_toml = (task / "task.toml").read_text(encoding="utf-8")

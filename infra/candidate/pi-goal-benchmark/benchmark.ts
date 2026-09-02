@@ -174,7 +174,7 @@ function registerEvidenceLedger(pi: ExtensionAPI, ledger: EvidenceLedger) {
 }
 
 function registerVerificationConvergence(pi: ExtensionAPI, runtime: GoalRuntime, ledger: EvidenceLedger) {
-	const windowSeconds = positiveInteger("WEB3DGAMEBENCH_PI_VERIFICATION_WINDOW_SECONDS", 1200);
+	const windowSeconds = positiveInteger("WEB3DGAMEBENCH_PI_VERIFICATION_WINDOW_SECONDS", 5400);
 	const warningAttempt = positiveInteger("WEB3DGAMEBENCH_PI_REPEAT_VERIFICATION_WARNING", 2);
 	const terminateAttempt = positiveInteger("WEB3DGAMEBENCH_PI_REPEAT_VERIFICATION_TERMINATE", 3);
 	let terminal = false;

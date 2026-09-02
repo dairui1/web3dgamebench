@@ -58,7 +58,7 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
 ) -> None:
     assert len(season_plan["cells"]) == 80
     assert len({cell["cell_id"] for cell in season_plan["cells"]}) == 80
-    assert season_plan["runtime_control"]["candidate_total_timeout_seconds"] == 7200
+    assert season_plan["runtime_control"]["candidate_total_timeout_seconds"] == 5400
     assert season_plan["runtime_control"]["candidate_pids_limit"] == 1024
     assert season_plan["runtime_control"]["task_order"] == "serial"
     assert season_plan["runtime_control"]["harness_order"] == "parallel"
@@ -83,7 +83,7 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
     assert versions["pi_goal_upstream"] == "0.54.4"
     assert versions["pi_adapter"] == "web3dgamebench-pi-adapter-v3"
     assert (
-        season_plan["runtime_control"]["pi_adapter"]["verification_window_seconds"] == 1200
+        season_plan["runtime_control"]["pi_adapter"]["verification_window_seconds"] == 5400
     )
     assert all(versions.values())
     capabilities = season_plan["runtime_environment"]["candidate_toolchain"]["capabilities"]

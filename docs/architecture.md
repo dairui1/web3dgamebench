@@ -48,7 +48,7 @@ The official Season 1 matrix is owned by the repository runner. Harbor executes 
 cell, while the repository serializes tasks, runs the
 Codex, Claude Code, and Pi families concurrently within a task, and serializes models within each
 family. Candidate containers use Docker init, a 1024-PID ceiling, a supervised Chromium process
-group, streamed trace files, and a two-hour cell deadline. The task barrier stops on infrastructure
+group, streamed trace files, and a 90-minute cell deadline. The task barrier stops on infrastructure
 failure so an operator can classify and resume the same immutable receipt.
 
 Pi loads the repository-frozen `web3dgamebench-pi-adapter-v3`, a narrow fork of
@@ -62,8 +62,8 @@ The adapter does not impose a global model-turn or tool-call budget on implement
 convergence is revision-scoped: a successful build records the source and bundle, prompts immediate
 completion, and blocks further shell verification against that unchanged revision. Attempts to add
 browser automation before completion are rejected or converged as candidate verification overruns.
-runner remains the external wall-clock watchdog: formal cells use 7200 seconds, Pi calibration runs
-use 2700 seconds, and Pi shell commands use 1200 seconds.
+runner remains the external wall-clock watchdog: formal cells, Pi calibration runs, Pi shell
+commands, and the verification guard all use 5400 seconds.
 
 Harbor job and trial artifacts are converted into the canonical run layout. `harbor.json` binds the
 raw job and trial results, while `harbor-task-lock.json` binds the generated task to the frozen

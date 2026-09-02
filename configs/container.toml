@@ -7,8 +7,8 @@ proxy_container = "web3dgamebench-egress-proxy"
 proxy_port = 8888
 memory = "8g"
 cpus = "6"
-command_timeout_seconds = 1200
-candidate_total_timeout_seconds = 7200
+command_timeout_seconds = 5400
+candidate_total_timeout_seconds = 5400
 pids_limit = 1024
 
 # Model APIs only. Do not add galleries, GitHub, npm, CDNs, or the public site.
@@ -24,7 +24,7 @@ egress_allow = [
 version = "web3dgamebench-pi-adapter-v3"
 upstream_pi_goal_version = "0.54.4"
 runtime_evidence_schema_version = 3
-verification_window_seconds = 1200
+verification_window_seconds = 5400
 repeat_verification_warning = 2
 repeat_verification_terminate = 3
-calibration_total_timeout_seconds = 2700
+calibration_total_timeout_seconds = 5400

@@ -80,8 +80,8 @@ def load_container_config(root: Path) -> ContainerConfig:
         egress_allow=tuple(raw["egress_allow"]),
         memory=raw.get("memory"),
         cpus=raw.get("cpus"),
-        command_timeout_seconds=int(raw.get("command_timeout_seconds", 1200)),
-        candidate_total_timeout_seconds=int(raw.get("candidate_total_timeout_seconds", 7200)),
+        command_timeout_seconds=int(raw.get("command_timeout_seconds", 5400)),
+        candidate_total_timeout_seconds=int(raw.get("candidate_total_timeout_seconds", 5400)),
         pids_limit=int(raw.get("pids_limit", 1024)),
         pi_adapter=PiAdapterConfig(
             version=str(adapter["version"]),

@@ -21,10 +21,10 @@
 
 当前冻结产物：
 
-- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-build-only-v3-20260902T114050Z.json`
-- Plan digest：`656316e5037a9855da44aff26545b9be3b2e4a4c1432952e66b87eea1161b190`
-- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T114052Z-af8bb90c-adc5bd7e/receipt.json`（3/3 harness passed）。
-- Candidate image：`web3dgamebench-candidate:0.2.0` / `sha256:1cde9f7cf7c7a3c3f9d286ff6c1f47493f5e64131f2ba396dcfc17e5da1750f5`
+- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T114815Z.json`
+- Plan digest：`2d2784bb45f40031a2796cebabb6bb274abb4cf33a66bbb3eb8ef0631d3e299b`
+- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T114816Z-079fb484-391944df/receipt.json`（3/3 harness passed）。
+- Candidate image：`web3dgamebench-candidate:0.2.0` / `sha256:e402fb482a085d66bf081eff264628a9df11fb16e231a070419510c45a6f55f4`
 
 ## P1：本地 Matrix Control Plane
 
@@ -52,7 +52,7 @@
 - [x] 外部 watchdog 由 runner/process-group 负责，能够中断单次长 agent run，而不是只在 `agent_end` 后检查。
 - [x] 保留 wall clock 和单条 shell command 的硬边界；不对实现阶段做粗粒度的全局 turn/tool cap，改为在 source + dist revision 构建成功后立即收敛。
 - [x] 对连续重复的 full-playthrough、autopilot 或同一路径浏览器脚本发出一次收敛提醒；再次发生则终止为明确的 candidate verification overrun。
-- [x] 保留正式 cell 的 `7200s` 硬上限，但 calibration 阶段增加 `2700s` 的外部诊断上限，避免再次为已识别的循环消耗两小时。
+- [x] 正式 cell、Pi shell command、verification guard 与 calibration 统一使用 `5400s`（90 分钟）硬上限。
 - [x] 将 timeout 分类拆开：provider/Harbor infrastructure failure 与 candidate non-termination 不再混为一类。
 
 ## P2：Evaluator 对齐
@@ -68,7 +68,7 @@
 - [ ] 对每个任务比较现有 adapter 与新 adapter；普通 Pi 和 `pi-goal-pro` 仅保留为历史诊断，不再扩大样本。
 - [ ] 每个 calibration run 保存 prompt/control hash、镜像 digest、trace、workspace digest、completion receipt 和 evaluator report。
 - [ ] 新 adapter 必须全部满足以下条件才可进入正式重启：
-  - 3/3 lifecycle 得到可信终态，无 Harbor `7200s` timeout；
+  - 3/3 lifecycle 得到可信终态，无 Harbor `5400s` timeout；
   - TASK.md 未修改；
   - build evidence 完整，TASK.md、source 和 dist digest 一致；
   - 没有为了 completion 反复运行完整胜负流程；

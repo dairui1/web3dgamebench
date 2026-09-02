@@ -52,7 +52,7 @@ def test_pi_container_caps_each_command_without_limiting_the_task(
     assert "-e" not in argv
     env_file = Path(argv[argv.index("--env-file") + 1])
     assert env_file.stat().st_mode & 0o777 == 0o600
-    assert "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS=1200" in env_file.read_text()
+    assert "WEB3DGAMEBENCH_COMMAND_TIMEOUT_SECONDS=5400" in env_file.read_text()
     assert "OPENCODE_API_KEY=test-only-token" in env_file.read_text()
     assert all("test-only-token" not in argument for argument in argv)
     assert "/tmp:rw,nosuid,nodev,size=1g" in argv
