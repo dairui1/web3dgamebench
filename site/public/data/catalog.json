@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generatedAt": "2026-09-02T17:10:19.763430+00:00",
+  "generatedAt": "2026-09-02T17:47:39.111505+00:00",
   "season": {
     "id": "season-1",
     "status": "public-preview"
@@ -148,15 +148,43 @@
           "harness": "codex",
           "model": "gpt-5.6-luna",
           "playUrl": "/playground/canyon-strike/codex-luna-max/",
-          "officialApiCost": null,
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.039186,
+            "usage": {
+              "uncachedInputTokens": 55573,
+              "cachedInputTokens": 298240,
+              "cacheWriteTokens": 0,
+              "outputTokens": 18422,
+              "reasoningTokens": 869,
+              "totalTokens": 372235
+            },
+            "ratesPerMillion": {
+              "input": 0.2,
+              "cachedInput": 0.02,
+              "cacheWrite": 0.25,
+              "output": 1.2
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://help.openai.com/en/articles/20001415",
+            "sourceLabel": "OpenAI ChatGPT rate card"
+          },
           "status": "published",
           "runStatus": "candidate-complete",
           "notices": [
             "page-console-warning",
-            "runtime-network",
-            "trace-replay-unavailable",
-            "api-cost-unavailable"
-          ]
+            "runtime-network"
+          ],
+          "traceId": "20260902T160708Z-canyon-strike-codex-luna-max-a1-a824fb0e",
+          "replayUrl": "/replay/20260902T160708Z-canyon-strike-codex-luna-max-a1-a824fb0e",
+          "traceSummary": {
+            "durationSeconds": 413.943,
+            "eventCount": 17,
+            "toolCalls": 13,
+            "errors": 2
+          }
         },
         {
           "id": "canyon-strike--codex-sol-medium",
@@ -165,15 +193,43 @@
           "harness": "codex",
           "model": "gpt-5.6-sol",
           "playUrl": "/playground/canyon-strike/codex-sol-medium/",
-          "officialApiCost": null,
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.705386,
+            "usage": {
+              "uncachedInputTokens": 69163,
+              "cachedInputTokens": 167936,
+              "cacheWriteTokens": 0,
+              "outputTokens": 18078,
+              "reasoningTokens": 177,
+              "totalTokens": 255177
+            },
+            "ratesPerMillion": {
+              "input": 4.0,
+              "cachedInput": 0.4,
+              "cacheWrite": 5.0,
+              "output": 20.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://help.openai.com/en/articles/20001415",
+            "sourceLabel": "OpenAI ChatGPT rate card"
+          },
           "status": "published",
           "runStatus": "candidate-complete",
           "notices": [
             "page-console-warning",
-            "runtime-network",
-            "trace-replay-unavailable",
-            "api-cost-unavailable"
-          ]
+            "runtime-network"
+          ],
+          "traceId": "20260902T155011Z-canyon-strike-codex-sol-medium-a1-2914360f",
+          "replayUrl": "/replay/20260902T155011Z-canyon-strike-codex-sol-medium-a1-2914360f",
+          "traceSummary": {
+            "durationSeconds": 545.586,
+            "eventCount": 14,
+            "toolCalls": 7,
+            "errors": 0
+          }
         },
         {
           "id": "canyon-strike--codex-terra-high",
@@ -182,15 +238,43 @@
           "harness": "codex",
           "model": "gpt-5.6-terra",
           "playUrl": "/playground/canyon-strike/codex-terra-high/",
-          "officialApiCost": null,
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.506564,
+            "usage": {
+              "uncachedInputTokens": 88399,
+              "cachedInputTokens": 425728,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20385,
+              "reasoningTokens": 661,
+              "totalTokens": 534512
+            },
+            "ratesPerMillion": {
+              "input": 2.0,
+              "cachedInput": 0.2,
+              "cacheWrite": 2.5,
+              "output": 12.0
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+            "sourceLabel": "OpenAI API model pricing"
+          },
           "status": "published",
           "runStatus": "candidate-complete",
           "notices": [
             "page-console-warning",
-            "runtime-network",
-            "trace-replay-unavailable",
-            "api-cost-unavailable"
-          ]
+            "runtime-network"
+          ],
+          "traceId": "20260902T155931Z-canyon-strike-codex-terra-high-a1-33858c92",
+          "replayUrl": "/replay/20260902T155931Z-canyon-strike-codex-terra-high-a1-33858c92",
+          "traceSummary": {
+            "durationSeconds": 446.51,
+            "eventCount": 17,
+            "toolCalls": 12,
+            "errors": 1
+          }
         },
         {
           "id": "canyon-strike--pi-deepseek-v4-flash",
@@ -275,6 +359,56 @@
             "eventCount": 59,
             "toolCalls": 29,
             "errors": 0
+          }
+        },
+        {
+          "id": "canyon-strike--pi-qwen3-8-flash",
+          "taskId": "canyon-strike",
+          "profileId": "pi-qwen3-8-flash",
+          "harness": "pi",
+          "model": "qwen3.8-flash",
+          "playUrl": "/playground/canyon-strike/pi-qwen3-8-flash/",
+          "officialApiCost": {
+            "currency": "USD",
+            "estimated": true,
+            "total": 0.096499,
+            "usage": {
+              "uncachedInputTokens": 180,
+              "cachedInputTokens": 1681839,
+              "cacheWriteTokens": 111814,
+              "outputTokens": 100425,
+              "reasoningTokens": 0,
+              "totalTokens": 1894258
+            },
+            "ratesPerMillion": {
+              "input": 0.15,
+              "cachedInput": 0.016,
+              "cacheWrite": 0.2,
+              "output": 0.47
+            },
+            "pricingTier": "standard",
+            "priceAsOf": "2026-08-31",
+            "source": "https://www.qwencloud.com/models/qwen3.8-flash",
+            "sourceLabel": "QwenCloud model pricing"
+          },
+          "status": "published",
+          "runStatus": "candidate-complete",
+          "notices": [
+            "assisted-repair"
+          ],
+          "repair": {
+            "assisted": true,
+            "attempt": 2,
+            "penaltyPoints": 100,
+            "sourceRunId": "20260902T161458Z-canyon-strike-pi-qwen3-8-flash-a1-c18e644b"
+          },
+          "traceId": "20260903T001000Z-canyon-strike-pi-qwen3-8-flash-repair2",
+          "replayUrl": "/replay/20260903T001000Z-canyon-strike-pi-qwen3-8-flash-repair2",
+          "traceSummary": {
+            "durationSeconds": 1310.029,
+            "eventCount": 73,
+            "toolCalls": 26,
+            "errors": 3
           }
         }
       ]

@@ -138,6 +138,8 @@ def _candidate_input_read(arguments: Any) -> bool:
 
 
 def _codex_events(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    if any(event.get("method") for event in raw):
+        return _codex_app_server_events(raw)
     output: list[dict[str, Any]] = []
     usage: Counter[str] = Counter()
     for raw_event in raw:
@@ -189,6 +191,72 @@ def _codex_events(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict
         elif item_type == "todo_list":
             output.append(_event("plan", "Updated implementation plan", detail=item))
     return output, dict(usage)
+
+
+def _codex_app_server_events(
+    raw: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Normalize the JSON-RPC stream emitted by newer Codex app-server runs."""
+
+    output: list[dict[str, Any]] = []
+    usage: dict[str, int] = {}
+    for raw_event in raw:
+        method = raw_event.get("method")
+        params = raw_event.get("params") or {}
+        raw_timestamp = _timestamp(raw_event.get("emittedAtMs"))
+        if method == "thread/tokenUsage/updated":
+            total = (params.get("tokenUsage") or {}).get("total") or {}
+            usage = {
+                "inputTokens": int(total.get("inputTokens") or 0),
+                "outputTokens": int(total.get("outputTokens") or 0),
+                "reasoningTokens": int(total.get("reasoningOutputTokens") or 0),
+                "cachedTokens": int(total.get("cachedInputTokens") or 0),
+                "cacheWriteTokens": int(total.get("cacheWriteInputTokens") or 0),
+            }
+            continue
+        if method != "item/completed":
+            continue
+        item = params.get("item") or {}
+        item_type = item.get("type")
+        if item_type == "agentMessage":
+            message = str(item.get("text") or "").strip()
+            if message:
+                output.append(
+                    _event("message", "Agent update", detail=message, raw_timestamp=raw_timestamp)
+                )
+        elif item_type == "reasoning":
+            summary = item.get("summary") or []
+            if summary:
+                output.append(
+                    _event("thought", "Reasoning summary", detail=summary, raw_timestamp=raw_timestamp)
+                )
+        elif item_type == "commandExecution":
+            command = str(item.get("command") or "")
+            failed = item.get("status") == "failed" or item.get("exitCode") not in (None, 0)
+            output.append(
+                _event(
+                    "tool",
+                    _tool_title("shell", {"command": command}),
+                    detail=command,
+                    output="" if _candidate_input_read(command) else item.get("aggregatedOutput"),
+                    status="error" if failed else "ok",
+                    tool="shell",
+                    raw_timestamp=raw_timestamp,
+                )
+            )
+        elif item_type == "fileChange":
+            changes = item.get("changes") or []
+            paths = [str(change.get("path", "")).replace("/workspace/", "") for change in changes]
+            output.append(
+                _event(
+                    "change",
+                    f"Changed {', '.join(paths[:3]) or 'project files'}",
+                    detail=changes,
+                    tool="edit",
+                    raw_timestamp=raw_timestamp,
+                )
+            )
+    return output, usage
 
 
 def _claude_events(raw: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -481,6 +549,20 @@ def build_trace_replay(run_root: Path) -> dict[str, Any]:
         events, usage = _pi_events(raw)
     else:
         raise TraceReplayError(f"unsupported trace format: {trace_format or 'missing'}")
+    repair = manifest.get("repair")
+    if isinstance(repair, dict) and repair.get("assisted") is True:
+        events.append(
+            _event(
+                "change",
+                "Assisted repair applied",
+                detail={
+                    "attempt": repair.get("attempt"),
+                    "penaltyPoints": repair.get("penalty_points"),
+                    "changes": repair.get("changes") or [],
+                },
+                tool="repair",
+            )
+        )
     if not events:
         raise TraceReplayError(f"trace produced no replay events: {trace_path}")
 

@@ -130,3 +130,56 @@ def test_empty_trace_is_rejected(tmp_path: Path) -> None:
     run = write_run(tmp_path, "pi-jsonl-v1", [])
     with pytest.raises(TraceReplayError, match="trace has no events"):
         build_trace_replay(run)
+
+
+def test_builds_codex_app_server_replay(tmp_path: Path) -> None:
+    run = write_run(
+        tmp_path,
+        "codex-jsonl-v1",
+        [
+            {
+                "method": "item/completed",
+                "params": {"item": {"type": "agentMessage", "text": "Starting work"}},
+                "emittedAtMs": 1_700_000_000_000,
+            },
+            {
+                "method": "item/completed",
+                "params": {
+                    "item": {
+                        "type": "commandExecution",
+                        "command": "/bin/sh -lc 'npm run build'",
+                        "status": "completed",
+                        "exitCode": 0,
+                        "aggregatedOutput": "built",
+                    }
+                },
+                "emittedAtMs": 1_700_000_010_000,
+            },
+            {
+                "method": "thread/tokenUsage/updated",
+                "params": {
+                    "tokenUsage": {
+                        "total": {
+                            "inputTokens": 100,
+                            "outputTokens": 20,
+                            "reasoningOutputTokens": 3,
+                            "cachedInputTokens": 40,
+                        }
+                    }
+                },
+                "emittedAtMs": 1_700_000_011_000,
+            },
+        ],
+    )
+
+    replay = build_trace_replay(run)
+
+    assert [event["kind"] for event in replay["events"]] == ["message", "tool"]
+    assert replay["events"][1]["title"] == "Run production build"
+    assert replay["summary"]["usage"] == {
+        "inputTokens": 100,
+        "outputTokens": 20,
+        "reasoningTokens": 3,
+        "cachedTokens": 40,
+        "cacheWriteTokens": 0,
+    }

@@ -33,6 +33,8 @@ def _public_notice_codes(warnings: list[str]) -> list[str]:
             codes.append("trace-replay-unavailable")
         elif warning.startswith("official API cost unavailable"):
             codes.append("api-cost-unavailable")
+        elif warning.startswith("assisted repair"):
+            codes.append("assisted-repair")
         else:
             codes.append("non-blocking-check")
     return list(dict.fromkeys(codes))
@@ -311,6 +313,25 @@ def publish_runs(
             "runStatus": run_status,
             "notices": _public_notice_codes(warnings),
         }
+        repair = manifest.get("repair")
+        if repair is not None:
+            if (
+                not isinstance(repair, dict)
+                or repair.get("assisted") is not True
+                or not isinstance(repair.get("penalty_points"), int)
+                or repair["penalty_points"] <= 0
+                or not isinstance(repair.get("source_run_id"), str)
+            ):
+                raise PublishError(f"invalid assisted repair metadata: {run_root}")
+            submission["repair"] = {
+                "assisted": True,
+                "attempt": int(repair.get("attempt") or 1),
+                "penaltyPoints": repair["penalty_points"],
+                "sourceRunId": repair["source_run_id"],
+            }
+            submission["notices"] = list(
+                dict.fromkeys([*submission["notices"], "assisted-repair"])
+            )
         if replay:
             submission.update(
                 {

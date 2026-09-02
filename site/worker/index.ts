@@ -28,6 +28,7 @@ type Submission = {
   };
   status: string;
   runStatus?: string;
+  repair?: { assisted: true; attempt: number; penaltyPoints: number; sourceRunId: string };
 };
 
 type Task = {
@@ -165,10 +166,19 @@ async function leaderboard(env: Env): Promise<Response> {
     const result = await env.DB.prepare(
       "SELECT left_id, right_id, choice FROM votes WHERE task_id = ? AND choice IN ('left', 'right', 'tie')",
     ).bind(task.id).all<Preference>();
-    const ratings = bradleyTerry(submissions.map((item) => item.id), result.results).map((rating) => ({
-      ...rating,
-      submission: submissions.find((item) => item.id === rating.submissionId),
-    }));
+    const ratings = bradleyTerry(submissions.map((item) => item.id), result.results)
+      .map((rating) => {
+        const submission = submissions.find((item) => item.id === rating.submissionId);
+        const penaltyPoints = submission?.repair?.penaltyPoints ?? 0;
+        return {
+          ...rating,
+          rawRating: rating.rating,
+          rating: rating.rating - penaltyPoints,
+          penaltyPoints,
+          submission,
+        };
+      })
+      .sort((a, b) => b.rating - a.rating || b.comparisons - a.comparisons);
     output.push({ task: publicTask(task), ratings, votes: result.results.length });
   }
   return json({ tasks: output });

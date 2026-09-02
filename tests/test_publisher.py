@@ -46,6 +46,12 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     manifest["run_id"] = "run-task-profile"
     manifest["duration_seconds"] = 12.5
     manifest["trace_format"] = "codex-jsonl-v1"
+    manifest["repair"] = {
+        "assisted": True,
+        "attempt": 1,
+        "penalty_points": 100,
+        "source_run_id": "original-run",
+    }
     (tmp_path / "run/manifest.json").write_text(json.dumps(manifest))
     (tmp_path / "run/events.jsonl").write_text(
         json.dumps({"type": "thread.started", "thread_id": "thread"})
@@ -97,6 +103,13 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     assert submission["replayUrl"] == "/replay/run-task-profile"
     assert submission["officialApiCost"]["total"] == 0
     assert submission["officialApiCost"]["source"] == "https://example.com/pricing"
+    assert submission["repair"] == {
+        "assisted": True,
+        "attempt": 1,
+        "penaltyPoints": 100,
+        "sourceRunId": "original-run",
+    }
+    assert "assisted-repair" in submission["notices"]
     replay = json.loads(
         (root / "site/public/data/traces/run-task-profile.json").read_text()
     )

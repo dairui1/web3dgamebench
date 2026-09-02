@@ -59,6 +59,7 @@ h1 { margin: 0; font-size: clamp(52px, 7vw, 108px); line-height: 0.92; font-weig
 .build-row strong, .build-row small { display: block; }
 .build-row strong { font-size: 13px; }
 .build-row small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.repair-mark { color: #a94718; font-weight: 700; }
 .build-row a { border: 1px solid var(--ink); padding: 7px 11px; font: 700 11px/1 ui-monospace, monospace; text-transform: uppercase; text-decoration: none; }
 .build-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .build-actions .secondary-action { background: transparent; color: var(--muted); border-color: var(--line); }
