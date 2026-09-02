@@ -45,7 +45,12 @@ def test_control_app_is_local_token_guarded_and_lists_frozen_options(
         route.endpoint for route in app.routes if getattr(route, "path", None) == "/"
     )
     page = index()
-    assert "__CONTROL_TOKEN__" not in page.body.decode()
+    html = page.body.decode()
+    assert "__CONTROL_TOKEN__" not in html
+    assert 'id="sel-config"' in html
+    assert 'id="sel-plan"' not in html
+    assert 'id="sel-smoke"' not in html
+    assert "技术详情" in html
     state = supervisor.snapshot()
     assert state["controls"]["can_start"] is True
     assert state["options"]["plans"][0]["path"] == str(plan.resolve())

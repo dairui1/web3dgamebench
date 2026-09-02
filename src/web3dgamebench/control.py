@@ -171,6 +171,15 @@ class MatrixSupervisor:
                     if isinstance(value.get("season"), dict)
                     else None,
                     "digest": value.get("plan_digest_sha256"),
+                    "task_count": len(value.get("tasks") or {}),
+                    "profile_count": len(value.get("profiles") or {}),
+                    "cell_count": len(value.get("cells") or []),
+                    "timeout_minutes": (
+                        (value.get("runtime_control") or {}).get(
+                            "candidate_total_timeout_seconds", 0
+                        )
+                        // 60
+                    ),
                     "candidate_image": (
                         (value.get("runtime_environment") or {})
                         .get("container_images", {})
@@ -200,7 +209,7 @@ class MatrixSupervisor:
                     if isinstance(value.get("plan"), dict)
                     else None,
                     "backend": value.get("backend"),
-                    "completed_at": value.get("completed_at"),
+                    "completed_at": value.get("completed_at") or value.get("created_at"),
                 }
             )
         return plans[:30], smokes[:30]

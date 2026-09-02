@@ -21,9 +21,9 @@
 
 当前冻结产物：
 
-- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T135349Z.json`
-- Plan digest：`517560ecb521b3e80e357dfe9eea9dde279ff471a9b3bdcc7e7e567c7cf42e2d`
-- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T135351Z-a4034470-730cdc52/receipt.json`（3/3 harness passed）。
+- Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-90m-20260902T140916Z.json`
+- Plan digest：`44be668e83ae5388e75449cc56ff333ea834063cd5a3c82fb5bfce7e4f7994fb`
+- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T140917Z-feb4317b-03339cc8/receipt.json`（3/3 harness passed）。
 - Candidate image：`web3dgamebench-candidate:0.3.0` / `sha256:66e16b8f9d041bb8b5f17fda5f7aee7b9ee93ff7cf49b041ad3c75d2d54ca1e1`
 
 ## P1：本地 Matrix Control Plane

@@ -17,6 +17,7 @@
     <symbol id="i-rotate-cw" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
     <symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
     <symbol id="i-alert-octagon" viewBox="0 0 24 24"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
     <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
@@ -34,13 +35,14 @@
     <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
   </svg>
 
   <header class="topbar">
     <div class="topbar-title">
       <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>
       <h1>Web3DGameBench <span class="muted">Matrix 控制台</span></h1>
-      <span class="chip chip-neutral" title="仅监听 loopback 的本地控制面">localhost</span>
+      <span class="chip chip-neutral" title="仅监听本机回环地址的本地控制面">仅本机</span>
     </div>
     <div class="topbar-status" role="status" aria-live="polite">
       <span id="conn-indicator" class="conn conn-connecting" data-state="connecting">
@@ -50,7 +52,7 @@
       <span class="sep" aria-hidden="true">·</span>
       <span class="mono" title="距离上一次状态更新的时间">更新 <span id="age-label" class="fixed-w">--</span> 前</span>
       <span class="sep" aria-hidden="true">·</span>
-      <span class="mono" id="server-time" title="服务器时间 (UTC)">--:--:--</span>
+      <span class="mono" id="server-time" title="服务器时间（UTC）">--:--:--</span>
     </div>
   </header>
 
@@ -58,23 +60,23 @@
     <section class="panel controls" aria-labelledby="controls-heading">
       <div class="panel-head">
         <h2 id="controls-heading">操作</h2>
-        <span id="runner-chip" class="chip chip-neutral" aria-live="polite">runner 空闲</span>
+        <span id="runner-chip" class="chip chip-neutral" aria-live="polite">执行进程空闲</span>
       </div>
       <div class="toolbar" role="group" aria-label="Matrix 控制">
         <button type="button" class="btn btn-primary" id="btn-start" data-action="start" disabled
-                title="启动 Matrix：创建本季的 canonical Matrix 并开始执行" aria-label="启动 Matrix">
+                title="启动 Matrix：创建本季的正式 Matrix 并开始执行" aria-label="启动 Matrix">
           <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>启动</span>
         </button>
         <button type="button" class="btn" id="btn-pause" data-action="pause" disabled
-                title="暂停：在下一个 task barrier 优雅停止，无需确认" aria-label="在下一个 task barrier 暂停">
+                title="暂停：在下一个任务边界优雅停止，无需确认" aria-label="在下一个任务边界暂停">
           <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg><span>暂停</span>
         </button>
         <button type="button" class="btn btn-danger" id="btn-interrupt" data-action="interrupt" disabled
-                title="中断：立即向 runner 进程组发送 SIGINT，需要二次确认" aria-label="立即中断">
+                title="中断：立即向执行进程组发送中断信号，需要二次确认" aria-label="立即中断">
           <svg class="icon" aria-hidden="true"><use href="#i-octagon-x"/></svg><span>中断</span>
         </button>
         <button type="button" class="btn" id="btn-resume" data-action="resume" disabled
-                title="继续：从 canonical receipt 恢复未完成的 cell" aria-label="继续 Matrix">
+                title="继续：从正式回执恢复未完成的单元格" aria-label="继续 Matrix">
           <svg class="icon" aria-hidden="true"><use href="#i-rotate-cw"/></svg><span>继续</span>
         </button>
         <span class="toolbar-spacer"></span>
@@ -95,42 +97,49 @@
     <section class="panel start-panel" id="start-panel" aria-labelledby="start-heading" hidden>
       <div class="panel-head">
         <h2 id="start-heading">启动前配置</h2>
-        <span class="chip chip-cyan">backend: harbor</span>
+        <span class="chip chip-cyan">执行环境：Harbor</span>
       </div>
-      <form id="start-form" class="form-grid" autocomplete="off">
-        <label class="field">
-          <span class="field-label">plan（按修改时间倒序）</span>
-          <select id="sel-plan" name="plan" required></select>
-          <span class="field-meta mono" id="plan-meta">--</span>
+      <form id="start-form" class="start-form" autocomplete="off">
+        <div id="start-readiness" class="readiness" role="status" aria-live="polite" aria-atomic="true">
+          <svg class="icon" aria-hidden="true"><use id="start-readiness-icon" href="#i-info"/></svg>
+          <div class="readiness-body">
+            <p class="readiness-title" id="start-readiness-title">正在读取运行配置…</p>
+            <p class="readiness-text" id="start-readiness-text"></p>
+          </div>
+        </div>
+        <label class="field" id="start-config-field" hidden>
+          <span class="field-label">运行配置</span>
+          <select id="sel-config" name="config"></select>
+          <span class="field-meta" id="config-meta"></span>
         </label>
-        <label class="field">
-          <span class="field-label">smoke receipt（Harbor）</span>
-          <select id="sel-smoke" name="smoke_receipt" required></select>
-          <span class="field-meta mono" id="smoke-meta">--</span>
-        </label>
+        <dl class="kv start-facts" id="start-facts" aria-label="运行配置摘要"></dl>
         <div class="field-warning" id="start-warning" hidden>
           <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
           <span id="start-warning-text"></span>
         </div>
+        <details class="tech-details" id="start-details">
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>技术详情</summary>
+          <dl class="kv tech-kv" id="start-details-kv"></dl>
+        </details>
       </form>
     </section>
 
     <section class="panel overview" aria-labelledby="overview-heading">
       <div class="panel-head">
         <h2 id="overview-heading">Matrix 概况</h2>
-        <span id="matrix-chip" class="chip chip-neutral">无 canonical Matrix</span>
+        <span id="matrix-chip" class="chip chip-neutral">无正式 Matrix</span>
       </div>
       <div id="canonical-banner" class="banner" hidden>
         <svg class="icon" aria-hidden="true"><use id="canonical-banner-icon" href="#i-info"/></svg>
         <span id="canonical-banner-text"></span>
       </div>
       <dl class="stats" aria-label="Matrix 总计">
-        <div class="stat"><dt>总 cell</dt><dd id="st-total" class="mono">--</dd></div>
-        <div class="stat stat-green"><dt>完成 · trusted</dt><dd id="st-trusted" class="mono">--</dd></div>
+        <div class="stat"><dt>单元格总数</dt><dd id="st-total" class="mono">--</dd></div>
+        <div class="stat stat-green"><dt>已完成（可信）</dt><dd id="st-trusted" class="mono">--</dd></div>
         <div class="stat stat-cyan"><dt>运行中</dt><dd id="st-running" class="mono">--</dd></div>
         <div class="stat"><dt>待执行</dt><dd id="st-pending" class="mono">--</dd></div>
-        <div class="stat stat-red"><dt>candidate 失败</dt><dd id="st-cand" class="mono">--</dd></div>
-        <div class="stat stat-red"><dt>evidence 失败</dt><dd id="st-evid" class="mono">--</dd></div>
+        <div class="stat stat-red"><dt>候选失败</dt><dd id="st-cand" class="mono">--</dd></div>
+        <div class="stat stat-red"><dt>证据失败</dt><dd id="st-evid" class="mono">--</dd></div>
         <div class="stat stat-amber"><dt>基础设施错误</dt><dd id="st-infra" class="mono">--</dd></div>
         <div class="stat stat-amber"><dt>已中断</dt><dd id="st-int" class="mono">--</dd></div>
       </dl>
@@ -142,10 +151,10 @@
       </div>
       <dl class="kv">
         <dt>当前阶段</dt><dd id="kv-phase">--</dd>
-        <dt>当前 task</dt><dd id="kv-task" class="mono">--</dd>
+        <dt>当前任务</dt><dd id="kv-task" class="mono">--</dd>
         <dt>Matrix 状态</dt><dd id="kv-status">--</dd>
-        <dt>matrix_id</dt><dd id="kv-matrix-id" class="mono">--</dd>
-        <dt>season</dt><dd id="kv-season" class="mono">--</dd>
+        <dt>Matrix 编号</dt><dd id="kv-matrix-id" class="mono">--</dd>
+        <dt>赛季</dt><dd id="kv-season" class="mono">--</dd>
         <dt>创建 / 更新</dt><dd id="kv-times" class="mono">--</dd>
         <dt>执行窗口</dt><dd id="kv-window">--</dd>
       </dl>
@@ -153,11 +162,11 @@
 
     <section class="panel matrix-panel" aria-labelledby="matrix-heading">
       <div class="panel-head">
-        <h2 id="matrix-heading">Matrix <span class="muted" id="matrix-dims">task × profile</span></h2>
-        <div class="segmented" role="tablist" aria-label="按状态筛选 cell" id="cell-filter">
+        <h2 id="matrix-heading">Matrix <span class="muted" id="matrix-dims">任务 × 模型配置</span></h2>
+        <div class="segmented" role="tablist" aria-label="按状态筛选单元格" id="cell-filter">
           <button type="button" role="tab" aria-selected="true" data-filter="all" class="seg-active">全部</button>
           <button type="button" role="tab" aria-selected="false" data-filter="running">运行中</button>
-          <button type="button" role="tab" aria-selected="false" data-filter="completed">完成</button>
+          <button type="button" role="tab" aria-selected="false" data-filter="completed">已完成</button>
           <button type="button" role="tab" aria-selected="false" data-filter="failed">失败</button>
           <button type="button" role="tab" aria-selected="false" data-filter="resumable">可恢复</button>
           <button type="button" role="tab" aria-selected="false" data-filter="pending">待执行</button>
@@ -170,15 +179,15 @@
         </table>
         <div class="empty" id="matrix-empty">
           <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>
-          <p>尚未加载任何 Matrix receipt。选择匹配的 plan 与 smoke receipt 后点击「启动」创建 canonical Matrix。</p>
+          <p>尚未加载任何 Matrix 回执。确认「启动前配置」已就绪后，点击「启动」创建本季的正式 Matrix。</p>
         </div>
       </div>
       <ul class="legend" id="matrix-legend" aria-label="图例">
         <li><span class="lg lg-pending"></span>待执行</li>
         <li><span class="lg lg-running"></span>运行中 / 评估中</li>
-        <li><span class="lg lg-completed"></span>完成（trusted）</li>
-        <li><span class="lg lg-terminal"></span>终态失败（candidate / evidence，不会重试）</li>
-        <li><span class="lg lg-resumable"></span>可恢复（基础设施错误 / 中断）</li>
+        <li><span class="lg lg-completed"></span>已完成（可信）</li>
+        <li><span class="lg lg-terminal"></span>终态失败（候选 / 证据，不会重试）</li>
+        <li><span class="lg lg-resumable"></span>可恢复（基础设施错误 / 已中断）</li>
       </ul>
     </section>
 
@@ -187,38 +196,38 @@
         <h2 id="prov-heading">来源与证据</h2>
       </div>
       <dl class="kv">
-        <dt>plan</dt><dd id="pv-plan" class="mono">--</dd>
-        <dt>plan digest</dt><dd id="pv-plan-digest" class="mono">--</dd>
-        <dt>candidate image</dt><dd id="pv-image" class="mono">--</dd>
-        <dt>smoke receipt</dt><dd id="pv-smoke" class="mono">--</dd>
-        <dt>smoke id</dt><dd id="pv-smoke-id" class="mono">--</dd>
-        <dt>backend</dt><dd id="pv-backend" class="mono">--</dd>
-        <dt>receipt 文件</dt><dd id="pv-receipt" class="mono">--</dd>
+        <dt>Plan 文件</dt><dd id="pv-plan" class="mono">--</dd>
+        <dt>Plan 摘要</dt><dd id="pv-plan-digest" class="mono">--</dd>
+        <dt>候选镜像</dt><dd id="pv-image" class="mono">--</dd>
+        <dt>Smoke 回执</dt><dd id="pv-smoke" class="mono">--</dd>
+        <dt>Smoke 编号</dt><dd id="pv-smoke-id" class="mono">--</dd>
+        <dt>执行环境</dt><dd id="pv-backend">--</dd>
+        <dt>Matrix 回执</dt><dd id="pv-receipt" class="mono">--</dd>
       </dl>
       <div class="row-actions">
-        <button type="button" class="btn btn-sm" id="btn-view-plan" disabled title="查看 plan JSON">
-          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>plan</span>
+        <button type="button" class="btn btn-sm" id="btn-view-plan" disabled title="查看 Plan 文件内容">
+          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>查看 Plan</span>
         </button>
-        <button type="button" class="btn btn-sm" id="btn-view-smoke" disabled title="查看 smoke receipt JSON">
-          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>smoke</span>
+        <button type="button" class="btn btn-sm" id="btn-view-smoke" disabled title="查看 Smoke 回执内容">
+          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>查看 Smoke</span>
         </button>
-        <button type="button" class="btn btn-sm" id="btn-view-receipt" disabled title="查看 Matrix receipt JSON">
-          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>receipt</span>
+        <button type="button" class="btn btn-sm" id="btn-view-receipt" disabled title="查看 Matrix 回执内容">
+          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>查看回执</span>
         </button>
       </div>
     </section>
 
     <section class="panel runner" aria-labelledby="runner-heading">
       <div class="panel-head">
-        <h2 id="runner-heading">runner 进程</h2>
-        <button type="button" class="btn btn-sm" id="btn-view-runner-log" disabled title="查看 runner 进程日志">
+        <h2 id="runner-heading">执行进程</h2>
+        <button type="button" class="btn btn-sm" id="btn-view-runner-log" disabled title="查看执行进程日志">
           <svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg><span>日志</span>
         </button>
       </div>
       <dl class="kv">
         <dt>状态</dt><dd id="rn-status">--</dd>
-        <dt>操作</dt><dd id="rn-op" class="mono">--</dd>
-        <dt>pid / pgid</dt><dd id="rn-pid" class="mono">--</dd>
+        <dt>操作</dt><dd id="rn-op">--</dd>
+        <dt>进程号 / 进程组号</dt><dd id="rn-pid" class="mono">--</dd>
         <dt>启动</dt><dd id="rn-started" class="mono">--</dd>
         <dt>退出</dt><dd id="rn-exited" class="mono">--</dd>
         <dt>日志</dt><dd id="rn-log" class="mono">--</dd>
@@ -231,10 +240,10 @@
   <aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden tabindex="-1">
     <div class="drawer-head">
       <div>
-        <h2 id="drawer-title" class="mono">cell</h2>
+        <h2 id="drawer-title" class="mono">单元格</h2>
         <p id="drawer-sub" class="muted">--</p>
       </div>
-      <button type="button" class="btn btn-icon btn-ghost" id="drawer-close" title="关闭详情" aria-label="关闭 cell 详情">
+      <button type="button" class="btn btn-icon btn-ghost" id="drawer-close" title="关闭详情" aria-label="关闭单元格详情">
         <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
       </button>
     </div>
@@ -245,7 +254,7 @@
         <h3 class="subhead">失败原因</h3>
         <ul id="drawer-failure-list"></ul>
       </div>
-      <h3 class="subhead">artifact</h3>
+      <h3 class="subhead">产物</h3>
       <div class="file-list" id="drawer-files"></div>
     </div>
   </aside>
@@ -256,15 +265,18 @@
       <h2 id="dlg-start-title">确认启动 Matrix</h2>
       <p class="dialog-warn">
         <svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
-        <span>此操作将创建本季（season-1）的 <strong>canonical Matrix</strong>。canonical 声明一旦写入即不可覆盖，后续只能 resume 或人工作废。</span>
+        <span>此操作将创建本季的<strong>正式 Matrix</strong>。正式声明一旦写入即不可覆盖，后续只能继续执行或人工作废。</span>
       </p>
       <dl class="kv kv-dialog">
-        <dt>plan</dt><dd id="dlg-start-plan" class="mono">--</dd>
-        <dt>plan digest</dt><dd id="dlg-start-digest" class="mono">--</dd>
-        <dt>smoke receipt</dt><dd id="dlg-start-smoke" class="mono">--</dd>
-        <dt>smoke 状态</dt><dd id="dlg-start-smoke-status" class="mono">--</dd>
-        <dt>backend</dt><dd id="dlg-start-backend" class="mono">harbor</dd>
+        <dt>赛季</dt><dd id="dlg-start-season">--</dd>
+        <dt>冻结配置</dt><dd id="dlg-start-plan">--</dd>
+        <dt>连通性检查</dt><dd id="dlg-start-smoke">--</dd>
+        <dt>执行环境</dt><dd id="dlg-start-backend">Harbor</dd>
       </dl>
+      <details class="tech-details">
+        <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>技术详情</summary>
+        <dl class="kv tech-kv" id="dlg-start-details"></dl>
+      </details>
       <div class="dialog-actions">
         <button type="button" class="btn" value="cancel" data-close>取消</button>
         <button type="button" class="btn btn-primary" id="dlg-start-confirm">确认启动</button>
@@ -274,19 +286,19 @@
 
   <dialog id="dlg-interrupt" class="dialog dialog-danger" aria-labelledby="dlg-interrupt-title">
     <form method="dialog">
-      <h2 id="dlg-interrupt-title">立即中断 runner？</h2>
+      <h2 id="dlg-interrupt-title">立即中断执行进程？</h2>
       <p class="dialog-warn dialog-warn-red">
         <svg class="icon" aria-hidden="true"><use href="#i-octagon-x"/></svg>
-        <span id="dlg-int-text">将向 runner 进程组发送 SIGINT。正在执行的 candidate 会被标记为 <strong>interrupted</strong>，之后可通过「继续」恢复。若只想在当前 task 完成后停止，请改用「暂停」。</span>
+        <span id="dlg-int-text">将向执行进程组发送中断信号（SIGINT）。正在执行的候选会被标记为<strong>已中断</strong>，之后可通过「继续」恢复。若只想在当前任务完成后停止，请改用「暂停」。</span>
       </p>
       <dl class="kv kv-dialog">
-        <dt>操作</dt><dd id="dlg-int-op" class="mono">--</dd>
-        <dt>pid / pgid</dt><dd id="dlg-int-pid" class="mono">--</dd>
-        <dt>当前 task</dt><dd id="dlg-int-task" class="mono">--</dd>
+        <dt>操作</dt><dd id="dlg-int-op">--</dd>
+        <dt>进程号 / 进程组号</dt><dd id="dlg-int-pid" class="mono">--</dd>
+        <dt>当前任务</dt><dd id="dlg-int-task" class="mono">--</dd>
       </dl>
       <label class="check">
         <input type="checkbox" id="dlg-int-ack">
-        <span>我了解这会立即中断正在运行的 candidate</span>
+        <span>我了解这会立即中断正在运行的候选</span>
       </label>
       <div class="dialog-actions">
         <button type="button" class="btn" value="cancel" data-close>取消</button>

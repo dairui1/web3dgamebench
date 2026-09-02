@@ -10,22 +10,22 @@
   // ------------------------------------------------------------------
 
   const CELL_STATUS = {
-    pending: { label: '待执行', icon: 'i-circle', cls: 'cell-pending', kind: 'pending', chip: 'chip-neutral' },
-    running: { label: '运行中', icon: 'i-loader', cls: 'cell-running', kind: 'running', chip: 'chip-cyan', spin: true },
-    completed: { label: '完成 · trusted', icon: 'i-check', cls: 'cell-completed', kind: 'completed', chip: 'chip-green' },
-    'candidate-failure': { label: 'candidate 失败', icon: 'i-x', cls: 'cell-candidate-failure', kind: 'failed', chip: 'chip-red', terminal: true },
-    'evidence-failure': { label: 'evidence 失败', icon: 'i-alert-triangle', cls: 'cell-evidence-failure', kind: 'failed', chip: 'chip-red', terminal: true },
-    'infrastructure-error': { label: '基础设施错误', icon: 'i-alert-octagon', cls: 'cell-infrastructure-error', kind: 'resumable', chip: 'chip-amber', resumable: true },
-    interrupted: { label: '已中断', icon: 'i-pause-circle', cls: 'cell-interrupted', kind: 'resumable', chip: 'chip-amber', resumable: true },
+    pending: { label: '待执行', icon: 'i-circle', cls: 'cell-pending', kind: 'pending', chip: 'chip-neutral', tag: '·' },
+    running: { label: '运行中', icon: 'i-loader', cls: 'cell-running', kind: 'running', chip: 'chip-cyan', spin: true, tag: '运行' },
+    completed: { label: '已完成（可信）', icon: 'i-check', cls: 'cell-completed', kind: 'completed', chip: 'chip-green', tag: '完成' },
+    'candidate-failure': { label: '候选失败', icon: 'i-x', cls: 'cell-candidate-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '候选' },
+    'evidence-failure': { label: '证据失败', icon: 'i-alert-triangle', cls: 'cell-evidence-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '证据' },
+    'infrastructure-error': { label: '基础设施错误', icon: 'i-alert-octagon', cls: 'cell-infrastructure-error', kind: 'resumable', chip: 'chip-amber', resumable: true, tag: '设施' },
+    interrupted: { label: '已中断', icon: 'i-pause-circle', cls: 'cell-interrupted', kind: 'resumable', chip: 'chip-amber', resumable: true, tag: '中断' },
   };
-  const UNKNOWN_STATUS = { label: '未知状态', icon: 'i-info', cls: 'cell-pending', kind: 'pending', chip: 'chip-neutral' };
+  const UNKNOWN_STATUS = { label: '未知状态', icon: 'i-info', cls: 'cell-pending', kind: 'pending', chip: 'chip-neutral', tag: '?' };
 
   const MATRIX_STATUS = {
     running: { label: '执行中', chip: 'chip-cyan' },
-    incomplete: { label: '未完成（停在 task barrier）', chip: 'chip-amber' },
+    incomplete: { label: '未完成（停在任务边界）', chip: 'chip-amber' },
     interrupted: { label: '已中断', chip: 'chip-amber' },
     complete: { label: '已完成 · 已封存', chip: 'chip-green' },
-    invalidated: { label: '已作废 (invalidated)', chip: 'chip-red' },
+    invalidated: { label: '已作废', chip: 'chip-red' },
   };
 
   const RUNNER_STATUS = {
@@ -39,16 +39,37 @@
     'matrix-resume': '继续 Matrix',
   };
 
+  const ACTION_LABEL = {
+    start: '启动',
+    pause: '暂停',
+    interrupt: '中断',
+    resume: '继续',
+  };
+
+  const PHASE_LABEL = {
+    evaluating: '评估中',
+    running: '执行中',
+    building: '构建中',
+  };
+
+  // Display names for the three core coding harnesses probed by Harbor Smoke.
+  const HARNESS_LABEL = {
+    codex: 'Codex',
+    'claude-code': 'Claude Code',
+    pi: 'Pi',
+  };
+  const CORE_HARNESSES = 'Codex、Claude Code、Pi';
+
   const RUN_FILES = [
-    { rel: 'manifest.json', kind: 'candidate manifest' },
-    { rel: 'events.jsonl', kind: 'candidate 事件流' },
-    { rel: 'stderr.log', kind: 'candidate stderr' },
-    { rel: 'final.txt', kind: 'candidate 最终输出' },
-    { rel: 'evaluation/report.json', kind: 'evaluation 报告' },
-    { rel: 'evaluation/evaluator.stdout.log', kind: 'evaluator stdout' },
-    { rel: 'evaluation/evaluator.stderr.log', kind: 'evaluator stderr' },
-    { rel: 'evaluation/build.stdout.log', kind: 'build stdout' },
-    { rel: 'evaluation/build.stderr.log', kind: 'build stderr' },
+    { rel: 'manifest.json', kind: '候选清单' },
+    { rel: 'events.jsonl', kind: '候选事件流' },
+    { rel: 'stderr.log', kind: '候选标准错误' },
+    { rel: 'final.txt', kind: '候选最终输出' },
+    { rel: 'evaluation/report.json', kind: '评估报告' },
+    { rel: 'evaluation/evaluator.stdout.log', kind: '评估器标准输出' },
+    { rel: 'evaluation/evaluator.stderr.log', kind: '评估器标准错误' },
+    { rel: 'evaluation/build.stdout.log', kind: '构建标准输出' },
+    { rel: 'evaluation/build.stderr.log', kind: '构建标准错误' },
   ];
 
   // ------------------------------------------------------------------
@@ -66,6 +87,9 @@
     lastFocus: null,
     matrixSignature: '',
     optionsSignature: '',
+    combos: [],
+    comboDiagnostics: null,
+    selectedComboId: null,
     cellButtons: new Map(),
     pauseRequestedAt: null,
     lastRunnerKey: null,
@@ -142,6 +166,22 @@
   }
 
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  function tsValue(iso) {
+    if (!iso) return 0;
+    const t = new Date(iso).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  }
+
+  function harnessLabel(value) {
+    if (typeof value !== 'string' || !value) return '';
+    return HARNESS_LABEL[value] || value;
+  }
+
+  function phaseLabel(value) {
+    if (typeof value !== 'string' || !value) return '';
+    return PHASE_LABEL[value] || value;
+  }
 
   function fmtTime(iso) {
     if (!iso) return '--';
@@ -356,20 +396,20 @@
 
     let phase;
     if (active) {
-      if (counts.evaluating > 0 && counts.running === counts.evaluating) phase = '评估中 (evaluating)';
-      else if (counts.evaluating > 0) phase = 'candidate 执行 + 评估中';
-      else if (counts.running > 0) phase = 'candidate 执行中';
-      else phase = 'runner 启动 / 校验 frozen inputs';
-      if (app.pauseRequestedAt) phase += ' · 已请求 pause，将在下一个 task barrier 停止';
+      if (counts.evaluating > 0 && counts.running === counts.evaluating) phase = '评估中';
+      else if (counts.evaluating > 0) phase = '候选执行中 + 评估中';
+      else if (counts.running > 0) phase = '候选执行中';
+      else phase = '执行进程启动中 / 校验冻结输入';
+      if (app.pauseRequestedAt) phase += ' · 已请求暂停，将在下一个任务边界停止';
     } else if (!receipt) {
-      phase = canonical ? 'canonical receipt 不可读' : '未启动';
+      phase = canonical ? '正式回执不可读' : '未启动';
     } else {
       switch (receipt.status) {
         case 'complete': phase = 'Matrix 已完成'; break;
-        case 'incomplete': phase = '已在 task barrier 停止，等待 resume'; break;
-        case 'interrupted': phase = '已中断，等待 resume'; break;
-        case 'invalidated': phase = 'receipt 已作废'; break;
-        case 'running': phase = 'runner 未运行（receipt 仍标记 running，可 resume）'; break;
+        case 'incomplete': phase = '已在任务边界停止，等待继续'; break;
+        case 'interrupted': phase = '已中断，等待继续'; break;
+        case 'invalidated': phase = '回执已作废'; break;
+        case 'running': phase = '执行进程未运行（回执仍标记为执行中，可继续）'; break;
         default: phase = receipt.status || '--';
       }
     }
@@ -406,11 +446,11 @@
     if (app.lastRunnerKey !== null && runnerKey !== app.lastRunnerKey) {
       if (d.runner.status === 'exited') {
         const code = d.runner.returncode;
-        const label = OPERATION_LABEL[d.runner.operation] || d.runner.operation || 'runner';
-        logActivity(code === 0 ? 'ok' : 'warn', `${label} 进程已退出${code === null || code === undefined ? '' : `（returncode ${code}）`}${d.runner.exit_reason ? '：' + d.runner.exit_reason : ''}`);
+        const label = OPERATION_LABEL[d.runner.operation] || d.runner.operation || '执行';
+        logActivity(code === 0 ? 'ok' : 'warn', `${label} 进程已退出${code === null || code === undefined ? '' : `（退出码 ${code}）`}${d.runner.exit_reason ? '：' + d.runner.exit_reason : ''}`);
         app.pauseRequestedAt = null;
       } else if (d.runner.status === 'running') {
-        logActivity('info', `${OPERATION_LABEL[d.runner.operation] || d.runner.operation || 'runner'} 进程已启动（pid ${d.runner.pid}）`);
+        logActivity('info', `${OPERATION_LABEL[d.runner.operation] || d.runner.operation || '执行'} 进程已启动（进程号 ${d.runner.pid}）`);
       }
     }
     app.lastRunnerKey = runnerKey;
@@ -419,7 +459,7 @@
     const matrixStatus = d.receipt ? d.receipt.status : null;
     if (app.lastMatrixStatus !== null && matrixStatus !== app.lastMatrixStatus && matrixStatus) {
       const meta = MATRIX_STATUS[matrixStatus];
-      logActivity('info', `Matrix receipt 状态变为 ${meta ? meta.label : matrixStatus}`);
+      logActivity('info', `Matrix 回执状态变为「${meta ? meta.label : matrixStatus}」`);
     }
     app.lastMatrixStatus = matrixStatus;
 
@@ -437,15 +477,16 @@
       interrupt: $('btn-interrupt'),
       resume: $('btn-resume'),
     };
-    buttons.start.disabled = app.busy || controls.can_start !== true;
+    const hasCombo = app.combos.length > 0;
+    buttons.start.disabled = app.busy || controls.can_start !== true || !hasCombo;
     buttons.pause.disabled = app.busy || controls.can_pause !== true;
     buttons.interrupt.disabled = app.busy || controls.can_interrupt !== true;
     buttons.resume.disabled = app.busy || controls.can_resume !== true;
 
     const runnerMeta = RUNNER_STATUS[d.runner.status] || { label: d.runner.status || '--', chip: 'chip-neutral' };
-    let runnerLabel = 'runner ' + runnerMeta.label;
+    let runnerLabel = '执行进程' + runnerMeta.label;
     let runnerChip = runnerMeta.chip;
-    if (d.runner.status === 'running' && !d.active) { runnerLabel = 'runner 进程丢失'; runnerChip = 'chip-red'; }
+    if (d.runner.status === 'running' && !d.active) { runnerLabel = '执行进程丢失'; runnerChip = 'chip-red'; }
     if (d.active && d.runner.operation) runnerLabel += ' · ' + (OPERATION_LABEL[d.runner.operation] || d.runner.operation);
     setChip($('runner-chip'), runnerChip, runnerLabel);
 
@@ -453,25 +494,86 @@
     const receiptStatus = d.receipt ? d.receipt.status : null;
     if (d.active) {
       hint = controls.can_pause
-        ? 'Matrix 正在执行。「暂停」会在下一个 task barrier 优雅停止；「中断」立即向进程组发送 SIGINT。'
-        : 'runner 正在运行，当前 receipt 状态不接受 pause，仅可立即中断。';
-      if (app.pauseRequestedAt) hint = `已于 ${fmtTime(app.pauseRequestedAt)} 请求 pause，runner 将在当前 task 完成后停止。仍可立即中断。`;
+        ? 'Matrix 正在执行。「暂停」会在下一个任务边界优雅停止；「中断」会立即向执行进程组发送中断信号。'
+        : '执行进程正在运行，当前回执状态不接受暂停，仅可立即中断。';
+      if (app.pauseRequestedAt) hint = `已于 ${fmtTime(app.pauseRequestedAt)} 请求暂停，执行进程将在当前任务完成后停止。仍可立即中断。`;
     } else if (!d.canonical) {
-      hint = controls.can_start
-        ? '选择匹配的 plan 与 smoke receipt 后点击「启动」创建 canonical Matrix。'
-        : '服务端当前不允许启动 Matrix。';
+      if (controls.can_start !== true) hint = '服务端当前不允许启动 Matrix。';
+      else if (!hasCombo) hint = '启动前配置尚未就绪：需要一份冻结配置 Plan，以及与之匹配且已通过的 Harbor Smoke 连通性检查。';
+      else if (app.combos.length === 1) hint = '运行配置已自动选定并就绪，点击「启动」创建本季的正式 Matrix。';
+      else hint = '在「启动前配置」中选择一套运行配置，然后点击「启动」创建本季的正式 Matrix。';
     } else if (controls.can_resume) {
-      hint = `canonical Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」从 receipt 恢复未完成的 cell。`;
+      hint = `正式 Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」从回执恢复未完成的单元格。`;
     } else if (receiptStatus === 'complete') {
-      hint = 'canonical Matrix 已完成并封存，没有可执行的操作。';
+      hint = '正式 Matrix 已完成并封存，没有可执行的操作。';
     } else if (receiptStatus === 'invalidated') {
-      hint = 'canonical receipt 已作废，控制面不提供进一步操作。';
+      hint = '正式回执已作废，控制面不提供进一步操作。';
     } else if (!d.receipt) {
-      hint = 'canonical 记录存在，但 receipt 无法加载或校验失败，请人工检查。';
+      hint = '正式记录存在，但回执无法加载或校验失败，请人工检查。';
     } else {
       hint = '当前没有可用操作。';
     }
     setText('controls-hint', hint);
+  }
+
+  // ------------------------------------------------------------------
+  // Start panel: one combined "运行配置" (Plan + newest matching passed
+  // Harbor Smoke) instead of two raw file selectors.
+  // ------------------------------------------------------------------
+
+  function isUsableSmoke(smoke) {
+    return !!smoke && smoke.status === 'passed' && (smoke.backend || 'harbor') === 'harbor' && !!smoke.plan_digest;
+  }
+
+  function buildCombos(options) {
+    const plans = Array.isArray(options.plans) ? options.plans : [];
+    const smokes = Array.isArray(options.smokes) ? options.smokes : [];
+    const combos = [];
+    const diagnostics = {
+      plans: plans.length,
+      smokes: smokes.length,
+      plansWithoutSmoke: [],
+      matchedButFailed: 0,
+      matchedWrongBackend: 0,
+      orphanSmokes: 0,
+    };
+    const planDigests = new Set(plans.map((p) => p.digest).filter(Boolean));
+    for (const smoke of smokes) {
+      if (!smoke.plan_digest || !planDigests.has(smoke.plan_digest)) { diagnostics.orphanSmokes++; continue; }
+      if (smoke.status !== 'passed') diagnostics.matchedButFailed++;
+      else if ((smoke.backend || 'harbor') !== 'harbor') diagnostics.matchedWrongBackend++;
+    }
+    for (const plan of plans) {
+      if (!plan || !plan.path) continue;
+      const matches = smokes
+        .filter((s) => isUsableSmoke(s) && s.plan_digest === plan.digest)
+        .sort((a, b) => tsValue(b.completed_at) - tsValue(a.completed_at));
+      if (!matches.length) { diagnostics.plansWithoutSmoke.push(plan); continue; }
+      combos.push({ id: plan.path + '\n' + matches[0].path, plan, smoke: matches[0], alternatives: matches.length - 1 });
+    }
+    // Newest Plan first (server already orders by modification time, keep it stable).
+    combos.sort((a, b) => tsValue(b.plan.modified_at) - tsValue(a.plan.modified_at));
+    return { combos, diagnostics };
+  }
+
+  function comboLabel(combo) {
+    const season = combo.plan.season || '未知赛季';
+    return `${season} · Plan 生成于 ${fmtTime(combo.plan.modified_at)} · Smoke 通过于 ${fmtTime(combo.smoke.completed_at)}`;
+  }
+
+  function selectedCombo() {
+    if (!app.combos.length) return null;
+    return app.combos.find((c) => c.id === app.selectedComboId) || app.combos[0];
+  }
+
+  function selectedPlan() {
+    const combo = selectedCombo();
+    return combo ? combo.plan : null;
+  }
+
+  function selectedSmoke() {
+    const combo = selectedCombo();
+    return combo ? combo.smoke : null;
   }
 
   function renderStartPanel(state, d) {
@@ -479,83 +581,162 @@
     const controls = state.controls || {};
     const show = controls.can_start === true;
     if (panel.hidden === show) panel.hidden = !show;
-    if (!show) return;
 
     const options = state.options || { plans: [], smokes: [] };
     const plans = Array.isArray(options.plans) ? options.plans : [];
     const smokes = Array.isArray(options.smokes) ? options.smokes : [];
-    const signature = plans.map((p) => p.path + '|' + p.modified_at).join(';') + '##' + smokes.map((s) => s.path + '|' + s.status + '|' + s.completed_at).join(';');
+    const signature = plans.map((p) => p.path + '|' + p.digest + '|' + p.modified_at).join(';')
+      + '##' + smokes.map((s) => s.path + '|' + s.status + '|' + s.backend + '|' + s.plan_digest + '|' + s.completed_at).join(';');
     if (signature !== app.optionsSignature) {
       app.optionsSignature = signature;
-      const planSel = $('sel-plan');
-      const smokeSel = $('sel-smoke');
-      const prevPlan = planSel.value;
-      const prevSmoke = smokeSel.value;
-      fillPlanSelect(planSel, plans);
-      replaceChildren(smokeSel, smokes.length ? smokes.map((s) => el('option', {
-        value: s.path,
-        text: `${s.name}  ·  ${s.status || '?'}  ·  ${s.backend || '?'}  ·  ${shortDigest(s.plan_digest)}`,
-      })) : [el('option', { value: '', text: '（runs/smoke 下没有可用 receipt）' })]);
-      const wantedPlan = plans.some((p) => p.path === prevPlan) ? prevPlan : (plans[0] && plans[0].path);
-      if (wantedPlan) planSel.value = wantedPlan;
-      if (smokes.some((s) => s.path === prevSmoke)) smokeSel.value = prevSmoke;
-      else pickMatchingSmoke();
-      smokeSel.disabled = !smokes.length;
+      const built = buildCombos(options);
+      app.combos = built.combos;
+      app.comboDiagnostics = built.diagnostics;
+      const select = $('sel-config');
+      const labels = app.combos.map(comboLabel);
+      // Guard against identical labels (same second) by numbering duplicates.
+      const seen = new Map();
+      const optionNodes = app.combos.map((combo, index) => {
+        let text = labels[index];
+        const count = (seen.get(text) || 0) + 1;
+        seen.set(text, count);
+        if (count > 1) text += `（第 ${count} 份）`;
+        return el('option', { value: combo.id, text });
+      });
+      replaceChildren(select, optionNodes.length ? optionNodes : [el('option', { value: '', text: '（没有可用的运行配置）' })]);
+      const keep = app.combos.some((c) => c.id === app.selectedComboId);
+      app.selectedComboId = keep ? app.selectedComboId : (app.combos[0] ? app.combos[0].id : null);
+      if (app.selectedComboId) select.value = app.selectedComboId;
+      select.disabled = !app.combos.length;
     }
-    renderStartMeta();
+    if (!show) return;
+    renderStartReadiness();
   }
 
-  function fillPlanSelect(select, plans) {
-    replaceChildren(select, plans.length ? plans.map((p) => el('option', {
-      value: p.path,
-      text: `${p.name}  ·  ${p.season || '?'}  ·  ${shortDigest(p.digest)}`,
-    })) : [el('option', { value: '', text: '（runs/plans 下没有可用 plan）' })]);
-    select.disabled = !plans.length;
+  function setReadiness(tone, icon, title, text) {
+    const box = $('start-readiness');
+    const cls = 'readiness readiness-' + tone;
+    if (box.className !== cls) box.className = cls;
+    const use = $('start-readiness-icon');
+    if (use.getAttribute('href') !== '#' + icon) use.setAttribute('href', '#' + icon);
+    setText('start-readiness-title', title);
+    const textNode = $('start-readiness-text');
+    if (textNode.textContent !== text) textNode.textContent = text;
+    textNode.hidden = !text;
   }
 
-  function selectedPlan() {
-    const path = $('sel-plan').value;
-    const plans = (app.state && app.state.options && app.state.options.plans) || [];
-    return plans.find((p) => p.path === path) || null;
-  }
-
-  function selectedSmoke() {
-    const path = $('sel-smoke').value;
-    const smokes = (app.state && app.state.options && app.state.options.smokes) || [];
-    return smokes.find((s) => s.path === path) || null;
-  }
-
-  function pickMatchingSmoke() {
-    const plan = selectedPlan();
-    const smokes = (app.state && app.state.options && app.state.options.smokes) || [];
-    if (!plan) return;
-    const match = smokes.find((s) => s.plan_digest === plan.digest && s.status === 'passed' && (s.backend || 'harbor') === 'harbor')
-      || smokes.find((s) => s.plan_digest === plan.digest);
-    if (match) $('sel-smoke').value = match.path;
-  }
-
-  function renderStartMeta() {
-    const plan = selectedPlan();
-    const smoke = selectedSmoke();
-    setText('plan-meta', plan ? `${plan.plan_id || '--'} · 修改于 ${fmtTime(plan.modified_at)}` : '--');
-    setText('smoke-meta', smoke ? `${smoke.smoke_id || '--'} · 完成于 ${fmtTime(smoke.completed_at)}` : '--');
-    const warnings = [];
-    if (plan && smoke && smoke.plan_digest && plan.digest && smoke.plan_digest !== plan.digest) {
-      warnings.push('所选 smoke receipt 的 plan digest 与所选 plan 不一致，启动时的 Harbor 校验会拒绝。');
+  function kvItems(pairs) {
+    const items = [];
+    for (const [key, value, mono] of pairs) {
+      items.push(el('dt', { text: key }));
+      const dd = el('dd', { class: mono ? 'mono' : null });
+      replaceChildren(dd, value === null || value === undefined || value === '' ? '--' : value);
+      items.push(dd);
     }
-    if (smoke && smoke.status && smoke.status !== 'passed') {
-      warnings.push(`所选 smoke receipt 状态为 ${smoke.status}，只有 passed 的 receipt 才能用于启动。`);
+    return items;
+  }
+
+  function renderStartReadiness() {
+    const combos = app.combos;
+    const diag = app.comboDiagnostics || { plans: 0, smokes: 0, plansWithoutSmoke: [], matchedButFailed: 0, matchedWrongBackend: 0, orphanSmokes: 0 };
+    const combo = selectedCombo();
+    const field = $('start-config-field');
+    const multi = combos.length > 1;
+    if (field.hidden === multi) field.hidden = !multi;
+
+    const facts = $('start-facts');
+    const details = $('start-details-kv');
+    const warningBox = $('start-warning');
+
+    if (!combo) {
+      // Nothing usable: explain in status language what is missing.
+      let text;
+      if (diag.plans === 0) {
+        text = '未找到冻结配置（Plan）。请先为本季生成冻结配置，再运行 Harbor Smoke 连通性检查。';
+      } else if (diag.smokes === 0) {
+        text = `已找到 ${diag.plans} 份冻结配置，但没有任何 Harbor Smoke 记录。请先对当前 Plan 运行 Harbor 连通性检查（${CORE_HARNESSES}）。`;
+      } else {
+        const reasons = [];
+        if (diag.matchedButFailed) reasons.push(`${diag.matchedButFailed} 份与 Plan 匹配的检查未通过`);
+        if (diag.matchedWrongBackend) reasons.push(`${diag.matchedWrongBackend} 份匹配的检查不是在 Harbor 环境完成的`);
+        if (diag.orphanSmokes) reasons.push(`${diag.orphanSmokes} 份检查对应的 Plan 已不存在或内容已变更`);
+        text = `已找到 ${diag.plans} 份冻结配置与 ${diag.smokes} 份 Smoke 记录，但没有一份已通过的 Harbor Smoke 与现有 Plan 匹配`
+          + (reasons.length ? `：${reasons.join('；')}。` : '。')
+          + `请对最新的 Plan 重新运行 Harbor 连通性检查（${CORE_HARNESSES}）。`;
+      }
+      setReadiness('amber', 'i-alert-triangle', '尚未就绪，无法启动', text);
+      if (facts.dataset.rendered !== 'none') {
+        replaceChildren(facts, kvItems([
+          ['冻结配置', diag.plans ? `${diag.plans} 份，均缺少匹配且通过的连通性检查` : '未找到'],
+          ['连通性检查', diag.smokes ? `${diag.smokes} 份记录，均不可用` : '未找到'],
+          ['执行环境', 'Harbor'],
+        ]));
+        facts.dataset.rendered = 'none';
+      }
+      const plans = (app.state && app.state.options && app.state.options.plans) || [];
+      const smokes = (app.state && app.state.options && app.state.options.smokes) || [];
+      const key = 'none|' + app.optionsSignature;
+      if (details.dataset.rendered !== key) {
+        const pairs = [];
+        plans.forEach((p, i) => pairs.push([`Plan ${i + 1}`, el('span', null, [pathButton(p.path, p.name), ` · ${p.season || '未知赛季'} · 摘要 ${shortDigest(p.digest)} · ${p.modified_at || '--'}`]), true]));
+        smokes.forEach((s, i) => pairs.push([`Smoke ${i + 1}`, el('span', null, [pathButton(s.path, s.name), ` · ${s.status || '?'} · ${s.backend || 'harbor'} · 对应 Plan 摘要 ${shortDigest(s.plan_digest)} · ${s.completed_at || '--'}`]), true]));
+        if (!pairs.length) pairs.push(['扫描目录', 'runs/plans 与 runs/smoke 下没有可读取的文件', true]);
+        replaceChildren(details, kvItems(pairs));
+        details.dataset.rendered = key;
+      }
+      warningBox.hidden = true;
+      return;
     }
-    if (smoke && smoke.backend && smoke.backend !== 'harbor') {
-      warnings.push(`所选 smoke receipt 的 backend 为 ${smoke.backend}，控制面仅接受 harbor。`);
-    }
-    const box = $('start-warning');
-    if (warnings.length) {
-      $('start-warning-text').textContent = warnings.join(' ');
-      box.hidden = false;
+
+    const plan = combo.plan;
+    const smoke = combo.smoke;
+    const season = plan.season || '未知赛季';
+
+    if (multi) {
+      setReadiness('green', 'i-check-circle', '已就绪，请选择运行配置',
+        `找到 ${combos.length} 套可用的运行配置。每套均由本地冻结配置生成，并已通过 Harbor 的 ${CORE_HARNESSES} 连通性检查；每个 Plan 已自动匹配最新的通过记录。`);
     } else {
-      box.hidden = true;
+      setReadiness('green', 'i-check-circle', '已就绪，可以启动',
+        `已自动选用唯一可用的运行配置：Plan 由本地冻结配置生成，Harbor 已完成 ${CORE_HARNESSES} 连通性检查并全部通过。`);
     }
+
+    if (multi) {
+      setText('config-meta', combo.alternatives > 0
+        ? `已自动选用该 Plan 最新的通过记录（另有 ${combo.alternatives} 份较早的记录未列出）。`
+        : '该 Plan 只有这一份已通过的连通性检查。');
+    }
+
+    const factsKey = combo.id + '|' + combo.alternatives;
+    if (facts.dataset.rendered !== factsKey) {
+      let smokeText = `Harbor 已完成 ${CORE_HARNESSES} 连通性检查，全部通过 · ${fmtTime(smoke.completed_at)}`;
+      if (!multi && combo.alternatives > 0) smokeText += `（自动选用最新一次，另有 ${combo.alternatives} 份较早的通过记录）`;
+      replaceChildren(facts, kvItems([
+        ['赛季', season],
+        ['运行规模', `${plan.task_count || '?'} 个任务 × ${plan.profile_count || '?'} 个模型配置，共 ${plan.cell_count || '?'} 个单元格`],
+        ['时间上限', `每个单元格 ${plan.timeout_minutes || '?'} 分钟`],
+        ['冻结配置', `由本地冻结配置生成 · ${fmtTime(plan.modified_at)}`],
+        ['连通性检查', smokeText],
+        ['执行环境', 'Harbor'],
+      ]));
+      facts.dataset.rendered = factsKey;
+    }
+
+    if (details.dataset.rendered !== combo.id) {
+      replaceChildren(details, kvItems([
+        ['Plan 文件', pathButton(plan.path, plan.path), true],
+        ['Plan 编号', plan.plan_id, true],
+        ['Plan 摘要', plan.digest, true],
+        ['Plan 修改时间', plan.modified_at, true],
+        ['Smoke 回执', pathButton(smoke.path, smoke.path), true],
+        ['Smoke 编号', smoke.smoke_id, true],
+        ['Smoke 完成时间', smoke.completed_at, true],
+        ['Smoke 对应 Plan 摘要', smoke.plan_digest, true],
+        ['执行环境', smoke.backend || 'harbor', true],
+      ]));
+      details.dataset.rendered = combo.id;
+    }
+
+    warningBox.hidden = true;
   }
 
   function renderOverview(state, d) {
@@ -564,16 +745,16 @@
     const receiptMatches = !!(receipt && canonical && receipt.matrix_id === canonical.matrix_id);
 
     let chipCls = 'chip-neutral';
-    let chipText = '无 canonical Matrix';
+    let chipText = '无正式 Matrix';
     if (canonical && receiptMatches) {
       const meta = MATRIX_STATUS[receipt.status] || { label: receipt.status, chip: 'chip-neutral' };
-      chipCls = meta.chip; chipText = 'canonical · ' + meta.label;
+      chipCls = meta.chip; chipText = '正式 · ' + meta.label;
     } else if (canonical) {
-      chipCls = 'chip-red'; chipText = 'canonical receipt 不可读';
+      chipCls = 'chip-red'; chipText = '正式回执不可读';
     } else if (receipt) {
       const meta = MATRIX_STATUS[receipt.status] || { label: receipt.status, chip: 'chip-neutral' };
       chipCls = receipt.status === 'invalidated' ? 'chip-red' : 'chip-amber';
-      chipText = '历史 receipt · ' + meta.label;
+      chipText = '历史回执 · ' + meta.label;
     }
     setChip($('matrix-chip'), chipCls, chipText);
 
@@ -581,22 +762,22 @@
     let bannerCls = null; let bannerIcon = 'i-info'; let bannerText = '';
     if (canonical && !receipt) {
       bannerCls = 'banner-red'; bannerIcon = 'i-alert-octagon';
-      bannerText = `canonical 记录指向 ${canonical.receipt || '（未知路径）'}，但该 receipt 无法加载或 digest 校验失败。请人工检查后再操作。`;
+      bannerText = `正式记录指向 ${canonical.receipt || '（未知路径）'}，但该回执无法加载或摘要校验失败。请人工检查后再操作。`;
     } else if (canonical && !receiptMatches) {
       bannerCls = 'banner-red'; bannerIcon = 'i-alert-octagon';
-      bannerText = `canonical 记录（${canonical.matrix_id}）指向的 receipt 无法加载；下方显示的是另一个历史 receipt ${receipt.matrix_id || ''}，仅供参考。`;
+      bannerText = `正式记录（${canonical.matrix_id}）指向的回执无法加载；下方显示的是另一份历史回执 ${receipt.matrix_id || ''}，仅供参考。`;
     } else if (!canonical && receipt) {
       bannerCls = receipt.status === 'invalidated' ? 'banner-red' : 'banner-amber';
       bannerIcon = 'i-alert-triangle';
       bannerText = receipt.status === 'invalidated'
-        ? `下方显示的历史 receipt（${receipt.matrix_id || ''}）已被作废 (invalidated)，不是 canonical Matrix；本季尚无 canonical 声明。`
-        : `下方显示的是历史 receipt（${receipt.matrix_id || ''}），不是 canonical Matrix；本季尚无 canonical 声明。`;
+        ? `下方显示的历史回执（${receipt.matrix_id || ''}）已被作废，不是正式 Matrix；本季尚无正式声明。`
+        : `下方显示的是历史回执（${receipt.matrix_id || ''}），不是正式 Matrix；本季尚无正式声明。`;
     } else if (receiptMatches && receipt.status === 'invalidated') {
       bannerCls = 'banner-red'; bannerIcon = 'i-alert-octagon';
-      bannerText = 'canonical receipt 已被作废 (invalidated)。';
+      bannerText = '正式回执已被作废。';
     } else if (receiptMatches && receipt.status === 'complete') {
       bannerCls = 'banner-green'; bannerIcon = 'i-lock';
-      bannerText = `canonical Matrix 已完成并封存（${fmtTime(receipt.completed_at)}）。`;
+      bannerText = `正式 Matrix 已完成并封存（${fmtTime(receipt.completed_at)}）。`;
     }
     if (bannerCls) {
       banner.className = 'banner ' + bannerCls;
@@ -625,7 +806,7 @@
     $('pg-cyan').style.width = pct(c.running);
 
     setText('kv-phase', d.phase);
-    setText('kv-task', d.currentTask || (receipt && receipt.execution_window && receipt.execution_window.stopped_at_task_barrier ? `停在 barrier：${receipt.execution_window.stopped_at_task_barrier}` : '--'));
+    setText('kv-task', d.currentTask || (receipt && receipt.execution_window && receipt.execution_window.stopped_at_task_barrier ? `停在任务边界：${receipt.execution_window.stopped_at_task_barrier}` : '--'));
     const statusNode = $('kv-status');
     if (receipt) {
       const meta = MATRIX_STATUS[receipt.status] || { label: receipt.status || '--', chip: 'chip-neutral' };
@@ -646,9 +827,9 @@
     if (receipt && receipt.execution_window && typeof receipt.execution_window === 'object') {
       const w = receipt.execution_window;
       const parts = [];
-      if (w.stop_after_task) parts.push(`stop-after ${w.stop_after_task}`);
-      if (w.pause_requested_at) parts.push(`pause 请求于 ${fmtTime(w.pause_requested_at)}`);
-      if (w.stopped_at_task_barrier) parts.push(`已停在 barrier ${w.stopped_at_task_barrier}`);
+      if (w.stop_after_task) parts.push(`在任务 ${w.stop_after_task} 之后停止`);
+      if (w.pause_requested_at) parts.push(`暂停请求于 ${fmtTime(w.pause_requested_at)}`);
+      if (w.stopped_at_task_barrier) parts.push(`已停在任务边界 ${w.stopped_at_task_barrier}`);
       if (w.stopped_at) parts.push(`停止于 ${fmtTime(w.stopped_at)}`);
       windowText = parts.length ? parts.join(' · ') : '（无约束）';
     } else if (receipt) {
@@ -663,7 +844,7 @@
     const body = $('matrix-body');
     const hasCells = d.cells.length > 0;
     scroll.classList.toggle('is-empty', !hasCells);
-    setText('matrix-dims', hasCells ? `${d.tasks.length} task × ${d.profiles.length} profile · ${d.cells.length} cell` : 'task × profile');
+    setText('matrix-dims', hasCells ? `${d.tasks.length} 个任务 × ${d.profiles.length} 个模型配置 · ${d.cells.length} 个单元格` : '任务 × 模型配置');
     if (!hasCells) {
       if (app.matrixSignature !== '') {
         replaceChildren(head, []);
@@ -681,14 +862,14 @@
       const planData = app.planCache.data;
       const profileInfo = planData && planData.profiles && typeof planData.profiles === 'object' ? planData.profiles : {};
 
-      const headRow = el('tr', null, [el('th', { class: 'corner', scope: 'col', text: 'task \\ profile' })]);
+      const headRow = el('tr', null, [el('th', { class: 'corner', scope: 'col', text: '任务 \\ 模型配置' })]);
       for (const profile of d.profiles) {
         const info = profileInfo[profile] || {};
-        const title = [profile, info.harness ? 'harness: ' + info.harness : null, info.model ? 'model: ' + info.model : null, info.effort ? 'effort: ' + info.effort : null].filter(Boolean).join('\n');
+        const title = [profile, info.harness ? '执行框架：' + harnessLabel(info.harness) : null, info.model ? '模型：' + info.model : null, info.effort ? '推理强度：' + info.effort : null].filter(Boolean).join('\n');
         headRow.appendChild(el('th', { scope: 'col', title }, [
           el('div', { class: 'col-head' }, [
             el('span', { class: 'col-main', text: profile }),
-            el('span', { class: 'col-sub', text: info.harness || (profile.split('-')[0] || '') }),
+            el('span', { class: 'col-sub', text: harnessLabel(info.harness || (profile.split('-')[0] || '')) }),
           ]),
         ]));
       }
@@ -727,14 +908,9 @@
       const btn = app.cellButtons.get(cell.cell_id);
       if (!btn) continue;
       const meta = statusMeta(cell.status);
-      let tag = '';
-      if (cell.status === 'running') tag = cell.phase === 'evaluating' ? 'eval' : 'run';
-      else if (cell.status === 'completed') tag = 'ok';
-      else if (cell.status === 'candidate-failure') tag = 'cand';
-      else if (cell.status === 'evidence-failure') tag = 'evid';
-      else if (cell.status === 'infrastructure-error') tag = 'infra';
-      else if (cell.status === 'interrupted') tag = 'int';
-      else tag = attemptsMatter ? 'a' + cell.attempt : '·';
+      let tag = meta.tag;
+      if (cell.status === 'running' && cell.phase === 'evaluating') tag = '评估';
+      else if (cell.status === 'pending') tag = attemptsMatter ? '#' + (cell.attempt || 1) : '·';
       const dimmed = !matchesFilter(cell, app.filter);
       const cls = ['cell', meta.cls, dimmed ? 'is-dimmed' : null, app.selectedCell === cell.cell_id ? 'is-selected' : null].filter(Boolean).join(' ');
       if (btn.className !== cls) btn.className = cls;
@@ -745,7 +921,7 @@
       svg.classList.toggle('icon-spin', !!meta.spin && cell.phase !== 'evaluating');
       const tagNode = btn.querySelector('.cell-tag');
       if (tagNode.textContent !== tag) tagNode.textContent = tag;
-      const label = `${cell.task} × ${cell.profile}${attemptsMatter ? ' · attempt ' + cell.attempt : ''}：${meta.label}${cell.phase ? '（' + cell.phase + '）' : ''}${meta.terminal ? '（终态）' : ''}`;
+      const label = `${cell.task} × ${cell.profile}${attemptsMatter ? ' · 第 ' + (cell.attempt || 1) + ' 次尝试' : ''}：${meta.label}${cell.phase ? '（' + phaseLabel(cell.phase) + '）' : ''}${meta.terminal ? '（终态）' : ''}`;
       if (btn.getAttribute('aria-label') !== label) { btn.setAttribute('aria-label', label); btn.title = label; }
       btn.tabIndex = dimmed ? -1 : 0;
     }
@@ -808,7 +984,7 @@
     setText('pv-plan-digest', receipt ? shortDigest(receipt.plan_digest) : '--');
     updatePathCell('pv-smoke', smokePath, smokePath ? `${parentName(smokePath)}/${baseName(smokePath)}` : null);
     setText('pv-smoke-id', smoke ? smoke.smoke_id : '--');
-    setText('pv-backend', receipt ? receipt.backend : '--');
+    setText('pv-backend', receipt ? (receipt.backend === 'harbor' ? 'Harbor' : receipt.backend) : '--');
     updatePathCell('pv-receipt', receipt ? receipt.path : null, receipt ? baseName(receipt.path) : null);
 
     $('btn-view-plan').disabled = !planPath;
@@ -837,11 +1013,11 @@
     let text = '--';
     const image = planData && planData.runtime_environment && planData.runtime_environment.container_images && planData.runtime_environment.container_images.candidate;
     if (image && typeof image === 'object') {
-      text = `${image.name || image.reference || 'candidate'} · ${shortDigest(image.id || image.digest)}`;
+      text = `${image.name || image.reference || '候选镜像'} · ${shortDigest(image.id || image.digest)}`;
       const smokeImage = smokeData && smokeData.candidate_image;
-      if (smokeImage && smokeImage.id && image.id && smokeImage.id !== image.id) text += ' · ⚠ smoke image 不一致';
+      if (smokeImage && smokeImage.id && image.id && smokeImage.id !== image.id) text += ' · ⚠ 与 Smoke 使用的镜像不一致';
     } else if (smokeData && smokeData.candidate_image && typeof smokeData.candidate_image === 'object') {
-      text = `${smokeData.candidate_image.name || 'candidate'} · ${shortDigest(smokeData.candidate_image.id)}（来自 smoke）`;
+      text = `${smokeData.candidate_image.name || '候选镜像'} · ${shortDigest(smokeData.candidate_image.id)}（来自 Smoke 回执）`;
     } else if (app.planCache.loading || app.smokeCache.loading) {
       text = '读取中…';
     } else if (app.planCache.path || app.smokeCache.path) {
@@ -893,19 +1069,19 @@
     const meta = RUNNER_STATUS[r.status] || { label: r.status || '--', chip: 'chip-neutral' };
     const node = $('rn-status');
     let label = meta.label; let chip = meta.chip;
-    if (r.status === 'running' && !d.active) { label = '进程丢失（记录为 running，但 pid 不存在）'; chip = 'chip-red'; }
+    if (r.status === 'running' && !d.active) { label = '进程丢失（记录为运行中，但进程号不存在）'; chip = 'chip-red'; }
     if (r.status === 'exited') {
       if (r.returncode === 0) { label = '正常退出'; chip = 'chip-green'; }
       else if (r.returncode === null || r.returncode === undefined) { label = '异常退出（' + (r.exit_reason || '原因未知') + '）'; chip = 'chip-red'; }
-      else if (r.returncode === 130 || r.returncode === -2) { label = `被 SIGINT 中断（returncode ${r.returncode}）`; chip = 'chip-amber'; }
-      else { label = `退出 returncode ${r.returncode}`; chip = 'chip-red'; }
+      else if (r.returncode === 130 || r.returncode === -2) { label = `被中断信号终止（退出码 ${r.returncode}）`; chip = 'chip-amber'; }
+      else { label = `异常退出（退出码 ${r.returncode}）`; chip = 'chip-red'; }
     }
     const wanted = chip + '|' + label;
     if (node.dataset.rendered !== wanted) {
       replaceChildren(node, el('span', { class: 'chip ' + chip, text: label }));
       node.dataset.rendered = wanted;
     }
-    setText('rn-op', r.operation ? `${OPERATION_LABEL[r.operation] || r.operation} (${r.operation})` : '--');
+    setText('rn-op', r.operation ? (OPERATION_LABEL[r.operation] || r.operation) : '--');
     setText('rn-pid', r.pid ? `${r.pid} / ${r.pgid || '--'}` : '--');
     setText('rn-started', r.started_at ? `${fmtTime(r.started_at)}${d.active ? ' · 已运行 ' + fmtDuration(r.started_at) : ''}` : '--');
     setText('rn-exited', r.exited_at ? fmtTime(r.exited_at) : (d.active ? '运行中' : '--'));
@@ -952,17 +1128,17 @@
     setText('drawer-title', cell.cell_id);
     const planData = app.planCache.data;
     const info = planData && planData.profiles && planData.profiles[cell.profile];
-    setText('drawer-sub', `task ${cell.task} · profile ${cell.profile}${info && info.model ? ' · ' + info.model : ''}${info && info.harness ? ' · ' + info.harness : ''} · attempt ${cell.attempt || 1}`);
+    setText('drawer-sub', `任务 ${cell.task} · 模型配置 ${cell.profile}${info && info.model ? ' · ' + info.model : ''}${info && info.harness ? ' · ' + harnessLabel(info.harness) : ''} · 第 ${cell.attempt || 1} 次尝试`);
 
     const statusLine = $('drawer-status');
     const noteText = meta.terminal
-      ? '终态：candidate/evidence 失败由 Matrix 记录为最终结果，不会重试。'
+      ? '终态：候选失败或证据失败由 Matrix 记录为最终结果，不会重试。'
       : meta.resumable
-        ? '可恢复：resume 时会重新执行此 cell。'
+        ? '可恢复：点击「继续」后会重新执行此单元格。'
         : cell.status === 'running'
-          ? (cell.phase === 'evaluating' ? '正在评估（evaluating）。' : 'candidate 正在 Harbor 中执行。')
+          ? (cell.phase === 'evaluating' ? '正在评估候选产物。' : '候选正在 Harbor 中执行。')
           : cell.status === 'completed'
-            ? 'trusted 结果已记录。'
+            ? '可信结果已记录。'
             : '尚未执行。';
     const key = `${meta.chip}|${meta.label}|${noteText}`;
     if (statusLine.dataset.rendered !== key) {
@@ -975,21 +1151,21 @@
 
     const yesNo = (v) => (v === true ? '是' : v === false ? '否' : '--');
     const kv = [
-      ['status', `${cell.status}${cell.phase ? ' · phase ' + cell.phase : ''}`],
-      ['passed / trusted', `${yesNo(cell.passed)} / ${yesNo(cell.trusted)}`],
-      ['playable', yesNo(cell.playable)],
-      ['开始', fmtTime(cell.started_at)],
-      ['完成', cell.completed_at ? fmtTime(cell.completed_at) : (cell.status === 'running' ? '运行中' : '--')],
-      ['耗时', cell.started_at ? fmtDuration(cell.started_at, cell.completed_at || (cell.status === 'running' ? null : cell.started_at)) : '--'],
+      ['状态', `${meta.label}${cell.phase ? ' · 阶段：' + phaseLabel(cell.phase) : ''}`, false],
+      ['通过 / 可信', `${yesNo(cell.passed)} / ${yesNo(cell.trusted)}`, true],
+      ['可游玩', yesNo(cell.playable), true],
+      ['开始', fmtTime(cell.started_at), true],
+      ['完成', cell.completed_at ? fmtTime(cell.completed_at) : (cell.status === 'running' ? '运行中' : '--'), true],
+      ['耗时', cell.started_at ? fmtDuration(cell.started_at, cell.completed_at || (cell.status === 'running' ? null : cell.started_at)) : '--', true],
     ];
     const kvNode = $('drawer-kv');
     const kvKey = JSON.stringify(kv) + '|' + (cell.run || '') + '|' + (cell.evaluation || '');
     if (kvNode.dataset.rendered !== kvKey) {
       const items = [];
-      for (const [k, v] of kv) { items.push(el('dt', { text: k })); items.push(el('dd', { class: 'mono', text: v })); }
-      items.push(el('dt', { text: 'run 目录' }));
+      for (const [k, v, mono] of kv) { items.push(el('dt', { text: k })); items.push(el('dd', { class: mono ? 'mono' : null, text: v })); }
+      items.push(el('dt', { text: '运行目录' }));
       items.push(el('dd', { class: 'mono' }, cell.run ? cell.run : '--'));
-      items.push(el('dt', { text: 'evaluation' }));
+      items.push(el('dt', { text: '评估报告' }));
       items.push(el('dd', { class: 'mono' }, cell.evaluation ? pathButton(cell.evaluation, 'evaluation/report.json') : '--'));
       replaceChildren(kvNode, items);
       kvNode.dataset.rendered = kvKey;
@@ -1010,7 +1186,7 @@
     const fileKey = (cell.run || '') + '|' + (cell.evaluation || '');
     if (files.dataset.rendered !== fileKey) {
       if (!cell.run) {
-        replaceChildren(files, el('p', { class: 'file-list-empty', text: '此 cell 尚未产生 run 目录。' }));
+        replaceChildren(files, el('p', { class: 'file-list-empty', text: '此单元格尚未产生运行目录。' }));
       } else {
         const root = String(cell.run).replace(/\/+$/, '');
         replaceChildren(files, RUN_FILES.map((f) => {
@@ -1051,7 +1227,7 @@
       if (app.fileDialogPath !== path) return;
       if (!response.ok) {
         content.classList.add('is-error');
-        content.textContent = `无法读取：${payload && payload.detail ? payload.detail : 'HTTP ' + response.status}\n\n文件可能尚不存在（例如尚未进入该阶段），或不在 runs 目录内。`;
+        content.textContent = `无法读取：${payload && payload.detail ? payload.detail : 'HTTP ' + response.status}\n\n文件可能尚不存在（例如尚未进入该阶段），或不在运行记录目录内。`;
         setText('dlg-file-hint', '读取失败。');
         return;
       }
@@ -1085,31 +1261,39 @@
     setBusy(action, true);
     try {
       const result = await postAction(action, body);
-      logActivity('ok', successText + (result && result.command ? `（command: ${baseName(result.command)}）` : ''));
+      logActivity('ok', successText + (result && result.command ? `（命令：${baseName(result.command)}）` : ''));
       notify('ok', successText);
       if (action === 'pause') app.pauseRequestedAt = new Date().toISOString();
       await fetchState().catch(() => {});
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
-      logActivity('error', `${action} 失败：${message}`);
-      notify('error', `${action} 被拒绝：${message}`, true);
+      const label = ACTION_LABEL[action] || action;
+      logActivity('error', `${label}失败：${message}`);
+      notify('error', `${label}请求被拒绝：${message}`, true);
     } finally {
       setBusy(action, false);
     }
   }
 
   function openStartDialog() {
-    const plan = selectedPlan();
-    const smoke = selectedSmoke();
-    if (!plan || !smoke) {
-      notify('warn', '请先选择 plan 与 smoke receipt。');
+    const combo = selectedCombo();
+    if (!combo) {
+      notify('warn', '启动前配置尚未就绪：没有可用的运行配置。');
       return;
     }
-    setText('dlg-start-plan', plan.path);
-    setText('dlg-start-digest', plan.digest || '--');
-    setText('dlg-start-smoke', smoke.path);
-    setText('dlg-start-smoke-status', `${smoke.status || '--'} · backend ${smoke.backend || '--'} · plan digest ${shortDigest(smoke.plan_digest)}${smoke.plan_digest && plan.digest && smoke.plan_digest !== plan.digest ? '（与 plan 不一致）' : ''}`);
-    setText('dlg-start-backend', 'harbor');
+    const plan = combo.plan;
+    const smoke = combo.smoke;
+    setText('dlg-start-season', plan.season || '未知赛季');
+    setText('dlg-start-plan', `Plan 由本地冻结配置生成 · ${fmtTime(plan.modified_at)}`);
+    setText('dlg-start-smoke', `Harbor 已完成 ${CORE_HARNESSES} 连通性检查，全部通过 · ${fmtTime(smoke.completed_at)}`);
+    setText('dlg-start-backend', 'Harbor');
+    replaceChildren($('dlg-start-details'), kvItems([
+      ['Plan 文件', plan.path, true],
+      ['Plan 摘要', plan.digest, true],
+      ['Smoke 回执', smoke.path, true],
+      ['Smoke 编号', smoke.smoke_id, true],
+      ['启动请求', JSON.stringify({ plan: plan.path, smoke_receipt: smoke.path, backend: 'harbor' }), true],
+    ]));
     app.lastFocus = document.activeElement;
     $('dlg-start').showModal();
     $('dlg-start-confirm').focus();
@@ -1118,10 +1302,10 @@
   function openInterruptDialog() {
     if (!app.state) return;
     const d = derive(app.state);
-    setText('dlg-int-op', d.runner.operation ? `${OPERATION_LABEL[d.runner.operation] || d.runner.operation} (${d.runner.operation})` : '--');
+    setText('dlg-int-op', d.runner.operation ? (OPERATION_LABEL[d.runner.operation] || d.runner.operation) : '--');
     setText('dlg-int-pid', d.runner.pid ? `${d.runner.pid} / ${d.runner.pgid || '--'}` : '--');
     setText('dlg-int-task', d.currentTask || '--');
-    replaceChildren($('dlg-int-text'), ['将向 runner 进程组发送 SIGINT。正在执行的 candidate 会被标记为 ', el('strong', { text: 'interrupted' }), '，之后可通过「继续」恢复。若只想在当前 task 完成后停止，请改用「暂停」。']);
+    replaceChildren($('dlg-int-text'), ['将向执行进程组发送中断信号（SIGINT）。正在执行的候选会被标记为', el('strong', { text: '已中断' }), '，之后可通过「继续」恢复。若只想在当前任务完成后停止，请改用「暂停」。']);
     const ack = $('dlg-int-ack');
     ack.checked = false;
     $('dlg-interrupt-confirm').disabled = true;
@@ -1141,9 +1325,9 @@
 
   function wire() {
     $('btn-start').addEventListener('click', openStartDialog);
-    $('btn-pause').addEventListener('click', () => runAction('pause', null, '已请求 pause：runner 将在下一个 task barrier 停止。'));
+    $('btn-pause').addEventListener('click', () => runAction('pause', null, '已请求暂停：执行进程将在下一个任务边界停止。'));
     $('btn-interrupt').addEventListener('click', openInterruptDialog);
-    $('btn-resume').addEventListener('click', () => runAction('resume', null, '已请求 resume：runner 正在从 canonical receipt 恢复。'));
+    $('btn-resume').addEventListener('click', () => runAction('resume', null, '已请求继续：执行进程正在从正式回执恢复。'));
     $('btn-refresh').addEventListener('click', () => {
       const btn = $('btn-refresh');
       btn.classList.add('is-busy');
@@ -1151,24 +1335,23 @@
     });
     $('notice-close').addEventListener('click', () => { $('notice').hidden = true; });
 
-    const onPlanChange = () => {
-      pickMatchingSmoke();
-      if (app.state) applyState(app.state); else renderStartMeta();
-    };
-    $('sel-plan').addEventListener('change', onPlanChange);
-    $('sel-smoke').addEventListener('change', renderStartMeta);
+    $('sel-config').addEventListener('change', (event) => {
+      app.selectedComboId = event.target.value || null;
+      renderStartReadiness();
+      if (app.state) renderControls(app.state, derive(app.state));
+    });
     $('start-form').addEventListener('submit', (event) => { event.preventDefault(); openStartDialog(); });
     $('dlg-start-confirm').addEventListener('click', () => {
       const plan = selectedPlan();
       const smoke = selectedSmoke();
       $('dlg-start').close();
       if (!plan || !smoke) return;
-      runAction('start', { plan: plan.path, smoke_receipt: smoke.path, backend: 'harbor' }, `已提交启动请求：${baseName(plan.path)} + ${parentName(smoke.path)}（harbor）。`);
+      runAction('start', { plan: plan.path, smoke_receipt: smoke.path, backend: 'harbor' }, `已提交启动请求：${plan.season || '未知赛季'} 的运行配置（Plan 生成于 ${fmtTime(plan.modified_at)}，Harbor Smoke 通过于 ${fmtTime(smoke.completed_at)}）。`);
     });
     $('dlg-int-ack').addEventListener('change', (event) => { $('dlg-interrupt-confirm').disabled = !event.target.checked; });
     $('dlg-interrupt-confirm').addEventListener('click', () => {
       $('dlg-interrupt').close();
-      runAction('interrupt', null, '已向 runner 进程组发送 SIGINT。');
+      runAction('interrupt', null, '已向执行进程组发送中断信号。');
     });
 
     for (const dialog of document.querySelectorAll('dialog')) {
@@ -1237,7 +1420,7 @@
     }, 1000);
 
     if (!TOKEN || TOKEN === '__CONTROL_TOKEN__') {
-      notify('warn', '未注入控制 token，操作请求会被服务端拒绝。请通过 `web3dgamebench control` 提供的地址访问。', true);
+      notify('warn', '未注入控制令牌，操作请求会被服务端拒绝。请通过 `web3dgamebench control` 命令输出的地址访问。', true);
     }
   }
 
