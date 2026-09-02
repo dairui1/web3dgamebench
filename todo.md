@@ -23,7 +23,7 @@
 
 - Plan：`~/.local/state/web3dgamebench/runs/plans/season-1-build-only-v3-20260902T114050Z.json`
 - Plan digest：`656316e5037a9855da44aff26545b9be3b2e4a4c1432952e66b87eea1161b190`
-- Smoke receipt：尚未为此 plan 生成；旧 receipt 已因 Goal、adapter 和镜像变化而失效。
+- Smoke receipt：`~/.local/state/web3dgamebench/runs/smoke/season-1-20260902T114052Z-af8bb90c-adc5bd7e/receipt.json`（3/3 harness passed）。
 - Candidate image：`web3dgamebench-candidate:0.2.0` / `sha256:1cde9f7cf7c7a3c3f9d286ff6c1f47493f5e64131f2ba396dcfc17e5da1750f5`
 
 ## P1：本地 Matrix Control Plane
@@ -82,7 +82,7 @@
 - [x] 补齐 unit、integration、Harbor smoke、timeout counterexample 和 receipt verification tests。
 - [x] 将旧 plan 标记 stale，保留原始审计记录，不原地修改旧 receipt。
 - [x] 重新生成 Season 1 plan，并核对完整 80-cell matrix、task barrier 和 profile 顺序；价格仍按冻结 pricing 配置与实际 token buckets 在 receipt 中结算。
-- [ ] 在控制台手动生成与新 plan、镜像和 adapter digest 一致的 harness smoke receipt。
+- [x] 生成与新 plan、镜像和 adapter digest 一致的 harness smoke receipt。
 - [ ] 只有 plan review 与 smoke receipt 同时通过后，才从第一个 task barrier 重新开始完整 Matrix。
 - [ ] 执行期间继续遵守 same-task profiles 可并行、tasks 串行；不得混入 calibration 或人工修补 workspace。
 - [ ] 80-cell closure、Fable backfill、judge、publisher 全部完成前不得发布 task prompt 或生成游戏源码。
