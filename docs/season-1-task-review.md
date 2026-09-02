@@ -1,6 +1,6 @@
 # Web3DGameBench Season 1 Task Review
 
-Status: **task contracts revised; all pre-revision plans and runs are invalid**. Season 1 must begin
+Status: **candidate prompts and admission checks revised; all pre-revision plans and runs are invalid**. Season 1 must begin
 again at Canyon Strike using a plan and smoke receipt generated after this revision. The official
 rerun uses the repository-controlled Harbor matrix; historical parity-lab artifacts are not Season 1 evidence.
 
@@ -41,7 +41,7 @@ distribution, broken-vote rate, and pairwise preference entropy. Near-universal 
 near-universal floor, or criteria that are routinely unverified are calibration findings to address
 in the next season; they are not reasons to change a frozen Season 1 task after scored runs begin.
 
-## Goal contract policy
+## Prompt and Goal policy
 
 - The harness activates an audited external persistence control, then supplies the exact canonical English prompt unchanged. Codex, Claude Code, and Pi must all expose observed Goal creation and completion in their traces; Pi uses upstream `pi-goal` plus a thin non-interactive lifecycle bridge.
 - No wall-clock or token limit is embedded in a task prompt. The runtime applies one 90-minute timeout to formal cells, Pi commands, and non-canonical calibration, without a global implementation turn/tool cap.

@@ -4,7 +4,7 @@ Web3DGameBench is a reproducible arena for coding agents that build complete, pl
 
 The public result is intentionally two-part:
 
-1. Deterministic checks establish that a submission builds, renders, responds to input, works on desktop and phone, and exposes a small runtime inspection contract.
+1. Deterministic admission checks establish that a submission builds, renders a visible nonblank canvas at desktop and phone viewports, resizes safely, avoids page errors, and makes no runtime network requests.
 2. Blind pairwise play determines the leaderboard. Visitors compare two games from the same task without seeing the model name; ratings use a Bradley-Terry fit.
 
 ## Core profiles
@@ -63,12 +63,12 @@ Harbor trial is converted into the repository run schema and bound by `harbor.js
 uv sync
 uv run web3dgamebench control
 uv run web3dgamebench vendor
-docker build -t web3dgamebench-candidate:0.2.0 infra/candidate
+docker build -t web3dgamebench-candidate:0.3.0 infra/candidate
 docker build -t web3dgamebench-evaluator:0.1.0 infra/evaluator
 uv run web3dgamebench doctor
 uv run web3dgamebench plan --season season-1 --output /path/to/season-1-plan.json
 uv run web3dgamebench smoke --plan /path/to/season-1-plan.json --backend harbor
-# Run the frozen, non-canonical three-task Pi adapter gate against a reviewed plan:
+# Run the frozen, non-canonical three-task Pi bridge gate against a reviewed plan:
 uv run web3dgamebench calibrate --plan /path/to/season-1-plan.json --backend harbor
 uv run web3dgamebench matrix --plan /path/to/season-1-plan.json --smoke-receipt /path/to/smoke/receipt.json --backend harbor
 # Stop cleanly at a task barrier when operating the season in review windows:

@@ -7,12 +7,12 @@
 - [x] 不采用 `pi-goal-pro`：它不能直接驱动当前 `pi --print`，并且本次 `autoTurnCount` 达到 39/25 后仍未暂停。
 - [x] 在完成下面的 calibration gate 前，不重跑 80-cell Matrix，不发布任何候选产物。
 
-旧 Matrix 已于 2026-09-02 显式标记为 `invalidated`。冻结快照包含 6 个 `completed`、8 个 `evidence-failure`、1 个 `interrupted`、1 个在终止旧恢复调度器时保留为 `running` 的 cell 和 64 个 `pending` cell；不手工改写旧 receipt。
+旧 Matrix 曾于 2026-09-02 显式标记为 `invalidated`；随后已按操作要求删除全部旧 Matrix receipt、run workspace、canonical claim 和 control history。历史诊断摘要单独保留，不可恢复或纳入正式 Season 1。
 
 ## P0：冻结与保全
 
 - [x] 确认没有 Matrix、Harbor candidate 或遗留 Chromium 进程继续运行，并移除旧的自动恢复 LaunchAgent。
-- [x] 保留当前 matrix receipt、interrupted/running run、原始 trace、workspace 和 evaluator 报告，不覆盖或手工修复。
+- [x] 删除全部旧 Matrix receipt、run workspace、canonical claim 和 control history，使控制台从空白状态重新开始。
 - [x] 将本次非 canonical A/B 结果登记为诊断证据，不纳入 leaderboard、publisher 或正式 Season receipt。
 - [x] 为当前 plan 标记 runtime/control semantics 已变更；旧 canonical matrix 已审计性 invalidated，不再复用旧 plan。
 
@@ -74,11 +74,11 @@
 
 ## P3：正式重启条件
 
-- [x] bump Pi runtime/control/adapter version，并更新冻结的 image digest 与 runtime evidence schema。
+- [x] bump Pi runtime/control/bridge version，并更新冻结的 image digest 与 runtime evidence schema。
 - [x] 补齐 unit、integration、Harbor smoke、timeout counterexample 和 receipt verification tests。
 - [x] 将旧 plan 标记 stale，保留原始审计记录，不原地修改旧 receipt。
 - [x] 重新生成 Season 1 plan，并核对完整 80-cell matrix、task barrier 和 profile 顺序；价格仍按冻结 pricing 配置与实际 token buckets 在 receipt 中结算。
-- [x] 生成与新 plan、镜像和 adapter digest 一致的 harness smoke receipt。
+- [x] 生成与新 plan、镜像和 bridge digest 一致的 harness smoke receipt。
 - [ ] 只有 plan review 与 smoke receipt 同时通过后，才从第一个 task barrier 重新开始完整 Matrix。
 - [ ] 执行期间继续遵守 same-task profiles 可并行、tasks 串行；不得混入 calibration 或人工修补 workspace。
 - [ ] 80-cell closure、Fable backfill、judge、publisher 全部完成前不得发布 task prompt 或生成游戏源码。
@@ -87,7 +87,7 @@
 
 | 方案 | 终止情况 | 官方 evaluator | 结论 |
 | --- | --- | --- | --- |
-| 现有 `pi-goal` 超时快照 | `7200s` timeout | 19/20 | 产物最好，但未收敛 |
+| 历史 `pi-goal` 超时快照（统一 90 分钟前） | `7200s` timeout | 19/20 | 产物最好，但未收敛 |
 | 普通 Pi | 1814s，exit 0 | 14/20 | 较快退出，但自测与 evaluator 明显错位 |
 | `pi-goal-pro 1.3.1` | 1823s 时仍 active，人工中断 | 17/20 | 需要非交互 shim，且 25-turn 上限未生效 |
 
