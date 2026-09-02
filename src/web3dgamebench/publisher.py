@@ -13,12 +13,29 @@ from .matrix import (
     load_matrix_receipt,
     validate_publication_receipt,
 )
+from .playability import assess_playability
 from .pricing import PricingError, estimate_official_cost, load_pricing
 from .trace_replay import TraceReplayError, export_trace_replay
 
 
 class PublishError(RuntimeError):
     pass
+
+
+def _public_notice_codes(warnings: list[str]) -> list[str]:
+    codes: list[str] = []
+    for warning in warnings:
+        if warning.startswith("no-runtime-network"):
+            codes.append("runtime-network")
+        elif warning.startswith("no-page-errors"):
+            codes.append("page-console-warning")
+        elif warning.startswith("trace replay unavailable"):
+            codes.append("trace-replay-unavailable")
+        elif warning.startswith("official API cost unavailable"):
+            codes.append("api-cost-unavailable")
+        else:
+            codes.append("non-blocking-check")
+    return list(dict.fromkeys(codes))
 
 
 def _copy_source(workspace: Path, destination: Path) -> None:
@@ -133,7 +150,15 @@ def _publication_catalog(
     for task in catalog_tasks:
         if not all(
             isinstance(task.get(field), str) and task[field]
-            for field in ("id", "title", "titleZh", "summary", "summaryZh", "genre", "genreZh")
+            for field in (
+                "id",
+                "title",
+                "titleZh",
+                "summary",
+                "summaryZh",
+                "genre",
+                "genreZh",
+            )
         ):
             raise PublishError(f"catalog task metadata is incomplete: {task.get('id')}")
         evaluation = task.get("evaluation")
@@ -152,13 +177,18 @@ def publish_runs(
     *,
     replace: bool = False,
     matrix_receipt: dict[str, Any] | None = None,
+    allow_partial: bool = False,
 ) -> Path:
     catalog_path = root / "site/public/data/catalog.json"
     catalog = json.loads(catalog_path.read_text())
     seen: set[tuple[str, str]] = set()
     additions: dict[str, list[dict]] = {}
     pricing = load_pricing(root)
-    if catalog.get("season", {}).get("id") == "season-1" and matrix_receipt is None:
+    if (
+        catalog.get("season", {}).get("id") == "season-1"
+        and matrix_receipt is None
+        and not allow_partial
+    ):
         raise PublishError("season-1 publication requires a closed matrix receipt")
     if matrix_receipt is not None:
         try:
@@ -169,6 +199,25 @@ def publish_runs(
         _matrix_cells_by_run(matrix_receipt) if matrix_receipt is not None else {}
     )
     resolved_runs = [run.expanduser().resolve() for run in runs]
+    if allow_partial and matrix_receipt is not None:
+        raise PublishError(
+            "partial publication accepts explicit runs, not a matrix receipt"
+        )
+    if allow_partial:
+        seasons = {
+            _task_season(
+                root,
+                json.loads((run / "manifest.json").read_text())["task"]["id"],
+            )
+            for run in resolved_runs
+        }
+        if len(seasons) != 1 or None in seasons:
+            raise PublishError("partial publication runs must belong to one known season")
+        season_id = next(iter(seasons))
+        template = root / "configs/catalogs" / f"{season_id}.json"
+        if not template.is_file():
+            raise PublishError(f"frozen season catalog is missing: {template}")
+        catalog = json.loads(template.read_text(encoding="utf-8"))
     if matrix_receipt is not None and set(resolved_runs) != set(matrix_cells):
         raise PublishError(
             "publication runs must exactly match all trusted cells in the closed matrix"
@@ -183,10 +232,11 @@ def publish_runs(
         evaluation = (
             json.loads(evaluation_path.read_text()) if evaluation_path.is_file() else {}
         )
-        if not evaluation.get("trusted") or not evaluation.get("passed"):
-            raise PublishError(f"run is not trusted and passing: {run_root}")
+        playable, errors, warnings = assess_playability(evaluation)
+        if not playable:
+            raise PublishError(f"run is not playable: {run_root} ({'; '.join(errors)})")
         run_status = str(manifest.get("status", "unknown"))
-        if run_status != "candidate-complete":
+        if run_status not in {"candidate-complete", "candidate-failure"}:
             raise PublishError(f"run is not publishable: {run_root} ({run_status})")
         task_id = manifest["task"]["id"]
         profile = manifest["profile"]
@@ -194,7 +244,7 @@ def publish_runs(
         if task_id not in tasks:
             raise PublishError(f"catalog has no task {task_id}")
         task_season = _task_season(root, task_id)
-        if task_season == "season-1" and matrix_receipt is None:
+        if task_season == "season-1" and matrix_receipt is None and not allow_partial:
             raise PublishError("season-1 publication requires a closed matrix receipt")
         if matrix_receipt is not None:
             if matrix_receipt.get("season") != task_season:
@@ -232,39 +282,49 @@ def publish_runs(
         try:
             replay = export_trace_replay(run_root, trace_target)
         except TraceReplayError as error:
-            raise PublishError(str(error)) from error
+            replay = None
+            warnings.append(f"trace replay unavailable: {error}")
         model = manifest.get("model_resolved") or profile["model"]
-        try:
-            cost = estimate_official_cost(
-                pricing,
-                model,
-                replay["summary"]["usage"],
-                replay["traceFormat"],
-                replay.get("createdAt"),
-            )
-        except PricingError as error:
-            raise PublishError(str(error)) from error
-        additions.setdefault(task_id, []).append(
-            {
-                "id": f"{task_id}--{profile_id}",
-                "taskId": task_id,
-                "profileId": profile_id,
-                "harness": profile["harness"],
-                "model": model,
-                "playUrl": f"/playground/{task_id}/{profile_id}/",
-                "traceId": trace_id,
-                "replayUrl": f"/replay/{trace_id}",
-                "traceSummary": {
-                    "durationSeconds": replay["durationSeconds"],
-                    "eventCount": replay["summary"]["eventCount"],
-                    "toolCalls": replay["summary"]["toolCalls"],
-                    "errors": replay["summary"]["errors"],
+        cost = None
+        if replay:
+            try:
+                cost = estimate_official_cost(
+                    pricing,
+                    model,
+                    replay["summary"]["usage"],
+                    replay["traceFormat"],
+                    replay.get("createdAt"),
+                )
+            except PricingError as error:
+                warnings.append(f"official API cost unavailable: {error}")
+        else:
+            warnings.append("official API cost unavailable: trace replay unavailable")
+        submission = {
+            "id": f"{task_id}--{profile_id}",
+            "taskId": task_id,
+            "profileId": profile_id,
+            "harness": profile["harness"],
+            "model": model,
+            "playUrl": f"/playground/{task_id}/{profile_id}/",
+            "officialApiCost": cost,
+            "status": "published",
+            "runStatus": run_status,
+            "notices": _public_notice_codes(warnings),
+        }
+        if replay:
+            submission.update(
+                {
+                    "traceId": trace_id,
+                    "replayUrl": f"/replay/{trace_id}",
+                    "traceSummary": {
+                        "durationSeconds": replay["durationSeconds"],
+                        "eventCount": replay["summary"]["eventCount"],
+                        "toolCalls": replay["summary"]["toolCalls"],
+                        "errors": replay["summary"]["errors"],
+                    },
                 },
-                "officialApiCost": cost,
-                "status": "published",
-                "runStatus": run_status,
-            }
-        )
+            )
+        additions.setdefault(task_id, []).append(submission)
 
     for task_id, submissions in additions.items():
         existing = {
@@ -274,7 +334,7 @@ def publish_runs(
         tasks[task_id]["submissions"] = sorted(
             existing.values(), key=lambda item: item["profileId"]
         )
-    catalog["season"]["status"] = "public-voting"
+    catalog["season"]["status"] = "public-preview" if allow_partial else "public-voting"
     catalog["generatedAt"] = datetime.now(UTC).isoformat()
     catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n")
     return catalog_path

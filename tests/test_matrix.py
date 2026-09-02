@@ -38,6 +38,7 @@ from web3dgamebench.matrix import (
     verify_run_artifacts,
     write_preflight_plan,
 )
+from web3dgamebench.playability import assess_playability
 from web3dgamebench.runtimes import build_invocation
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,13 +54,14 @@ def plan_path(tmp_path: Path, season_plan: dict) -> Path:
     return write_preflight_plan(tmp_path / "season-1-plan.json", season_plan)
 
 
-def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
+def test_preflight_plan_freezes_all_ninety_cells_and_runtime_inputs(
     season_plan: dict,
 ) -> None:
-    assert len(season_plan["cells"]) == 80
-    assert len({cell["cell_id"] for cell in season_plan["cells"]}) == 80
+    assert len(season_plan["cells"]) == 90
+    assert len({cell["cell_id"] for cell in season_plan["cells"]}) == 90
     assert season_plan["runtime_control"]["candidate_total_timeout_seconds"] == 5400
     assert season_plan["runtime_control"]["candidate_pids_limit"] == 1024
+    assert season_plan["runtime_control"]["candidate_workdir"] == "/workspace"
     assert season_plan["runtime_control"]["task_order"] == "serial"
     assert season_plan["runtime_control"]["harness_order"] == "parallel"
     assert season_plan["runtime_control"]["models_within_harness"] == "serial"
@@ -97,9 +99,6 @@ def test_preflight_plan_freezes_all_eighty_cells_and_runtime_inputs(
     assert frozen["uv.lock"]["roles"] == ["host-dependency-lock"]
     assert frozen["src/web3dgamebench/control.py"]["roles"] == ["matrix-operator-runtime"]
     assert frozen["src/web3dgamebench/control_ui/app.js"]["roles"] == ["matrix-operator-ui"]
-    assert frozen["src/web3dgamebench/fable_backfill.py"]["roles"] == [
-        "optional-backfill-runtime"
-    ]
     for task_id, task in season_plan["tasks"].items():
         assert task["brief_path"] in frozen
         assert task["starter_lock_path"] in frozen
@@ -351,7 +350,7 @@ def test_publication_rechecks_failed_cell_artifacts(
 
     matrix_module.validate_publication_receipt(ROOT, receipt)
 
-    assert len(checked) == 80
+    assert len(checked) == 90
     assert Path(failed["run"]).name in checked
 
 
@@ -360,7 +359,7 @@ def test_receipt_is_prefilled_with_all_cells_and_separate_judge_state(
 ) -> None:
     receipt = _new_receipt(plan_path, season_plan, "container")
     assert receipt["plan_digest_sha256"] == season_plan["plan_digest_sha256"]
-    assert len(receipt["cells"]) == 80
+    assert len(receipt["cells"]) == 90
     assert all(cell["status"] == "pending" for cell in receipt["cells"])
     assert all(cell["run"] is None for cell in receipt["cells"])
     assert all(cell["passed"] is False for cell in receipt["cells"])
@@ -409,6 +408,7 @@ def _trusted_evidence(
     )
     manifest = {
         "status": "candidate-complete",
+        "candidate_workdir": "/workspace",
         "task": {
             "id": cell["task"],
             "digest": task["task_tree_sha256"],
@@ -424,6 +424,7 @@ def _trusted_evidence(
         "model_resolved": profile["model"],
         "backend": "container",
         "container_plane": {
+            "candidate_workdir": "/workspace",
             "image_digest": season_plan["runtime_environment"]["container_images"][
                 "candidate"
             ]["id"]
@@ -471,6 +472,45 @@ def test_trusted_gate_rejects_missing_task_goal_and_model_evidence(
     assert "resolved model is incompatible with the profile" in failures
     assert "workspace TASK.md was not preserved" in failures
     assert "codex goal lifecycle did not complete" in failures
+
+
+def test_playability_treats_network_and_mobile_findings_as_warnings() -> None:
+    report = {
+        "trusted": True,
+        "build": {"passed": True},
+        "checks": [
+            {"name": "build", "passed": True},
+            {"name": "desktop.canvas-visible", "passed": True},
+            {"name": "desktop.nonblank", "passed": True},
+            {"name": "desktop.starts", "passed": True},
+            {"name": "phone.no-horizontal-overflow", "passed": False},
+            {
+                "name": "no-runtime-network",
+                "passed": False,
+                "detail": ["https://fonts.example/font.css"],
+            },
+        ],
+    }
+
+    playable, errors, warnings = assess_playability(report)
+
+    assert playable is True
+    assert errors == []
+    assert any("no-runtime-network" in warning for warning in warnings)
+
+
+def test_playability_rejects_a_game_that_does_not_build_or_start() -> None:
+    report = {
+        "trusted": True,
+        "build": {"passed": False},
+        "checks": [{"name": "render-source-unchanged", "passed": True}],
+    }
+
+    playable, errors, _warnings = assess_playability(report)
+
+    assert playable is False
+    assert "game build failed" in errors
+    assert "required playability check failed: desktop.starts" in errors
 
 
 def test_trusted_gate_accepts_harbor_only_with_bound_adapter_provenance(
@@ -539,6 +579,70 @@ def test_trusted_gate_accepts_harbor_only_with_bound_adapter_provenance(
     trusted, failures = trusted_cell_gate(season_plan, cell, manifest, report, run_root)
     assert trusted is False
     assert "Harbor execution provenance is missing or inconsistent" in failures
+
+
+def test_trusted_gate_accepts_complete_pi_adapter_provenance(
+    tmp_path: Path, season_plan: dict
+) -> None:
+    run_root = tmp_path / "harbor-pi-run"
+    cell, manifest, report = _trusted_evidence(
+        season_plan, "pi-deepseek-v4-flash", run_root
+    )
+    task = season_plan["tasks"][cell["task"]]
+    planned_harbor = season_plan["runtime_environment"]["harbor"]
+    generated_task = run_root / "harbor/task" / cell["task"]
+    generated_task.mkdir(parents=True)
+    (generated_task / "task.toml").write_text("frozen", encoding="utf-8")
+    job_root = run_root / "harbor/jobs/job"
+    trial_root = job_root / "trial"
+    trial_root.mkdir(parents=True)
+    (job_root / "result.json").write_text("{}", encoding="utf-8")
+    (trial_root / "result.json").write_text("{}", encoding="utf-8")
+    adapter_lock = {
+        "schema_version": 1,
+        "task": cell["task"],
+        "profile": cell["profile"],
+        "brief_sha256": task["brief_sha256"],
+        "harbor_version": planned_harbor["version"],
+        "harbor_commit": planned_harbor["commit"],
+        "generated_task_sha256": file_tree_sha256(generated_task),
+        "pi_adapter": season_plan["runtime_control"]["pi_adapter"],
+    }
+    adapter_path = run_root / "harbor-task-lock.json"
+    adapter_path.write_text(json.dumps(adapter_lock), encoding="utf-8")
+    (run_root / "harbor.json").write_text(
+        json.dumps(
+            {
+                "version": planned_harbor["version"],
+                "commit": planned_harbor["commit"],
+                "exception": None,
+                "task_checksum": "checksum",
+                "job": str(job_root),
+                "trial": str(trial_root),
+                "trial_result_sha256": hashlib.sha256(
+                    (trial_root / "result.json").read_bytes()
+                ).hexdigest(),
+                "job_result_sha256": hashlib.sha256(
+                    (job_root / "result.json").read_bytes()
+                ).hexdigest(),
+                "adapter_lock_sha256": hashlib.sha256(
+                    adapter_path.read_bytes()
+                ).hexdigest(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest["backend"] = "harbor"
+    manifest["container_plane"].update(
+        execution_backend="harbor-docker",
+        harbor_version=planned_harbor["version"],
+        harbor_commit=planned_harbor["commit"],
+    )
+
+    assert trusted_cell_gate(season_plan, cell, manifest, report, run_root) == (
+        True,
+        [],
+    )
 
 
 def _terminalize(receipt: dict) -> None:
@@ -616,7 +720,7 @@ def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
     receipt_path = tmp_path / "receipt.json"
     receipt = _new_receipt(plan_path, season_plan, "container")
     _terminalize(receipt)
-    first_two_tasks = receipt["cells"][:16]
+    first_two_tasks = receipt["cells"][:18]
     for cell in first_two_tasks:
         cell.update(status="pending", run=None, passed=False, trusted=False)
 
@@ -652,7 +756,7 @@ def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
             run=f"/runs/{cell['cell_id']}",
             passed=True,
             trusted=True,
-            artifacts=copy.deepcopy(receipt["cells"][16]["artifacts"]),
+            artifacts=copy.deepcopy(receipt["cells"][18]["artifacts"]),
         )
 
     monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
@@ -661,18 +765,22 @@ def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
 
     matrix_module._drive_matrix(ROOT, plan_path, season_plan, receipt_path, receipt)
 
-    assert first_started == 8
+    assert first_started == 9
     assert maximum_by_harness == {"codex": 1, "claude-code": 1, "pi": 1}
     assert start_order == {
         "codex": ["codex-sol-medium", "codex-terra-high", "codex-luna-max"],
-        "claude-code": ["claude-sonnet-default", "claude-opus-default"],
+        "claude-code": [
+            "claude-sonnet-default",
+            "claude-opus-default",
+            "claude-fable-default",
+        ],
         "pi": [
             "pi-deepseek-v4-flash",
             "pi-qwen3-8-flash",
             "pi-glm-5-3-flash",
         ],
     }
-    assert second_saw_finished == [8] * 8
+    assert second_saw_finished == [9] * 9
     assert receipt["status"] == "complete"
 
 
@@ -685,7 +793,7 @@ def test_matrix_can_stop_at_a_requested_task_barrier(
     receipt_path = tmp_path / "receipt.json"
     receipt = _new_receipt(plan_path, season_plan, "harbor")
     _terminalize(receipt)
-    for cell in receipt["cells"][:16]:
+    for cell in receipt["cells"][:18]:
         cell.update(status="pending", run=None, passed=False, trusted=False)
     receipt["execution_window"] = {"stop_after_task": "canyon-strike"}
     called: list[str] = []
@@ -697,7 +805,7 @@ def test_matrix_can_stop_at_a_requested_task_barrier(
             run=f"/runs/{cell['cell_id']}",
             passed=True,
             trusted=True,
-            artifacts=copy.deepcopy(receipt["cells"][16]["artifacts"]),
+            artifacts=copy.deepcopy(receipt["cells"][18]["artifacts"]),
         )
 
     monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
@@ -713,8 +821,8 @@ def test_matrix_can_stop_at_a_requested_task_barrier(
         stop_after_task="canyon-strike",
     )
 
-    assert len(called) == 8
-    assert all(cell["status"] == "pending" for cell in receipt["cells"][8:16])
+    assert len(called) == 9
+    assert all(cell["status"] == "pending" for cell in receipt["cells"][9:18])
     assert receipt["status"] == "incomplete"
     assert receipt["execution_window"]["stopped_at_task_barrier"] == "canyon-strike"
 
@@ -729,7 +837,7 @@ def test_matrix_honors_dynamic_pause_only_after_active_task_finishes(
     receipt_path = tmp_path / "receipt.json"
     receipt = _new_receipt(plan_path, season_plan, "harbor")
     _terminalize(receipt)
-    for cell in receipt["cells"][:16]:
+    for cell in receipt["cells"][:18]:
         cell.update(status="pending", run=None, passed=False, trusted=False)
     called: list[str] = []
 
@@ -742,7 +850,7 @@ def test_matrix_honors_dynamic_pause_only_after_active_task_finishes(
             run=f"/runs/{cell['cell_id']}",
             passed=True,
             trusted=True,
-            artifacts=copy.deepcopy(receipt["cells"][16]["artifacts"]),
+            artifacts=copy.deepcopy(receipt["cells"][18]["artifacts"]),
         )
 
     monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
@@ -751,9 +859,9 @@ def test_matrix_honors_dynamic_pause_only_after_active_task_finishes(
 
     matrix_module._drive_matrix(ROOT, plan_path, season_plan, receipt_path, receipt)
 
-    assert len(called) == 8
-    assert all(cell["status"] == "completed" for cell in receipt["cells"][:8])
-    assert all(cell["status"] == "pending" for cell in receipt["cells"][8:16])
+    assert len(called) == 9
+    assert all(cell["status"] == "completed" for cell in receipt["cells"][:9])
+    assert all(cell["status"] == "pending" for cell in receipt["cells"][9:18])
     assert receipt["status"] == "incomplete"
     assert receipt["execution_window"]["stopped_at_task_barrier"] == "canyon-strike"
 
@@ -856,7 +964,22 @@ def test_evaluator_retry_reuses_completed_candidate_run(
         output = reused / "evaluation"
         output.mkdir()
         report = output / "report.json"
-        report.write_text(json.dumps({"passed": True, "trusted": True}), encoding="utf-8")
+        report.write_text(
+            json.dumps(
+                {
+                    "passed": True,
+                    "trusted": True,
+                    "build": {"passed": True},
+                    "checks": [
+                        {"name": "build", "passed": True},
+                        {"name": "desktop.canvas-visible", "passed": True},
+                        {"name": "desktop.nonblank", "passed": True},
+                        {"name": "desktop.starts", "passed": True},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
         return report
 
     monkeypatch.setattr(matrix_module, "run_once", do_not_rerun)

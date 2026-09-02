@@ -17,6 +17,7 @@ from .matrix import (
     create_plan_for_matrix,
     create_preflight_plan,
     invalidate_canonical_matrix,
+    reclassify_matrix_by_playability,
     resume_matrix,
     start_matrix,
     write_preflight_plan,
@@ -144,7 +145,11 @@ def command_doctor(_: argparse.Namespace) -> int:
         result = subprocess.run(["docker", "version"], capture_output=True, check=False)
         checks["docker_daemon"] = result.returncode == 0
     print(json.dumps(checks, indent=2))
-    return 0 if all(value is True for key, value in checks.items() if not key.endswith("error")) else 1
+    return (
+        0
+        if all(value is True for key, value in checks.items() if not key.endswith("error"))
+        else 1
+    )
 
 
 def command_run(args: argparse.Namespace) -> int:
@@ -168,6 +173,17 @@ def command_smoke(args: argparse.Namespace) -> int:
     return 0 if value.get("status") == "passed" else 1
 
 
+def command_prepare(args: argparse.Namespace) -> int:
+    from .smoke import run_smoke
+
+    plan = create_preflight_plan(project_root(), args.season)
+    plan_path = write_preflight_plan(runs_dir() / "plans" / f"{plan['plan_id']}.json", plan)
+    smoke_path = run_smoke(project_root(), plan_path, backend="harbor")
+    smoke = json.loads(smoke_path.read_text(encoding="utf-8"))
+    print(json.dumps({"plan": str(plan_path), "smoke_receipt": str(smoke_path)}))
+    return 0 if smoke.get("status") == "passed" else 1
+
+
 def command_vendor(_: argparse.Namespace) -> int:
     root = project_root()
     cache = root / "vendor/npm-cache"
@@ -189,7 +205,9 @@ def command_vendor(_: argparse.Namespace) -> int:
             image = load_container_config(root).image
             with tempfile.TemporaryDirectory(prefix="web3dgamebench-vendor-") as temporary:
                 seed = Path(temporary) / "starter"
-                shutil.copytree(starter, seed, ignore=shutil.ignore_patterns("node_modules", "dist"))
+                shutil.copytree(
+                    starter, seed, ignore=shutil.ignore_patterns("node_modules", "dist")
+                )
                 result = subprocess.run(
                     [
                         "docker",
@@ -290,9 +308,20 @@ def command_publish(args: argparse.Namespace) -> int:
     else:
         runs = [Path(item).expanduser().resolve() for item in args.run]
     catalog = publish_runs(
-        root, runs, games_repo, replace=args.replace, matrix_receipt=matrix_receipt
+        root,
+        runs,
+        games_repo,
+        replace=args.replace,
+        matrix_receipt=matrix_receipt,
+        allow_partial=args.allow_partial,
     )
     print(catalog)
+    return 0
+
+
+def command_reclassify(args: argparse.Namespace) -> int:
+    result = reclassify_matrix_by_playability(project_root(), Path(args.matrix))
+    print(json.dumps(result, ensure_ascii=False))
     return 0
 
 
@@ -320,26 +349,6 @@ def command_invalidate(args: argparse.Namespace) -> int:
         + "\n"
     )
     print(sidecar)
-    return 0
-
-
-def command_fable(args: argparse.Namespace) -> int:
-    from .fable_backfill import run_backfill
-
-    core_plan = Path(args.core_plan).expanduser().resolve()
-    receipt = (
-        Path(args.receipt).expanduser().resolve()
-        if args.receipt
-        else runs_dir() / f"fable-backfill-{core_plan.stem}.json"
-    )
-    result = run_backfill(
-        project_root(),
-        core_plan,
-        receipt,
-        set(args.task) or None,
-        backend=args.backend,
-    )
-    print(result)
     return 0
 
 
@@ -372,6 +381,11 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--plan", required=True)
     smoke.add_argument("--backend", choices=("container", "harbor"), default="harbor")
     smoke.set_defaults(func=command_smoke)
+    prepare = commands.add_parser(
+        "prepare", help="create a frozen plan and run its Harbor smoke checks"
+    )
+    prepare.add_argument("--season", required=True)
+    prepare.set_defaults(func=command_prepare)
     vendor = commands.add_parser("vendor")
     vendor.set_defaults(func=command_vendor)
     evaluate = commands.add_parser("evaluate")
@@ -412,21 +426,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     publish.add_argument("--games-repo")
     publish.add_argument("--replace", action="store_true")
+    publish.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="publish explicit playable runs as a non-final public preview",
+    )
     publish.set_defaults(func=command_publish)
+    reclassify = commands.add_parser(
+        "reclassify", help="reclassify finished cells with the playable-first policy"
+    )
+    reclassify.add_argument("--matrix", required=True)
+    reclassify.set_defaults(func=command_reclassify)
     invalidate = commands.add_parser("invalidate")
     invalidate_source = invalidate.add_mutually_exclusive_group(required=True)
     invalidate_source.add_argument("--run")
     invalidate_source.add_argument("--matrix-season")
     invalidate.add_argument("--reason", required=True)
     invalidate.set_defaults(func=command_invalidate)
-    fable = commands.add_parser(
-        "fable", help="run or resume the optional quota-deferred Claude Fable lane"
-    )
-    fable.add_argument("--core-plan", required=True)
-    fable.add_argument("--receipt")
-    fable.add_argument("--task", action="append", default=[])
-    fable.add_argument("--backend", choices=("container", "harbor"), default="harbor")
-    fable.set_defaults(func=command_fable)
     control = commands.add_parser(
         "control", help="run the local Matrix operator control plane"
     )

@@ -86,7 +86,10 @@ class _Web3DHarborAgent(BaseInstalledAgent):
         command = shlex.join(invocation["argv"])
         if invocation.get("stdin_prompt"):
             command = f"printf %s {shlex.quote(instruction)} | {command}"
-        command += " > /logs/agent/events.jsonl 2> /logs/agent/stderr.log"
+        command = (
+            'cd /workspace && test "$(pwd -P)" = /workspace && '
+            f"{command} > /logs/agent/events.jsonl 2> /logs/agent/stderr.log"
+        )
         result = await self.exec_as_agent(environment, command=command, env=runtime_env)
         if result.return_code != 0:
             raise RuntimeError(f"candidate harness exited with status {result.return_code}")

@@ -61,10 +61,17 @@ def test_publish_copies_source_dist_and_updates_catalog(tmp_path: Path) -> None:
     (tmp_path / "run/evaluation").mkdir()
     (tmp_path / "run/evaluation/report.json").write_text(
         json.dumps(
-            {
-                "trusted": True,
-                "passed": True,
-                "evaluator": {"render_source_sha256": render_source_sha256(render)},
+                {
+                    "trusted": True,
+                    "passed": True,
+                    "build": {"passed": True},
+                    "checks": [
+                        {"name": "build", "passed": True},
+                        {"name": "desktop.canvas-visible", "passed": True},
+                        {"name": "desktop.nonblank", "passed": True},
+                        {"name": "desktop.starts", "passed": True},
+                    ],
+                    "evaluator": {"render_source_sha256": render_source_sha256(render)},
                 "evidence": {
                     "render_source_sha256": render_source_sha256(render),
                     "post_build_render_source_sha256": render_source_sha256(render),

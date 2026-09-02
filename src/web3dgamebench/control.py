@@ -17,7 +17,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .matrix import MatrixError, load_matrix_receipt, request_matrix_pause
+from .matrix import (
+    MatrixError,
+    invalidate_canonical_matrix,
+    load_matrix_receipt,
+    request_matrix_pause,
+)
 from .runner import runs_dir
 
 
@@ -44,6 +49,10 @@ class StartRequest(BaseModel):
     plan: str
     smoke_receipt: str
     backend: str = "harbor"
+
+
+class InvalidateRequest(BaseModel):
+    reason: str
 
 
 class MatrixSupervisor:
@@ -300,12 +309,16 @@ class MatrixSupervisor:
             "receipt": self._receipt_view(receipt_path, receipt),
             "options": {"plans": plans, "smokes": smokes},
             "controls": {
+                "can_prepare": not active and not has_canonical,
                 "can_start": not active and not has_canonical,
                 "can_resume": not active
                 and has_canonical
                 and receipt_status in {"incomplete", "interrupted", "running"},
                 "can_pause": active and has_canonical and receipt_status == "running",
                 "can_interrupt": active,
+                "can_invalidate": not active
+                and has_canonical
+                and receipt_status in {"incomplete", "interrupted", "running"},
             },
         }
 
@@ -315,6 +328,25 @@ class MatrixSupervisor:
         if not path.is_file() or not path.is_relative_to(allowed):
             raise ValueError(f"path is outside the managed state directory: {path}")
         return path
+
+    def _child_environment(self) -> dict[str, str]:
+        environment = os.environ.copy()
+        existing = environment.get("PATH", "").split(os.pathsep)
+        required = [
+            str(Path(sys.executable).resolve().parent),
+            str(Path.home() / ".local/bin"),
+            str(Path.home() / ".bun/bin"),
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+        environment["PATH"] = os.pathsep.join(
+            dict.fromkeys(entry for entry in [*required, *existing] if entry)
+        )
+        return environment
 
     def _spawn(self, operation: str, argv: list[str], receipt: Path | None = None) -> None:
         with self._lock:
@@ -334,6 +366,7 @@ class MatrixSupervisor:
                 stderr=subprocess.STDOUT,
                 text=True,
                 start_new_session=True,
+                env=self._child_environment(),
             )
             state = {
                 "schema_version": 1,
@@ -369,6 +402,21 @@ class MatrixSupervisor:
                 "harbor",
                 "--smoke-receipt",
                 str(smoke),
+            ],
+        )
+
+    def prepare(self) -> None:
+        if self._canonical() is not None:
+            raise RuntimeError("a canonical matrix already exists")
+        self._spawn(
+            "matrix-prepare",
+            [
+                sys.executable,
+                "-m",
+                "web3dgamebench.cli",
+                "prepare",
+                "--season",
+                "season-1",
             ],
         )
 
@@ -415,6 +463,25 @@ class MatrixSupervisor:
                 raise RuntimeError("managed process group is unavailable")
             os.killpg(pgid, signal.SIGINT)
             self._event("interrupt-requested", operation=runner.get("operation"), pgid=pgid)
+
+    def invalidate(self, reason: str) -> Path:
+        reason = reason.strip()
+        if not reason:
+            raise ValueError("invalidation requires a reason")
+        runner = self._refresh_runner()
+        if runner.get("status") == "running" and self._pid_alive(runner.get("pid")):
+            raise RuntimeError("an active matrix must be interrupted before invalidation")
+        canonical = self._canonical()
+        if canonical is None or not isinstance(canonical.get("season"), str):
+            raise RuntimeError("there is no canonical matrix to invalidate")
+        marker = invalidate_canonical_matrix(canonical["season"], reason=reason)
+        self._event(
+            "matrix-invalidated",
+            matrix_id=canonical.get("matrix_id"),
+            reason=reason,
+            marker=str(marker),
+        )
+        return marker
 
     def tail(self, raw: str, limit: int = 200_000) -> tuple[Path, str]:
         path = Path(raw).expanduser().resolve()
@@ -499,6 +566,17 @@ def create_control_app(root: Path, state_root: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {"status": "accepted"}
 
+    @app.post("/api/actions/prepare", status_code=202)
+    def prepare(
+        x_web3d_control_token: str | None = Header(default=None),
+    ) -> dict[str, str]:
+        authorize(x_web3d_control_token)
+        try:
+            supervisor.prepare()
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": "accepted"}
+
     @app.post("/api/actions/resume", status_code=202)
     def resume(x_web3d_control_token: str | None = Header(default=None)) -> dict[str, str]:
         authorize(x_web3d_control_token)
@@ -527,6 +605,18 @@ def create_control_app(root: Path, state_root: Path | None = None) -> FastAPI:
         except RuntimeError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {"status": "accepted"}
+
+    @app.post("/api/actions/invalidate", status_code=200)
+    def invalidate(
+        body: InvalidateRequest,
+        x_web3d_control_token: str | None = Header(default=None),
+    ) -> dict[str, str]:
+        authorize(x_web3d_control_token)
+        try:
+            marker = supervisor.invalidate(body.reason)
+        except (MatrixError, RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": "invalidated", "marker": str(marker)}
 
     app.mount("/assets", StaticFiles(directory=assets), name="control-assets")
     app.state.supervisor = supervisor

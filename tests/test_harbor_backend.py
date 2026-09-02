@@ -86,6 +86,9 @@ def test_harbor_task_materialization_is_profile_generic_and_preserves_boundaries
     assert compose.count("- --allow") == 2
     assert "internal: true" in compose
     dockerfile = (task / "environment/Dockerfile").read_text(encoding="utf-8")
+    assert "rm -rf /workspace" in dockerfile
+    assert "install -d -o candidate -g candidate /workspace" in dockerfile
+    assert "WORKDIR /workspace" in dockerfile
     dependency_copy = dockerfile.index(
         "COPY --chown=candidate:candidate starter/package*.json"
     )

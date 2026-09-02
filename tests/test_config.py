@@ -59,12 +59,15 @@ def test_candidate_commands_have_a_bounded_runtime() -> None:
     assert config.pids_limit == 1024
 
 
-def test_season_one_preflight_has_ten_tasks_and_eighty_cells() -> None:
+def test_season_one_preflight_has_ten_tasks_and_ninety_cells() -> None:
     season, profiles = validate_matrix(ROOT, "season-1")
     assert season.status == "ready"
-    assert season.publish_prompts_after_close is True
+    assert season.publish_prompts_after_close is False
     assert len(season.tasks) == 10
-    assert len(season.tasks) * len(season.profiles) * season.attempts == 80
+    assert len(season.profiles) == 9
+    assert "claude-fable-default" in season.profiles
+    assert profiles["claude-fable-default"].model == "claude-fable-5-1"
+    assert len(season.tasks) * len(season.profiles) * season.attempts == 90
     assert set(season.profiles).issubset(profiles)
 
 

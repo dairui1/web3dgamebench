@@ -12,9 +12,9 @@
   const CELL_STATUS = {
     pending: { label: '待执行', icon: 'i-circle', cls: 'cell-pending', kind: 'pending', chip: 'chip-neutral', tag: '·' },
     running: { label: '运行中', icon: 'i-loader', cls: 'cell-running', kind: 'running', chip: 'chip-cyan', spin: true, tag: '运行' },
-    completed: { label: '已完成（可信）', icon: 'i-check', cls: 'cell-completed', kind: 'completed', chip: 'chip-green', tag: '完成' },
-    'candidate-failure': { label: '候选失败', icon: 'i-x', cls: 'cell-candidate-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '候选' },
-    'evidence-failure': { label: '证据失败', icon: 'i-alert-triangle', cls: 'cell-evidence-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '证据' },
+    completed: { label: '可打开游玩', icon: 'i-check', cls: 'cell-completed', kind: 'completed', chip: 'chip-green', tag: '成功' },
+    'candidate-failure': { label: '无法构建或启动', icon: 'i-x', cls: 'cell-candidate-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '失败' },
+    'evidence-failure': { label: '无法打开游玩', icon: 'i-alert-triangle', cls: 'cell-evidence-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '失败' },
     'infrastructure-error': { label: '基础设施错误', icon: 'i-alert-octagon', cls: 'cell-infrastructure-error', kind: 'resumable', chip: 'chip-amber', resumable: true, tag: '设施' },
     interrupted: { label: '已中断', icon: 'i-pause-circle', cls: 'cell-interrupted', kind: 'resumable', chip: 'chip-amber', resumable: true, tag: '中断' },
   };
@@ -35,15 +35,18 @@
   };
 
   const OPERATION_LABEL = {
+    'matrix-prepare': '准备运行配置',
     'matrix-start': '启动 Matrix',
     'matrix-resume': '继续 Matrix',
   };
 
   const ACTION_LABEL = {
+    prepare: '准备配置',
     start: '启动',
     pause: '暂停',
     interrupt: '中断',
     resume: '继续',
+    invalidate: '作废',
   };
 
   const PHASE_LABEL = {
@@ -351,11 +354,23 @@
 
   function derive(state) {
     const receipt = state.receipt || null;
-    const cells = receipt && Array.isArray(receipt.cells) ? receipt.cells : [];
+    const planData = app.planCache.data;
+    const preview = !state.canonical
+      && state.controls && state.controls.can_start === true
+      && planData && Array.isArray(planData.cells);
+    const cells = preview
+      ? planData.cells.map((cell) => ({
+        ...cell,
+        status: 'pending',
+        run: null,
+        passed: false,
+        trusted: false,
+      }))
+      : (receipt && Array.isArray(receipt.cells) ? receipt.cells : []);
     const tasks = [];
     const profiles = [];
     const grid = new Map();
-    const counts = { total: cells.length, pending: 0, running: 0, completed: 0, candidate: 0, evidence: 0, infra: 0, interrupted: 0, trusted: 0, evaluating: 0 };
+    const counts = { total: cells.length, pending: 0, running: 0, completed: 0, candidate: 0, evidence: 0, infra: 0, interrupted: 0, trusted: 0, playable: 0, warning: 0, evaluating: 0 };
     const taskState = new Map();
 
     for (const cell of cells) {
@@ -375,6 +390,8 @@
         default: break;
       }
       if (cell.trusted === true) counts.trusted++;
+      if (cell.playable === true) counts.playable++;
+      if (Array.isArray(cell.admission_warnings) && cell.admission_warnings.length) counts.warning++;
       const ts = taskState.get(cell.task) || { total: 0, terminal: 0, running: 0 };
       ts.total++;
       if (cell.status === 'running') ts.running++;
@@ -401,6 +418,8 @@
       else if (counts.running > 0) phase = '候选执行中';
       else phase = '执行进程启动中 / 校验冻结输入';
       if (app.pauseRequestedAt) phase += ' · 已请求暂停，将在下一个任务边界停止';
+    } else if (preview) {
+      phase = '待启动（Plan 预览）';
     } else if (!receipt) {
       phase = canonical ? '正式回执不可读' : '未启动';
     } else {
@@ -415,7 +434,7 @@
     }
 
     return {
-      receipt, cells, tasks, profiles, grid, counts, runner, active, canonical, currentTask, phase, taskState, runningTasks,
+      receipt, cells, tasks, profiles, grid, counts, runner, active, canonical, currentTask, phase, taskState, runningTasks, preview,
     };
   }
 
@@ -472,16 +491,20 @@
   function renderControls(state, d) {
     const controls = state.controls || {};
     const buttons = {
+      prepare: $('btn-prepare'),
       start: $('btn-start'),
       pause: $('btn-pause'),
       interrupt: $('btn-interrupt'),
       resume: $('btn-resume'),
+      invalidate: $('btn-invalidate'),
     };
     const hasCombo = app.combos.length > 0;
+    buttons.prepare.disabled = app.busy || controls.can_prepare !== true;
     buttons.start.disabled = app.busy || controls.can_start !== true || !hasCombo;
     buttons.pause.disabled = app.busy || controls.can_pause !== true;
     buttons.interrupt.disabled = app.busy || controls.can_interrupt !== true;
     buttons.resume.disabled = app.busy || controls.can_resume !== true;
+    buttons.invalidate.disabled = app.busy || controls.can_invalidate !== true;
 
     const runnerMeta = RUNNER_STATUS[d.runner.status] || { label: d.runner.status || '--', chip: 'chip-neutral' };
     let runnerLabel = '执行进程' + runnerMeta.label;
@@ -493,7 +516,9 @@
     let hint;
     const receiptStatus = d.receipt ? d.receipt.status : null;
     if (d.active) {
-      hint = controls.can_pause
+      hint = d.runner.operation === 'matrix-prepare'
+        ? '正在生成冻结 Plan 并执行 Harbor Smoke；完成后会自动出现在启动前配置中，也可立即中断。'
+        : controls.can_pause
         ? 'Matrix 正在执行。「暂停」会在下一个任务边界优雅停止；「中断」会立即向执行进程组发送中断信号。'
         : '执行进程正在运行，当前回执状态不接受暂停，仅可立即中断。';
       if (app.pauseRequestedAt) hint = `已于 ${fmtTime(app.pauseRequestedAt)} 请求暂停，执行进程将在当前任务完成后停止。仍可立即中断。`;
@@ -503,7 +528,7 @@
       else if (app.combos.length === 1) hint = '运行配置已自动选定并就绪，点击「启动」创建本季的正式 Matrix。';
       else hint = '在「启动前配置」中选择一套运行配置，然后点击「启动」创建本季的正式 Matrix。';
     } else if (controls.can_resume) {
-      hint = `正式 Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」从回执恢复未完成的单元格。`;
+      hint = `正式 Matrix 处于「${(MATRIX_STATUS[receiptStatus] || { label: receiptStatus }).label}」，可通过「继续」恢复，或保留审计记录后「作废」。`;
     } else if (receiptStatus === 'complete') {
       hint = '正式 Matrix 已完成并封存，没有可执行的操作。';
     } else if (receiptStatus === 'invalidated') {
@@ -742,6 +767,9 @@
   function renderOverview(state, d) {
     const receipt = d.receipt;
     const canonical = d.canonical;
+    const previewPlan = d.preview ? app.planCache.data : null;
+    const previewOption = d.preview ? selectedPlan() : null;
+    const previewSmoke = d.preview ? selectedSmoke() : null;
     const receiptMatches = !!(receipt && canonical && receipt.matrix_id === canonical.matrix_id);
 
     let chipCls = 'chip-neutral';
@@ -751,6 +779,8 @@
       chipCls = meta.chip; chipText = '正式 · ' + meta.label;
     } else if (canonical) {
       chipCls = 'chip-red'; chipText = '正式回执不可读';
+    } else if (d.preview) {
+      chipCls = 'chip-neutral'; chipText = '待启动 · Plan 预览';
     } else if (receipt) {
       const meta = MATRIX_STATUS[receipt.status] || { label: receipt.status, chip: 'chip-neutral' };
       chipCls = receipt.status === 'invalidated' ? 'chip-red' : 'chip-amber';
@@ -760,7 +790,12 @@
 
     const banner = $('canonical-banner');
     let bannerCls = null; let bannerIcon = 'i-info'; let bannerText = '';
-    if (canonical && !receipt) {
+    if (d.preview) {
+      bannerCls = 'banner-cyan'; bannerIcon = 'i-info';
+      bannerText = receipt && receipt.status === 'invalidated'
+        ? '当前显示的是新运行配置的待启动预览，尚未创建正式 Matrix。上一份正式 Matrix 已作废，审计记录仍然保留。'
+        : '当前显示的是新运行配置的待启动预览，尚未创建正式 Matrix。';
+    } else if (canonical && !receipt) {
       bannerCls = 'banner-red'; bannerIcon = 'i-alert-octagon';
       bannerText = `正式记录指向 ${canonical.receipt || '（未知路径）'}，但该回执无法加载或摘要校验失败。请人工检查后再操作。`;
     } else if (canonical && !receiptMatches) {
@@ -770,8 +805,8 @@
       bannerCls = receipt.status === 'invalidated' ? 'banner-red' : 'banner-amber';
       bannerIcon = 'i-alert-triangle';
       bannerText = receipt.status === 'invalidated'
-        ? `下方显示的历史回执（${receipt.matrix_id || ''}）已被作废，不是正式 Matrix；本季尚无正式声明。`
-        : `下方显示的是历史回执（${receipt.matrix_id || ''}），不是正式 Matrix；本季尚无正式声明。`;
+          ? `下方显示的历史回执（${receipt.matrix_id || ''}）已被作废，不是正式 Matrix；本季尚无正式声明。`
+          : `下方显示的是历史回执（${receipt.matrix_id || ''}），不是正式 Matrix；本季尚无正式声明。`;
     } else if (receiptMatches && receipt.status === 'invalidated') {
       bannerCls = 'banner-red'; bannerIcon = 'i-alert-octagon';
       bannerText = '正式回执已被作废。';
@@ -791,7 +826,7 @@
     const c = d.counts;
     const has = c.total > 0;
     setText('st-total', has ? c.total : '--');
-    setText('st-trusted', has ? c.trusted : '--');
+    setText('st-trusted', has ? c.playable : '--');
     setText('st-running', has ? c.running : '--');
     setText('st-pending', has ? c.pending : '--');
     setText('st-cand', has ? c.candidate : '--');
@@ -806,9 +841,15 @@
     $('pg-cyan').style.width = pct(c.running);
 
     setText('kv-phase', d.phase);
-    setText('kv-task', d.currentTask || (receipt && receipt.execution_window && receipt.execution_window.stopped_at_task_barrier ? `停在任务边界：${receipt.execution_window.stopped_at_task_barrier}` : '--'));
+    setText('kv-task', d.preview ? '--' : (d.currentTask || (receipt && receipt.execution_window && receipt.execution_window.stopped_at_task_barrier ? `停在任务边界：${receipt.execution_window.stopped_at_task_barrier}` : '--')));
     const statusNode = $('kv-status');
-    if (receipt) {
+    if (d.preview) {
+      const wanted = 'chip-neutral|待启动';
+      if (statusNode.dataset.rendered !== wanted) {
+        replaceChildren(statusNode, el('span', { class: 'chip chip-neutral', text: '待启动' }));
+        statusNode.dataset.rendered = wanted;
+      }
+    } else if (receipt) {
       const meta = MATRIX_STATUS[receipt.status] || { label: receipt.status || '--', chip: 'chip-neutral' };
       const wanted = `${meta.chip}|${meta.label}`;
       if (statusNode.dataset.rendered !== wanted) {
@@ -819,12 +860,17 @@
       replaceChildren(statusNode, '--');
       statusNode.dataset.rendered = '--';
     }
-    setText('kv-matrix-id', receipt ? receipt.matrix_id : (canonical ? canonical.matrix_id : '--'));
-    setText('kv-season', receipt ? receipt.season : (canonical ? canonical.season : '--'));
-    setText('kv-times', receipt ? `${fmtTime(receipt.created_at)} / ${fmtTime(receipt.updated_at)}` : '--');
+    const previewSeason = previewPlan && previewPlan.season ? previewPlan.season.id : (previewOption ? previewOption.season : null);
+    setText('kv-matrix-id', d.preview ? '启动时创建' : (receipt ? receipt.matrix_id : (canonical ? canonical.matrix_id : '--')));
+    setText('kv-season', d.preview ? (previewSeason || '--') : (receipt ? receipt.season : (canonical ? canonical.season : '--')));
+    setText('kv-times-label', d.preview ? '配置时间' : '创建 / 更新');
+    setText('kv-times', d.preview
+      ? `Plan ${fmtTime((previewPlan && previewPlan.created_at) || (previewOption && previewOption.modified_at))} · Smoke ${fmtTime(previewSmoke && previewSmoke.completed_at)}`
+      : (receipt ? `${fmtTime(receipt.created_at)} / ${fmtTime(receipt.updated_at)}` : '--'));
+    setText('kv-window-label', '执行窗口');
 
-    let windowText = '--';
-    if (receipt && receipt.execution_window && typeof receipt.execution_window === 'object') {
+    let windowText = d.preview ? '尚未开始' : '--';
+    if (!d.preview && receipt && receipt.execution_window && typeof receipt.execution_window === 'object') {
       const w = receipt.execution_window;
       const parts = [];
       if (w.stop_after_task) parts.push(`在任务 ${w.stop_after_task} 之后停止`);
@@ -832,7 +878,7 @@
       if (w.stopped_at_task_barrier) parts.push(`已停在任务边界 ${w.stopped_at_task_barrier}`);
       if (w.stopped_at) parts.push(`停止于 ${fmtTime(w.stopped_at)}`);
       windowText = parts.length ? parts.join(' · ') : '（无约束）';
-    } else if (receipt) {
+    } else if (!d.preview && receipt) {
       windowText = '（无约束，完整执行）';
     }
     setText('kv-window', windowText);
@@ -976,15 +1022,20 @@
     const receipt = d.receipt;
     const plan = receipt && receipt.plan && typeof receipt.plan === 'object' ? receipt.plan : null;
     const smoke = receipt && receipt.harness_smoke && typeof receipt.harness_smoke === 'object' ? receipt.harness_smoke : null;
+    const combo = !d.canonical ? selectedCombo() : null;
 
-    const planPath = plan ? plan.path : null;
-    const smokePath = smoke ? smoke.receipt : null;
+    const planPath = combo ? combo.plan.path : (plan ? plan.path : null);
+    const smokePath = combo ? combo.smoke.path : (smoke ? smoke.receipt : null);
 
     updatePathCell('pv-plan', planPath, planPath ? baseName(planPath) : null);
-    setText('pv-plan-digest', receipt ? shortDigest(receipt.plan_digest) : '--');
+    setText('pv-plan-digest', combo ? shortDigest(combo.plan.digest) : (receipt ? shortDigest(receipt.plan_digest) : '--'));
     updatePathCell('pv-smoke', smokePath, smokePath ? `${parentName(smokePath)}/${baseName(smokePath)}` : null);
-    setText('pv-smoke-id', smoke ? smoke.smoke_id : '--');
-    setText('pv-backend', receipt ? (receipt.backend === 'harbor' ? 'Harbor' : receipt.backend) : '--');
+    setText('pv-smoke-id', combo ? combo.smoke.smoke_id : (smoke ? smoke.smoke_id : '--'));
+    const backend = combo ? combo.smoke.backend : (receipt ? receipt.backend : null);
+    setText('pv-backend', backend ? (backend === 'harbor' ? 'Harbor' : backend) : '--');
+    const historicalReceipt = d.preview && receipt;
+    setText('pv-receipt-label', historicalReceipt ? '历史 Matrix 回执' : 'Matrix 回执');
+    setText('btn-view-receipt-label', historicalReceipt ? '查看历史回执' : '查看回执');
     updatePathCell('pv-receipt', receipt ? receipt.path : null, receipt ? baseName(receipt.path) : null);
 
     $('btn-view-plan').disabled = !planPath;
@@ -1138,7 +1189,9 @@
         : cell.status === 'running'
           ? (cell.phase === 'evaluating' ? '正在评估候选产物。' : '候选正在 Harbor 中执行。')
           : cell.status === 'completed'
-            ? '可信结果已记录。'
+            ? (Array.isArray(cell.admission_warnings) && cell.admission_warnings.length
+              ? '游戏可以打开游玩；其余问题按提醒记录。'
+              : '游戏可以打开游玩。')
             : '尚未执行。';
     const key = `${meta.chip}|${meta.label}|${noteText}`;
     if (statusLine.dataset.rendered !== key) {
@@ -1152,7 +1205,7 @@
     const yesNo = (v) => (v === true ? '是' : v === false ? '否' : '--');
     const kv = [
       ['状态', `${meta.label}${cell.phase ? ' · 阶段：' + phaseLabel(cell.phase) : ''}`, false],
-      ['通过 / 可信', `${yesNo(cell.passed)} / ${yesNo(cell.trusted)}`, true],
+      ['成功 / 证据完整', `${yesNo(cell.passed)} / ${yesNo(cell.trusted)}`, true],
       ['可游玩', yesNo(cell.playable), true],
       ['开始', fmtTime(cell.started_at), true],
       ['完成', cell.completed_at ? fmtTime(cell.completed_at) : (cell.status === 'running' ? '运行中' : '--'), true],
@@ -1180,6 +1233,20 @@
       replaceChildren($('drawer-failure-list'), failures.map((f) => el('li', { class: f.infra ? 'is-infra' : null, text: f.text })));
       failBox.hidden = failures.length === 0;
       failBox.dataset.rendered = failKey;
+    }
+
+    const warnings = Array.isArray(cell.admission_warnings)
+      ? cell.admission_warnings.map(String)
+      : [];
+    const warningBox = $('drawer-warnings');
+    const warningKey = JSON.stringify(warnings);
+    if (warningBox.dataset.rendered !== warningKey) {
+      replaceChildren(
+        $('drawer-warning-list'),
+        warnings.map((warning) => el('li', { text: warning })),
+      );
+      warningBox.hidden = warnings.length === 0;
+      warningBox.dataset.rendered = warningKey;
     }
 
     const files = $('drawer-files');
@@ -1314,6 +1381,25 @@
     ack.focus();
   }
 
+  function updateInvalidateConfirm() {
+    const reason = $('dlg-invalidate-reason').value.trim();
+    $('dlg-invalidate-confirm').disabled = !reason || !$('dlg-invalidate-ack').checked;
+  }
+
+  function openInvalidateDialog() {
+    if (!app.state || !app.state.receipt) return;
+    const receipt = app.state.receipt;
+    setText('dlg-invalidate-id', receipt.matrix_id || '--');
+    const status = MATRIX_STATUS[receipt.status];
+    setText('dlg-invalidate-status', status ? status.label : (receipt.status || '--'));
+    $('dlg-invalidate-reason').value = '';
+    $('dlg-invalidate-ack').checked = false;
+    updateInvalidateConfirm();
+    app.lastFocus = document.activeElement;
+    $('dlg-invalidate').showModal();
+    $('dlg-invalidate-reason').focus();
+  }
+
   function restoreFocus() {
     const target = app.lastFocus;
     if (target && typeof target.focus === 'function' && document.contains(target)) target.focus();
@@ -1324,10 +1410,16 @@
   // ------------------------------------------------------------------
 
   function wire() {
+    $('btn-prepare').addEventListener('click', () => {
+      app.lastFocus = document.activeElement;
+      $('dlg-prepare').showModal();
+      $('dlg-prepare-confirm').focus();
+    });
     $('btn-start').addEventListener('click', openStartDialog);
     $('btn-pause').addEventListener('click', () => runAction('pause', null, '已请求暂停：执行进程将在下一个任务边界停止。'));
     $('btn-interrupt').addEventListener('click', openInterruptDialog);
     $('btn-resume').addEventListener('click', () => runAction('resume', null, '已请求继续：执行进程正在从正式回执恢复。'));
+    $('btn-invalidate').addEventListener('click', openInvalidateDialog);
     $('btn-refresh').addEventListener('click', () => {
       const btn = $('btn-refresh');
       btn.classList.add('is-busy');
@@ -1338,7 +1430,7 @@
     $('sel-config').addEventListener('change', (event) => {
       app.selectedComboId = event.target.value || null;
       renderStartReadiness();
-      if (app.state) renderControls(app.state, derive(app.state));
+      if (app.state) applyState(app.state);
     });
     $('start-form').addEventListener('submit', (event) => { event.preventDefault(); openStartDialog(); });
     $('dlg-start-confirm').addEventListener('click', () => {
@@ -1348,10 +1440,22 @@
       if (!plan || !smoke) return;
       runAction('start', { plan: plan.path, smoke_receipt: smoke.path, backend: 'harbor' }, `已提交启动请求：${plan.season || '未知赛季'} 的运行配置（Plan 生成于 ${fmtTime(plan.modified_at)}，Harbor Smoke 通过于 ${fmtTime(smoke.completed_at)}）。`);
     });
+    $('dlg-prepare-confirm').addEventListener('click', () => {
+      $('dlg-prepare').close();
+      runAction('prepare', null, '已开始准备运行配置；完成后不会自动启动 Matrix。');
+    });
     $('dlg-int-ack').addEventListener('change', (event) => { $('dlg-interrupt-confirm').disabled = !event.target.checked; });
     $('dlg-interrupt-confirm').addEventListener('click', () => {
       $('dlg-interrupt').close();
       runAction('interrupt', null, '已向执行进程组发送中断信号。');
+    });
+    $('dlg-invalidate-reason').addEventListener('input', updateInvalidateConfirm);
+    $('dlg-invalidate-ack').addEventListener('change', updateInvalidateConfirm);
+    $('dlg-invalidate-confirm').addEventListener('click', () => {
+      const reason = $('dlg-invalidate-reason').value.trim();
+      if (!reason || !$('dlg-invalidate-ack').checked) return;
+      $('dlg-invalidate').close();
+      runAction('invalidate', { reason }, '正式 Matrix 已作废；旧记录已保留，现在可以创建新的 Matrix。');
     });
 
     for (const dialog of document.querySelectorAll('dialog')) {

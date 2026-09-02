@@ -20,6 +20,7 @@ from .config import Profile, Season, Task, load_task, validate_matrix
 from .container import load_container_config
 from .evaluator import evaluate_run, render_dist_sha256, render_source_sha256
 from .harbor_backend import HARBOR_COMMIT, harbor_version
+from .playability import assess_playability
 from .runner import RunInterrupted, run_once, runs_dir
 
 
@@ -432,7 +433,6 @@ def _global_inputs(root: Path) -> list[tuple[Path, str]]:
         (root / "src/web3dgamebench/config.py", "matrix-runtime"),
         (root / "src/web3dgamebench/container.py", "matrix-runtime"),
         (root / "src/web3dgamebench/evaluator.py", "evaluator-host"),
-        (root / "src/web3dgamebench/fable_backfill.py", "optional-backfill-runtime"),
         (root / "src/web3dgamebench/harbor_agents.py", "harbor-agent-runtime"),
         (root / "src/web3dgamebench/harbor_backend.py", "harbor-execution-runtime"),
         (root / "src/web3dgamebench/judge.py", "judge-host"),
@@ -599,6 +599,7 @@ def create_preflight_plan(root: Path, season_id: str) -> dict[str, Any]:
         "runtime_control": {
             "candidate_total_timeout_seconds": container_config.candidate_total_timeout_seconds,
             "candidate_pids_limit": container_config.pids_limit,
+            "candidate_workdir": "/workspace",
             "task_order": "serial",
             "harness_order": "parallel",
             "models_within_harness": "serial",
@@ -1117,6 +1118,95 @@ def load_matrix_receipt(path: Path) -> dict[str, Any]:
     return _load_receipt(path)
 
 
+def reclassify_matrix_by_playability(root: Path, receipt_path: Path) -> dict[str, Any]:
+    """Apply the lenient playable-first policy while preserving the prior receipt."""
+
+    receipt_path = receipt_path.expanduser().resolve()
+    receipt = _load_receipt(receipt_path)
+    if receipt.get("status") == "running":
+        raise MatrixError("cannot reclassify a running matrix")
+    plan_reference = receipt.get("plan")
+    if not isinstance(plan_reference, dict) or not isinstance(
+        plan_reference.get("path"), str
+    ):
+        raise MatrixError("matrix receipt has no plan path")
+    plan = load_preflight_plan(Path(plan_reference["path"]))
+    archived_at = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    archive = (
+        receipt_path.parent
+        / "reclassifications"
+        / (f"{receipt_path.stem}-before-playability-v1-{archived_at}.json")
+    )
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    archive.write_bytes(receipt_path.read_bytes())
+
+    changed = 0
+    for cell in receipt["cells"]:
+        run_value = cell.get("run")
+        if not isinstance(run_value, str):
+            continue
+        run_root = Path(run_value).expanduser().resolve()
+        report_path = run_root / "evaluation/report.json"
+        manifest_path = run_root / "manifest.json"
+        if not report_path.is_file() or not manifest_path.is_file():
+            continue
+        manifest = _candidate_manifest(run_root)
+        report = _evaluation_report(report_path)
+        playable, errors, warnings = assess_playability(report)
+        trusted, trust_warnings = trusted_cell_gate(plan, cell, manifest, report, run_root)
+        if manifest.get("status") == "candidate-failure":
+            warnings.append("candidate lifecycle did not complete")
+        warnings.extend(trust_warnings)
+        next_status = (
+            "completed"
+            if playable
+            else "candidate-failure"
+            if manifest.get("status") == "candidate-failure"
+            else "evidence-failure"
+        )
+        before = {
+            "status": cell.get("status"),
+            "playable": cell.get("playable"),
+            "passed": cell.get("passed"),
+            "trusted": cell.get("trusted"),
+            "evidence_failures": cell.get("evidence_failures"),
+        }
+        after = {
+            "status": next_status,
+            "playable": playable,
+            "passed": playable,
+            "trusted": trusted,
+            "evidence_failures": errors,
+        }
+        if before != after:
+            changed += 1
+        cell.update(after)
+        cell["evaluation"] = str(report_path)
+        cell["admission_warnings"] = list(dict.fromkeys(warnings))
+        cell["artifacts"] = close_run_artifacts(run_root)
+        cell.setdefault("reclassifications", []).append(
+            {
+                "policy": "playability-v1",
+                "at": _now(),
+                "before": before,
+            }
+        )
+
+    receipt["admission_policy"] = {
+        "id": "playability-v1",
+        "success_rule": "build and desktop game launch checks pass",
+        "warning_rule": "all other evaluator and provenance findings are non-blocking",
+        "reclassified_at": _now(),
+        "previous_receipt": str(archive),
+    }
+    _write_receipt(receipt_path, receipt)
+    return {
+        "receipt": str(receipt_path),
+        "previous_receipt": str(archive),
+        "changed_cells": changed,
+    }
+
+
 def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
     """Validate the stable publication-facing shape of a closed receipt."""
 
@@ -1140,8 +1230,8 @@ def validate_closed_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
     cells = receipt.get("cells")
     if not isinstance(cells, list) or not cells:
         raise MatrixError("matrix receipt has no cells")
-    if receipt["season"] == "season-1" and len(cells) != 80:
-        raise MatrixError("season-1 matrix receipt must contain exactly 80 cells")
+    if receipt["season"] == "season-1" and len(cells) != 90:
+        raise MatrixError("season-1 matrix receipt must contain exactly 90 cells")
     seen: set[str] = set()
     for cell in cells:
         if not isinstance(cell, dict):
@@ -1320,8 +1410,6 @@ def trusted_cell_gate(
 
     if manifest.get("status") != "candidate-complete":
         failures.append("candidate did not complete")
-    if report.get("passed") is not True:
-        failures.append("evaluator did not pass")
     if report.get("trusted") is not True:
         failures.append("evaluator report is not trusted")
     manifest_task = manifest.get("task")
@@ -1343,12 +1431,17 @@ def trusted_cell_gate(
         backend = manifest.get("backend")
         if backend not in {"container", "harbor"}:
             failures.append("season-1 candidate did not run in a trusted isolated backend")
+        expected_workdir = plan["runtime_control"].get("candidate_workdir")
+        if expected_workdir and manifest.get("candidate_workdir") != expected_workdir:
+            failures.append("candidate working directory mismatch")
         plane = manifest.get("container_plane")
         candidate_image_id = plan["runtime_environment"]["container_images"]["candidate"][
             "id"
         ]
         if not isinstance(plane, dict) or plane.get("image_digest") != candidate_image_id:
             failures.append("candidate container image digest mismatch")
+        elif expected_workdir and plane.get("candidate_workdir") != expected_workdir:
+            failures.append("candidate container working directory mismatch")
         if backend == "harbor":
             harbor_path = run_root / "harbor.json"
             adapter_lock_path = run_root / "harbor-task-lock.json"
@@ -1360,12 +1453,7 @@ def trusted_cell_gate(
                 adapter_lock = None
             planned_harbor = plan["runtime_environment"].get("harbor")
             expected_pi_adapter = (
-                {
-                    "version": plan["runtime_control"]["pi_adapter"]["version"],
-                    "upstream_pi_goal_version": plan["runtime_control"]["pi_adapter"][
-                        "upstream_pi_goal_version"
-                    ],
-                }
+                plan["runtime_control"]["pi_adapter"]
                 if profile.get("harness") == "pi"
                 else None
             )
@@ -1566,19 +1654,7 @@ def _execute_cell(
                 "candidate runtime exited without benchmark evidence: "
                 f"{run_root} (exit {manifest.get('exit_code')})"
             )
-        if manifest.get("status") == "candidate-failure":
-            cell.update(
-                {
-                    "status": "candidate-failure",
-                    "passed": False,
-                    "trusted": False,
-                    "artifacts": close_run_artifacts(run_root),
-                    "evidence_failures": ["candidate did not complete"],
-                    "completed_at": _now(),
-                }
-            )
-            return
-        if manifest.get("status") != "candidate-complete":
+        if manifest.get("status") not in {"candidate-complete", "candidate-failure"}:
             raise MatrixError(
                 f"candidate runtime returned an unknown status for {run_root}: "
                 f"{manifest.get('status')}"
@@ -1603,24 +1679,28 @@ def _execute_cell(
 
     manifest = _candidate_manifest(run_root)
     report = _evaluation_report(report_path)
-    if report.get("trusted") is not True:
-        errors = report.get("infrastructure_errors")
-        detail = (
-            "; ".join(str(item) for item in errors)
-            if isinstance(errors, list)
-            else "untrusted evaluator report"
-        )
-        raise MatrixError(f"evaluator infrastructure failure for {run_root}: {detail}")
-    trusted, failures = trusted_cell_gate(plan, cell, manifest, report, run_root)
+    trusted, trust_warnings = trusted_cell_gate(plan, cell, manifest, report, run_root)
+    playable, playability_failures, admission_warnings = assess_playability(report)
+    if manifest.get("status") == "candidate-failure":
+        admission_warnings.append("candidate lifecycle did not complete")
+    admission_warnings.extend(trust_warnings)
+    terminal_status = (
+        "completed"
+        if playable
+        else "candidate-failure"
+        if manifest.get("status") == "candidate-failure"
+        else "evidence-failure"
+    )
     cell.update(
         {
             "evaluation": str(report_path),
-            "playable": report.get("passed") is True,
-            "passed": trusted,
+            "playable": playable,
+            "passed": playable,
             "trusted": trusted,
-            "status": "completed" if trusted else "evidence-failure",
+            "status": terminal_status,
             "artifacts": close_run_artifacts(run_root),
-            "evidence_failures": failures,
+            "evidence_failures": playability_failures,
+            "admission_warnings": list(dict.fromkeys(admission_warnings)),
             "completed_at": _now(),
         }
     )

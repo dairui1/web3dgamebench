@@ -34,9 +34,10 @@ profiles = [
   "codex-luna-max",
   "claude-sonnet-default",
   "claude-opus-default",
+  "claude-fable-default",
   "pi-deepseek-v4-flash",
   "pi-qwen3-8-flash",
   "pi-glm-5-3-flash",
 ]
 attempts = 1
-publish_prompts_after_close = true
+publish_prompts_after_close = false

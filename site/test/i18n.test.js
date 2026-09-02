@@ -29,6 +29,10 @@ test('published submissions include official API cost estimates', async () => {
   assert.ok(submissions.length > 0);
   for (const submission of submissions) {
     const cost = submission.officialApiCost;
+    if (!cost) {
+      assert.ok(submission.notices?.includes('api-cost-unavailable'));
+      continue;
+    }
     assert.equal(cost.currency, 'USD');
     assert.equal(cost.estimated, true);
     assert.ok(cost.total > 0);

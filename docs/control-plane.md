@@ -29,6 +29,9 @@ Restarting the WebUI does not automatically resume an interrupted or incomplete 
 
 ## Actions
 
+- **Prepare configuration** creates a new immutable Season 1 plan from the current repository and
+  runs the matching Harbor smoke checks for Codex, Claude Code, and Pi. It never starts a Matrix;
+  the resulting pair appears in the launch selector when the smoke receipt passes.
 - **Start** accepts only plan and smoke receipt paths below the managed run directory and always
   uses the Harbor backend. Season 1 rejects a stale plan, mismatched smoke receipt, an existing
   canonical claim, or a smoke receipt that does not pass for the exact selected plan digest.
@@ -39,6 +42,10 @@ Restarting the WebUI does not automatically resume an interrupted or incomplete 
   trace-preservation behavior marks active work interrupted before the process exits.
 - **Resume** accepts only the receipt named by the canonical claim. It cannot switch the plan or
   backend and cannot resume an invalidated Matrix.
+- **Invalidate** is available only after the managed runner has stopped and before the Matrix is
+  closed. It requires an operator reason and explicit confirmation, preserves the old claim and
+  receipt as audit records, writes the immutable invalidation marker, and releases the season for
+  a new canonical Matrix.
 
 Candidate and evidence failures remain terminal evidence. They do not gain a retry action in the
 WebUI. Infrastructure errors and interrupted cells remain resumable through the canonical receipt.

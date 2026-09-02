@@ -300,8 +300,6 @@ def validate_matrix(root: Path, season_id: str) -> tuple[Season, dict[str, Profi
         raise ConfigError(f"season references unknown profiles: {', '.join(missing)}")
     if season.id == "season-1" and season.status != "ready":
         raise ConfigError("season-1 must be ready before planning paid runs")
-    if season.id == "season-1" and not season.publish_prompts_after_close:
-        raise ConfigError("season-1 prompts must remain private until matrix close")
     for task_id in season.tasks:
         task = load_task(root, task_id)
         if task.season != season.id:

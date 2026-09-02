@@ -108,8 +108,8 @@ COPY pi_command_timeout.js /usr/lib/node_modules/@earendil-works/pi-coding-agent
 COPY pi_goal_runner.ts /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-runner.ts
 COPY pi_goal_bridge.json /usr/lib/node_modules/@earendil-works/pi-coding-agent/web3dgamebench-goal-bridge.json
 RUN chmod 0555 /usr/local/bin/web3dgamebench-codex-goal /usr/local/bin/chromium \\
-    && mkdir -p /workspace \\
-    && chown candidate:candidate /workspace
+    && rm -rf /workspace \\
+    && install -d -o candidate -g candidate /workspace
 
 USER candidate
 WORKDIR /workspace
@@ -405,6 +405,7 @@ def execute_harbor(
             check=True,
         ).stdout.strip(),
         "execution_backend": "harbor-docker",
+        "candidate_workdir": "/workspace",
         "harbor_version": version,
         "harbor_commit": HARBOR_COMMIT,
     }

@@ -15,6 +15,8 @@
     <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
     <symbol id="i-octagon-x" viewBox="0 0 24 24"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
     <symbol id="i-rotate-cw" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 15H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.94 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.57 15 1.7 1.7 0 0 0 3 14H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.57 1.7 1.7 0 0 0 10 3V3h4v.08A1.7 1.7 0 0 0 15.06 4.6a1.7 1.7 0 0 0 1.88-.34L17 4.2 19.83 7l-.06.06A1.7 1.7 0 0 0 19.43 9 1.7 1.7 0 0 0 21 10h.08v4H21a1.7 1.7 0 0 0-1.6 1z"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
@@ -63,6 +65,10 @@
         <span id="runner-chip" class="chip chip-neutral" aria-live="polite">执行进程空闲</span>
       </div>
       <div class="toolbar" role="group" aria-label="Matrix 控制">
+        <button type="button" class="btn" id="btn-prepare" data-action="prepare" disabled
+                title="准备运行配置：生成冻结 Plan 并执行 Harbor Smoke，不启动 Matrix" aria-label="准备运行配置">
+          <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span>准备配置</span>
+        </button>
         <button type="button" class="btn btn-primary" id="btn-start" data-action="start" disabled
                 title="启动 Matrix：创建本季的正式 Matrix 并开始执行" aria-label="启动 Matrix">
           <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>启动</span>
@@ -78,6 +84,10 @@
         <button type="button" class="btn" id="btn-resume" data-action="resume" disabled
                 title="继续：从正式回执恢复未完成的单元格" aria-label="继续 Matrix">
           <svg class="icon" aria-hidden="true"><use href="#i-rotate-cw"/></svg><span>继续</span>
+        </button>
+        <button type="button" class="btn btn-danger" id="btn-invalidate" data-action="invalidate" disabled
+                title="作废：保留审计记录并释放本季正式 Matrix，需要填写原因并确认" aria-label="作废正式 Matrix">
+          <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span>作废</span>
         </button>
         <span class="toolbar-spacer"></span>
         <button type="button" class="btn btn-icon" id="btn-refresh" title="手动刷新状态" aria-label="手动刷新状态">
@@ -135,11 +145,11 @@
       </div>
       <dl class="stats" aria-label="Matrix 总计">
         <div class="stat"><dt>单元格总数</dt><dd id="st-total" class="mono">--</dd></div>
-        <div class="stat stat-green"><dt>已完成（可信）</dt><dd id="st-trusted" class="mono">--</dd></div>
+        <div class="stat stat-green"><dt>可打开游玩</dt><dd id="st-trusted" class="mono">--</dd></div>
         <div class="stat stat-cyan"><dt>运行中</dt><dd id="st-running" class="mono">--</dd></div>
         <div class="stat"><dt>待执行</dt><dd id="st-pending" class="mono">--</dd></div>
-        <div class="stat stat-red"><dt>候选失败</dt><dd id="st-cand" class="mono">--</dd></div>
-        <div class="stat stat-red"><dt>证据失败</dt><dd id="st-evid" class="mono">--</dd></div>
+        <div class="stat stat-red"><dt>无法构建或启动</dt><dd id="st-cand" class="mono">--</dd></div>
+        <div class="stat stat-red"><dt>无法打开游玩</dt><dd id="st-evid" class="mono">--</dd></div>
         <div class="stat stat-amber"><dt>基础设施错误</dt><dd id="st-infra" class="mono">--</dd></div>
         <div class="stat stat-amber"><dt>已中断</dt><dd id="st-int" class="mono">--</dd></div>
       </dl>
@@ -155,8 +165,8 @@
         <dt>Matrix 状态</dt><dd id="kv-status">--</dd>
         <dt>Matrix 编号</dt><dd id="kv-matrix-id" class="mono">--</dd>
         <dt>赛季</dt><dd id="kv-season" class="mono">--</dd>
-        <dt>创建 / 更新</dt><dd id="kv-times" class="mono">--</dd>
-        <dt>执行窗口</dt><dd id="kv-window">--</dd>
+        <dt id="kv-times-label">创建 / 更新</dt><dd id="kv-times" class="mono">--</dd>
+        <dt id="kv-window-label">执行窗口</dt><dd id="kv-window">--</dd>
       </dl>
     </section>
 
@@ -185,7 +195,7 @@
       <ul class="legend" id="matrix-legend" aria-label="图例">
         <li><span class="lg lg-pending"></span>待执行</li>
         <li><span class="lg lg-running"></span>运行中 / 评估中</li>
-        <li><span class="lg lg-completed"></span>已完成（可信）</li>
+        <li><span class="lg lg-completed"></span>可打开游玩</li>
         <li><span class="lg lg-terminal"></span>终态失败（候选 / 证据，不会重试）</li>
         <li><span class="lg lg-resumable"></span>可恢复（基础设施错误 / 已中断）</li>
       </ul>
@@ -202,7 +212,7 @@
         <dt>Smoke 回执</dt><dd id="pv-smoke" class="mono">--</dd>
         <dt>Smoke 编号</dt><dd id="pv-smoke-id" class="mono">--</dd>
         <dt>执行环境</dt><dd id="pv-backend">--</dd>
-        <dt>Matrix 回执</dt><dd id="pv-receipt" class="mono">--</dd>
+        <dt id="pv-receipt-label">Matrix 回执</dt><dd id="pv-receipt" class="mono">--</dd>
       </dl>
       <div class="row-actions">
         <button type="button" class="btn btn-sm" id="btn-view-plan" disabled title="查看 Plan 文件内容">
@@ -212,7 +222,7 @@
           <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>查看 Smoke</span>
         </button>
         <button type="button" class="btn btn-sm" id="btn-view-receipt" disabled title="查看 Matrix 回执内容">
-          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>查看回执</span>
+          <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span id="btn-view-receipt-label">查看回执</span>
         </button>
       </div>
     </section>
@@ -254,6 +264,10 @@
         <h3 class="subhead">失败原因</h3>
         <ul id="drawer-failure-list"></ul>
       </div>
+      <div id="drawer-warnings" class="warnings" hidden>
+        <h3 class="subhead">提醒</h3>
+        <ul id="drawer-warning-list"></ul>
+      </div>
       <h3 class="subhead">产物</h3>
       <div class="file-list" id="drawer-files"></div>
     </div>
@@ -284,6 +298,20 @@
     </form>
   </dialog>
 
+  <dialog id="dlg-prepare" class="dialog" aria-labelledby="dlg-prepare-title">
+    <form method="dialog">
+      <h2 id="dlg-prepare-title">准备新的运行配置？</h2>
+      <p class="dialog-warn">
+        <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>
+        <span>控制台将基于当前 Season 1 配置生成不可变 Plan，并通过 Harbor 对 Codex、Claude Code、Pi 执行连通性 Smoke。此操作<strong>不会启动 Matrix</strong>。</span>
+      </p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" value="cancel" data-close>取消</button>
+        <button type="button" class="btn btn-primary" id="dlg-prepare-confirm">确认准备</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlg-interrupt" class="dialog dialog-danger" aria-labelledby="dlg-interrupt-title">
     <form method="dialog">
       <h2 id="dlg-interrupt-title">立即中断执行进程？</h2>
@@ -303,6 +331,32 @@
       <div class="dialog-actions">
         <button type="button" class="btn" value="cancel" data-close>取消</button>
         <button type="button" class="btn btn-danger" id="dlg-interrupt-confirm" disabled>确认中断</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-invalidate" class="dialog dialog-danger" aria-labelledby="dlg-invalidate-title">
+    <form method="dialog">
+      <h2 id="dlg-invalidate-title">作废正式 Matrix？</h2>
+      <p class="dialog-warn dialog-warn-red">
+        <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg>
+        <span>当前 canonical claim 会转为只读审计记录，回执会标记为<strong>已作废</strong>。此操作不能撤销，之后可以创建一份新的正式 Matrix。</span>
+      </p>
+      <dl class="kv kv-dialog">
+        <dt>Matrix 编号</dt><dd id="dlg-invalidate-id" class="mono">--</dd>
+        <dt>当前状态</dt><dd id="dlg-invalidate-status">--</dd>
+      </dl>
+      <label class="field dialog-field">
+        <span class="field-label">作废原因</span>
+        <textarea id="dlg-invalidate-reason" rows="3" maxlength="500" required placeholder="说明为什么不再继续这份 Matrix"></textarea>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="dlg-invalidate-ack">
+        <span>我确认保留旧记录并释放 canonical Matrix</span>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn" value="cancel" data-close>取消</button>
+        <button type="button" class="btn btn-danger" id="dlg-invalidate-confirm" disabled>确认作废</button>
       </div>
     </form>
   </dialog>

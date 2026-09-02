@@ -100,7 +100,9 @@ def prepare(root: Path, task: Task, profile: Profile, attempt: int = 1) -> tuple
     shutil.copy2(task.brief, workspace / "TASK.md")
     (workspace / "AGENTS.md").write_text(
         "# Candidate rules\n\nImplement TASK.md in this directory. Do not access the network, parent "
-        "directories, credentials, other submissions, or production services. Build and test the game.\n",
+        "directories, credentials, other submissions, or production services. The built game must be "
+        "fully self-contained: bundle every asset locally and make no runtime network requests. Build "
+        "and test the game.\n",
         encoding="utf-8",
     )
     manifest = {
@@ -162,6 +164,7 @@ def run_once(
     container_config = load_container_config(root)
     effective_timeout_seconds = container_config.candidate_total_timeout_seconds
     manifest["execution_mode"] = "benchmark"
+    manifest["candidate_workdir"] = str(invocation_workspace)
     manifest["candidate_timeout_seconds"] = effective_timeout_seconds
     manifest["prompt"] = {
         "candidate_sha256": invocation.candidate_prompt_sha256,
@@ -192,6 +195,7 @@ def run_once(
     failure_scope = None
     if backend == "container":
         plane = ensure_plane(root, container_config)
+        plane["candidate_workdir"] = str(invocation_workspace)
         prepare_dependencies(root, container_config, workspace)
         container_name = f"web3dgamebench-run-{run_root.name[-28:]}".lower()
         argv, passed_environment = wrap_command(
