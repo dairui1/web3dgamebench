@@ -2,8 +2,9 @@ export const messages = {
   en: {
     navGames: 'Games', navTraces: 'Traces', navArena: 'Arena', navLeaderboard: 'Leaderboard', navAbout: 'About',
     homeLabel: 'Web3DGameBench home', publicVoting: 'Public voting', pilot: 'Pilot',
-    heroEyebrow: 'Browser-native 3D game benchmark', heroTitle: 'Play the work. Judge the game.',
-    heroCopy: 'Coding agents receive the same frozen brief, Three.js toolchain, and isolated workspace.',
+    heroEyebrow: 'Playable coding-agent arena', heroTitle: 'Web3DGameBench',
+    heroCopy: 'Agent systems build browser-native 3D games from the same frozen brief in isolated workspaces. Play every result, compare it blind, and replay the observable execution trace.',
+    heroIndependent: 'Independently built and self-funded. Local orchestration runs on one machine using existing agent subscriptions and model quotas, with no dedicated compute cluster.',
     startComparison: 'Start a blind comparison', gameTasks: 'Game tasks', loadingCatalog: 'Loading catalog...',
     task: 'Task', play: 'Play', compare: 'Compare', playableBuilds: '{count} playable builds',
     catalogCount: '{tasks} task · {submissions} submissions', timeoutBuild: 'timed out after producing this build',
@@ -36,13 +37,14 @@ export const messages = {
     checksTitle: 'Playable checks', checksCopy: 'Build, canvas output, input, resize, restart, mobile controls, and a small runtime-state contract establish basic reliability.',
     rankingTitle: 'Human ranking', rankingCopy: 'Automation cannot decide whether a game feels good. Blind sequential play supplies the public ranking.',
     footerTagline: 'Three.js game coding arena', source: 'Source',
-    pageDescription: 'Play and compare 3D browser games built by coding agents.',
+    pageDescription: 'A playable coding-agent arena for browser-native 3D games.',
   },
   zh: {
     navGames: '游戏', navTraces: '轨迹', navArena: '竞技场', navLeaderboard: '排行榜', navAbout: '关于',
     homeLabel: 'Web3DGameBench 首页', publicVoting: '公开投票', pilot: '试运行',
-    heroEyebrow: '浏览器原生 3D 游戏基准', heroTitle: '亲自玩，再判断。',
-    heroCopy: '所有编程智能体获得相同的冻结任务说明、Three.js 工具链和隔离工作区。',
+    heroEyebrow: '可试玩 Coding Agent 竞技场', heroTitle: 'Web3DGameBench',
+    heroCopy: '不同 Agent 系统在隔离工作区中，根据同一份冻结任务制作浏览器原生 3D 游戏。每个结果都能直接试玩、匿名对比，并回放可观察的执行轨迹。',
+    heroIndependent: '项目由个人独立、自费完成。评测编排在一台本地机器上运行，主要使用现有 Agent 订阅和模型额度，不需要自建计算集群。',
     startComparison: '开始盲测对比', gameTasks: '游戏题目', loadingCatalog: '正在加载题目……',
     task: '题目', play: '试玩', compare: '对比', playableBuilds: '{count} 个可玩版本',
     catalogCount: '{tasks} 个题目 · {submissions} 个参赛版本', timeoutBuild: '生成可玩版本后运行超时',
@@ -75,7 +77,7 @@ export const messages = {
     checksTitle: '可玩性检查', checksCopy: '通过构建、画布输出、输入、尺寸适配、重启、手机操作和运行时状态契约，确认基本可靠性。',
     rankingTitle: '人工排名', rankingCopy: '自动检查无法判断游戏手感。访客依次试玩两个匿名版本后投票，形成公开排名。',
     footerTagline: 'Three.js 游戏编程竞技场', source: '源码',
-    pageDescription: '试玩并比较由编程智能体制作的 3D 浏览器游戏。',
+    pageDescription: '面向浏览器原生 3D 游戏的可试玩 Coding Agent 竞技场。',
   },
 };
 

@@ -40,6 +40,8 @@ main { min-height: calc(100vh - 120px); }
 .eyebrow { margin: 0 0 18px; font: 700 12px/1.2 ui-monospace, monospace; text-transform: uppercase; color: var(--muted); }
 h1 { margin: 0; font-size: clamp(52px, 7vw, 108px); line-height: 0.92; font-weight: 820; letter-spacing: 0; }
 .intro-copy { align-self: end; margin-bottom: 76px; font-size: clamp(18px, 2vw, 25px); line-height: 1.45; }
+.intro-copy p { margin: 0; }
+.intro-note { margin-top: 20px !important; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .command-link { display: inline-flex; gap: 20px; align-items: center; margin-top: 28px; padding-bottom: 7px; border-bottom: 2px solid var(--ink); text-decoration: none; font-size: 15px; font-weight: 750; }
 .section-head { display: flex; justify-content: space-between; align-items: end; margin: 48px 0 20px; }
 .section-head h2 { margin: 0; font-size: 30px; }
@@ -292,7 +294,7 @@ footer a { margin-left: auto; }
 
 @media (max-width: 520px) {
   .view { padding-top: 30px; }
-  h1 { font-size: 49px; }
+  h1 { font-size: 38px; }
   .intro-copy { font-size: 18px; }
   .section-head { align-items: start; gap: 12px; }
   .game-card { min-height: 250px; }
