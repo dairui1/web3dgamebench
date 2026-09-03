@@ -53,6 +53,19 @@ def test_smoke_receipt_is_bound_to_plan_image_and_all_harnesses(tmp_path: Path) 
     assert verified["status"] == "passed"
 
 
+def test_smoke_receipt_accepts_a_subscription_limited_harness(tmp_path: Path) -> None:
+    plan = create_preflight_plan(ROOT, "season-1")
+    plan_path = write_preflight_plan(tmp_path / "plan.json", plan)
+    value = _receipt(plan_path, plan)
+    value["probes"][-1]["status"] = "subscription-limited"
+    receipt_path = tmp_path / "smoke.json"
+    _write_receipt(receipt_path, value)
+
+    verified = verify_smoke_receipt(plan_path, plan, receipt_path)
+
+    assert verified["probes"][-1]["status"] == "subscription-limited"
+
+
 def test_stale_smoke_receipt_is_rejected(tmp_path: Path) -> None:
     plan = create_preflight_plan(ROOT, "season-1")
     plan_path = write_preflight_plan(tmp_path / "plan.json", plan)

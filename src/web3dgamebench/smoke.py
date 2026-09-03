@@ -14,7 +14,7 @@ from typing import Any
 
 from .config import load_profiles
 from .container import ensure_plane, load_container_config, wrap_command
-from .matrix import MatrixError, load_preflight_plan
+from .matrix import MatrixError, _subscription_limit_detected, load_preflight_plan
 from .process import run_captured
 from .runner import runs_dir
 from .runtimes import (
@@ -188,6 +188,9 @@ def _probe(
         "goal_completed": activation_status == "observed-complete",
         "stdin_owned_by_runner": invocation.stdin_prompt or result.returncode != 130,
     }
+    status = "passed" if all(checks.values()) else "failed"
+    if status == "failed" and _subscription_limit_detected(output_dir):
+        status = "subscription-limited"
     return {
         "profile": profile_id,
         "harness": profile.harness,
@@ -195,7 +198,7 @@ def _probe(
         "model_resolved": resolved_model,
         "started_at": started_at,
         "completed_at": _now(),
-        "status": "passed" if all(checks.values()) else "failed",
+        "status": status,
         "checks": checks,
         "goal_activation_status": activation_status,
         "goal_lifecycle": lifecycle,
@@ -233,7 +236,14 @@ def run_smoke(root: Path, plan_path: Path, *, backend: str = "container") -> Pat
     receipt = {
         "schema_version": 1,
         "smoke_id": smoke_id,
-        "status": "passed" if all(item["status"] == "passed" for item in probes) else "failed",
+        "status": (
+            "passed"
+            if all(
+                item["status"] in {"passed", "subscription-limited"}
+                for item in probes
+            )
+            else "failed"
+        ),
         "backend": backend,
         "created_at": _now(),
         "plan": {
@@ -294,11 +304,12 @@ def verify_smoke_receipt(
     if not isinstance(image, dict) or image.get("id") != planned_image:
         raise MatrixError("harness smoke candidate image does not match the frozen plan")
     expected = {"codex", "claude-code", "pi"}
-    passed = {
+    covered = {
         item.get("harness")
         for item in receipt.get("probes", [])
-        if isinstance(item, dict) and item.get("status") == "passed"
+        if isinstance(item, dict)
+        and item.get("status") in {"passed", "subscription-limited"}
     }
-    if passed != expected:
+    if covered != expected:
         raise MatrixError("harness smoke receipt does not cover all core harnesses")
     return receipt
