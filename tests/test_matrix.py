@@ -23,6 +23,7 @@ from web3dgamebench.matrix import (
     _carry_completed_cells,
     _load_vendor_locks,
     _new_receipt,
+    _subscription_limit_detected,
     _write_receipt,
     close_run_artifacts,
     create_extension_plan,
@@ -875,6 +876,61 @@ def test_matrix_runs_harnesses_in_parallel_models_serially_with_task_barriers(
     }
     assert second_saw_finished == [9] * 9
     assert receipt["status"] == "complete"
+
+
+def test_subscription_limit_is_held_without_blocking_later_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    plan_path: Path,
+    season_plan: dict,
+) -> None:
+    receipt_path = tmp_path / "receipt.json"
+    receipt = _new_receipt(plan_path, season_plan, "container")
+    _terminalize(receipt)
+    for cell in receipt["cells"][:18]:
+        cell.update(status="pending", run=None, playable=None, passed=False, trusted=False)
+    called: list[str] = []
+
+    def execute(_root, _plan, _receipt_path, _receipt, cell, _cancel_event=None):
+        called.append(cell["cell_id"])
+        if cell["cell_id"] == receipt["cells"][0]["cell_id"]:
+            cell.update(
+                status="subscription-limited",
+                run="/runs/quota",
+                playable=None,
+                passed=False,
+                trusted=False,
+            )
+        else:
+            cell.update(
+                status="completed",
+                run=f"/runs/{cell['cell_id']}",
+                playable=True,
+                passed=True,
+                trusted=True,
+                artifacts=copy.deepcopy(receipt["cells"][18]["artifacts"]),
+            )
+
+    monkeypatch.setattr(matrix_module, "_verify_plan_file", lambda *_args: season_plan)
+    monkeypatch.setattr(matrix_module, "verify_frozen_inputs", lambda *_args: None)
+    monkeypatch.setattr(matrix_module, "_execute_cell", execute)
+
+    matrix_module._drive_matrix(ROOT, plan_path, season_plan, receipt_path, receipt)
+
+    assert any(cell_id.startswith("bombsite-retake::") for cell_id in called)
+    assert receipt["cells"][0]["status"] == "subscription-limited"
+    assert receipt["status"] == "incomplete"
+    assert receipt["summary"]["subscription_limited"] == 1
+
+
+def test_subscription_limit_detection_reads_harness_evidence(tmp_path: Path) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    (run_root / "events.jsonl").write_text(
+        '{"type":"rate_limit_event","status":"rejected"}\n'
+    )
+
+    assert _subscription_limit_detected(run_root) is True
 
 
 def test_matrix_can_stop_at_a_requested_task_barrier(

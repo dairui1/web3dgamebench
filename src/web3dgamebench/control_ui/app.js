@@ -16,6 +16,7 @@
     'candidate-failure': { label: '无法构建或启动', icon: 'i-x', cls: 'cell-candidate-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '失败' },
     'evidence-failure': { label: '无法打开游玩', icon: 'i-alert-triangle', cls: 'cell-evidence-failure', kind: 'failed', chip: 'chip-red', terminal: true, tag: '失败' },
     'infrastructure-error': { label: '基础设施错误', icon: 'i-alert-octagon', cls: 'cell-infrastructure-error', kind: 'resumable', chip: 'chip-amber', resumable: true, tag: '设施' },
+    'subscription-limited': { label: '订阅额度待恢复', icon: 'i-clock', cls: 'cell-infrastructure-error', kind: 'held', chip: 'chip-amber', tag: '额度' },
     interrupted: { label: '已中断', icon: 'i-pause-circle', cls: 'cell-interrupted', kind: 'resumable', chip: 'chip-amber', resumable: true, tag: '中断' },
   };
   const UNKNOWN_STATUS = { label: '未知状态', icon: 'i-info', cls: 'cell-pending', kind: 'pending', chip: 'chip-neutral', tag: '?' };
@@ -388,6 +389,7 @@
         case 'candidate-failure': counts.candidate++; break;
         case 'evidence-failure': counts.evidence++; break;
         case 'infrastructure-error': counts.infra++; break;
+        case 'subscription-limited': counts.infra++; break;
         case 'interrupted': counts.interrupted++; break;
         default: break;
       }
@@ -397,7 +399,7 @@
       const ts = taskState.get(cell.task) || { total: 0, terminal: 0, running: 0 };
       ts.total++;
       if (cell.status === 'running') ts.running++;
-      if (statusMeta(cell.status).terminal || cell.status === 'completed') ts.terminal++;
+      if (statusMeta(cell.status).terminal || statusMeta(cell.status).kind === 'held' || cell.status === 'completed') ts.terminal++;
       taskState.set(cell.task, ts);
     }
 
@@ -1192,6 +1194,8 @@
     const statusLine = $('drawer-status');
     const noteText = meta.terminal
       ? '本轮失败已记录；可在执行进程停止后通过「重跑失败项」重新排队。'
+      : meta.kind === 'held'
+        ? '该模型订阅额度已用完；不会阻塞其他任务，额度恢复后可单独重跑。'
       : meta.resumable
         ? '可恢复：点击「继续」后会重新执行此单元格。'
         : cell.status === 'running'
@@ -1209,7 +1213,7 @@
       ]);
       statusLine.dataset.rendered = key;
     }
-    const retryable = ['candidate-failure', 'evidence-failure', 'infrastructure-error'].includes(cell.status);
+    const retryable = ['candidate-failure', 'evidence-failure', 'infrastructure-error', 'subscription-limited'].includes(cell.status);
     $('drawer-actions').hidden = !(retryable && d.controls.can_retry === true);
 
     const yesNo = (v) => (v === true ? '是' : v === false ? '否' : '--');

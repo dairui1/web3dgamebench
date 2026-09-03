@@ -76,7 +76,12 @@ def _requeue_matrix_cells(
     if not isinstance(season_id, str):
         raise MatrixError("matrix receipt has no season")
     requested = set(cell_ids or [])
-    retryable = {"candidate-failure", "evidence-failure", "infrastructure-error"}
+    retryable = {
+        "candidate-failure",
+        "evidence-failure",
+        "infrastructure-error",
+        "subscription-limited",
+    }
     selected = [
         cell
         for cell in receipt.get("cells", [])
@@ -403,7 +408,12 @@ class MatrixSupervisor:
             for cell in (receipt.get("cells", []) if receipt else [])
             if isinstance(cell, dict)
             and cell.get("status")
-            in {"candidate-failure", "evidence-failure", "infrastructure-error"}
+            in {
+                "candidate-failure",
+                "evidence-failure",
+                "infrastructure-error",
+                "subscription-limited",
+            }
         ]
         has_canonical = canonical is not None
         return {

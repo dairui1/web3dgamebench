@@ -46,8 +46,14 @@ class MatrixInterrupted(KeyboardInterrupt):
 _TASK_TREE_EXCLUDED = frozenset({"node_modules", "dist"})
 _VENDOR_TREE_EXCLUDED = frozenset({"_logs", "_update-notifier-last-checked"})
 _RESUMABLE_CELL_STATUSES = {"pending", "infrastructure-error", "interrupted"}
+_HELD_CELL_STATUSES = {"subscription-limited"}
 _TERMINAL_CELL_STATUSES = {"completed", "candidate-failure", "evidence-failure"}
-_CELL_STATUSES = _RESUMABLE_CELL_STATUSES | _TERMINAL_CELL_STATUSES | {"running"}
+_CELL_STATUSES = (
+    _RESUMABLE_CELL_STATUSES
+    | _HELD_CELL_STATUSES
+    | _TERMINAL_CELL_STATUSES
+    | {"running"}
+)
 _JUDGE_CELL_STATUSES = {
     "not-run",
     "running",
@@ -1824,6 +1830,54 @@ def _candidate_manifest(run_root: Path) -> dict[str, Any]:
     return manifest
 
 
+def _subscription_limit_detected(run_root: Path) -> bool:
+    patterns = (
+        '"rate_limit_event"',
+        "usage limit",
+        "usage_limited",
+        "session limit",
+        "rate limit",
+        "api_error_status\":429",
+        "status\":429",
+    )
+    paths = (
+        run_root / "events.jsonl",
+        run_root / "stderr.log",
+        run_root / "harbor/harbor.stderr.log",
+        run_root / "harbor/harbor.stdout.log",
+    )
+    for path in paths:
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace").lower()
+        except OSError:
+            continue
+        if any(pattern in content for pattern in patterns):
+            return True
+    return False
+
+
+def _hold_subscription_limited_cell(
+    cell: dict[str, Any], run_root: Path, manifest: dict[str, Any]
+) -> None:
+    cell.update(
+        {
+            "status": "subscription-limited",
+            "run": str(run_root),
+            "passed": False,
+            "trusted": False,
+            "playable": None,
+            "infrastructure_scope": "profile-subscription",
+            "infrastructure_error": (
+                "model subscription quota is exhausted; retry this cell after reset"
+            ),
+            "completed_at": _now(),
+        }
+    )
+    repair = manifest.get("repair")
+    if isinstance(repair, dict):
+        cell["repair"] = repair
+
+
 def _evaluation_report(path: Path) -> dict[str, Any]:
     try:
         report = json.loads(path.read_text(encoding="utf-8"))
@@ -1888,6 +1942,9 @@ def _execute_cell(
         cell["run"] = str(run_root)
         manifest = _candidate_manifest(run_root)
         if manifest.get("status") == "infrastructure-error":
+            if _subscription_limit_detected(run_root):
+                _hold_subscription_limited_cell(cell, run_root, manifest)
+                return
             raise MatrixError(
                 "candidate runtime exited without benchmark evidence: "
                 f"{run_root} (exit {manifest.get('exit_code')})"
@@ -1919,7 +1976,8 @@ def _execute_cell(
     report = _evaluation_report(report_path)
     trusted, trust_warnings = trusted_cell_gate(plan, cell, manifest, report, run_root)
     playable, playability_failures, admission_warnings = assess_playability(report)
-    if not playable and not cell.get("recovery_attempts"):
+    subscription_limited = not playable and _subscription_limit_detected(run_root)
+    if not playable and not subscription_limited and not cell.get("recovery_attempts"):
         original_run = run_root
         recovery = {
             "attempt": 1,
@@ -1944,6 +2002,17 @@ def _execute_cell(
         cell["run"] = str(run_root)
         manifest = _candidate_manifest(run_root)
         if manifest.get("status") == "infrastructure-error":
+            if _subscription_limit_detected(run_root):
+                recovery.update(
+                    {
+                        "run": str(run_root),
+                        "completed_at": _now(),
+                        "playable": False,
+                    }
+                )
+                _hold_subscription_limited_cell(cell, run_root, manifest)
+                cell.pop("phase", None)
+                return
             raise MatrixError(
                 "recovery runtime exited without benchmark evidence: "
                 f"{run_root} (exit {manifest.get('exit_code')})"
@@ -1959,6 +2028,7 @@ def _execute_cell(
         report = _evaluation_report(report_path)
         trusted, trust_warnings = trusted_cell_gate(plan, cell, manifest, report, run_root)
         playable, playability_failures, admission_warnings = assess_playability(report)
+        subscription_limited = not playable and _subscription_limit_detected(run_root)
         recovery.update(
             {
                 "run": str(run_root),
@@ -1968,6 +2038,17 @@ def _execute_cell(
         )
         cell["repair"] = manifest.get("repair")
         admission_warnings.append("assisted repair applied with 100 point penalty")
+    if subscription_limited:
+        _hold_subscription_limited_cell(cell, run_root, manifest)
+        cell.update(
+            {
+                "evaluation": str(report_path),
+                "artifacts": close_run_artifacts(run_root),
+                "evidence_failures": playability_failures,
+            }
+        )
+        cell.pop("phase", None)
+        return
     if manifest.get("status") == "candidate-failure":
         admission_warnings.append("candidate lifecycle did not complete")
     admission_warnings.extend(trust_warnings)
@@ -2171,7 +2252,8 @@ def _drive_matrix(
             break
 
     unfinished = any(
-        cell.get("status") in _RESUMABLE_CELL_STATUSES | {"running"}
+        cell.get("status")
+        in _RESUMABLE_CELL_STATUSES | _HELD_CELL_STATUSES | {"running"}
         for cell in receipt["cells"]
     )
     receipt["status"] = "incomplete" if unfinished else "complete"
@@ -2187,6 +2269,9 @@ def _drive_matrix(
         ),
         "infrastructure_errors": sum(
             cell.get("status") == "infrastructure-error" for cell in receipt["cells"]
+        ),
+        "subscription_limited": sum(
+            cell.get("status") == "subscription-limited" for cell in receipt["cells"]
         ),
     }
     _write_receipt(receipt_path, receipt)
